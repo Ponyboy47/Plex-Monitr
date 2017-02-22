@@ -4,17 +4,40 @@ import JSON
 
 struct Config {
     var configFile: Path = "~/.config/monitr/settings.json"
-    var plexDir: String = "/var/lib/plexmediaserver/Library"
-    var torrentDir: String = "/var/lib/deluge"
-    var watchTime: Double = 60.0
-    var convert = false
+    var plexDirectory: Path = "/var/lib/plexmediaserver/Library"
+    private var _torrentDirectory: Path = "/var/lib/deluge/Downloads"
+    var torrentDirectory: Path {
+        set {
+            _torrentDirectory = newValue
+            torrentWatcher = DirectoryMonitor(URL: newValue.url)
+        }
+        get {
+            return _torrentDirectory
+        }
+    }
+    var convert: Bool = false
 
-    init(_ configFile: Path? = nil, _ plexDir: String? = nil, _ torrentDir: String? = nil, _ watchTime: Double? = nil, _ convert: Bool? = nil) {
+    var torrentWatcher: DirectoryMonitor?
+
+    init(_ configFile: Path? = nil, _ plexDirectory: Path? = nil, _ torrentDirectory: Path? = nil, _ convert: Bool? = nil) throws {
         self.configFile = configFile ?? self.configFile
-        self.plexDir = plexDir ?? self.plexDir
-        self.torrentDir = torrentDir ?? self.torrentDir
-        self.watchTime = watchTime ?? self.watchTime
+        self.plexDirectory = plexDirectory ?? self.plexDirectory
+        self.torrentDirectory = torrentDirectory ?? self._torrentDirectory
         self.convert = convert ?? self.convert
+
+        guard self.plexDirectory.exists else {
+            throw ConfigError.pathDoesNotExist
+        }
+        guard self.plexDirectory.isDirectory else {
+            throw ConfigError.pathIsNotDirectory
+        }
+
+        guard self.torrentDirectory.exists else {
+            throw ConfigError.pathDoesNotExist
+        }
+        guard self.torrentDirectory.isDirectory else {
+            throw ConfigError.pathIsNotDirectory
+        }
     }
 }
 
@@ -28,19 +51,31 @@ extension Config: JSONInitializable {
     }
 
     init(json: JSON) throws {
-        plexDir = try json.get("plexDir")
-        torrentDir = try json.get("torrentDir")
-        watchTime = try json.get("watchTime")
+        plexDirectory = Path(try json.get("plexDirectory"))
+        torrentDirectory = Path(try json.get("torrentDirectory"))
         convert = try json.get("convert")
+
+        guard plexDirectory.exists else {
+            throw ConfigError.pathDoesNotExist
+        }
+        guard plexDirectory.isDirectory else {
+            throw ConfigError.pathIsNotDirectory
+        }
+
+        guard torrentDirectory.exists else {
+            throw ConfigError.pathDoesNotExist
+        }
+        guard torrentDirectory.isDirectory else {
+            throw ConfigError.pathIsNotDirectory
+        }
     }
 }
 
 extension Config: JSONRepresentable {
     func encoded() -> JSON {
         return [
-            "plexDir": plexDir,
-            "torrentDir": torrentDir,
-            "watchTime": watchTime,
+            "plexDirectory": plexDirectory.string,
+            "torrentDirectory": torrentDirectory.string,
             "convert": convert
         ]
     }

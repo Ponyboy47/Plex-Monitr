@@ -6,15 +6,13 @@ enum MediaError: Swift.Error {
     case unsupportedFormat
 }
 
-protocol MediaFile {
-    associatedtype MediaType
-    associatedtype MediaFormat
-
+protocol Media {
     var path: Path { get set }
     var name: String { get }
-    var format: MediaFormat { get set }
+    var filename: String { get }
 
     init(_ path: Path) throws
+    func move(to newDirectory: Path) throws
 }
 
 enum VideoFormat: String {
@@ -25,27 +23,41 @@ enum VideoFormat: String {
     case wmv
 }
 
-struct Video: MediaFile {
-    typealias MediaType = Video
-    typealias MediaFormat = VideoFormat
-
-    private var dp: Downpour
+struct Video: Media {
+    private var downpour: Downpour
 
     var path: Path
     var name: String {
-        return dp.title
+        var filename: String
+        switch downpour.type {
+            case .movie:
+                filename = "\(downpour.title) (\(downpour.year))"
+            case .tv:
+                filename = "\(downpour.title) - s\(downpour.season)e\(downpour.episode)"
+        }
+        return filename
     }
-    var format: MediaFormat
-    var type: DownpourType {
-        return dp.type
+    var filename: String {
+        return name + (path.extension ?? "")
     }
+    private var directory: Path {
+        var base: Path = downpour.type == .movie ? "Movies" : "TV Shows"
+        base += downpour.type == .movie ? name : "\(downpour.title)/Season \(downpour.season)"
+        return base
+    }
+
     init(_ path: Path) throws {
-        self.path = path
-        guard let f = VideoFormat(rawValue: path.extension ?? "") else {
+        self.path = path.absolute
+        guard let _ = VideoFormat(rawValue: path.extension ?? "") else {
             throw MediaError.unsupportedFormat
         }
-        self.format = f
-        self.dp = Downpour(string: path.lastComponentWithoutExtension)
+        self.downpour = Downpour(string: path.lastComponentWithoutExtension)
+    }
+
+    func move(to plexPath: Path) throws {
+        let mediaDirectory = plexPath + directory
+        try mediaDirectory.mkpath()
+        try path.move(mediaDirectory + filename)
     }
 }
 
@@ -58,19 +70,22 @@ enum AudioFormat: String {
     case wav
 }
 
-struct Audio: MediaFile {
-    typealias MediaType = Audio
-    typealias MediaFormat = AudioFormat
+struct Audio: Media {
     var path: Path
     var name: String {
         return path.lastComponentWithoutExtension
     }
-    var format: MediaFormat
+    var filename: String {
+        return name + (path.extension ?? "")
+    }
+
     init(_ path: Path) throws {
-        self.path = path
-        guard let f = AudioFormat(rawValue: path.extension ?? "") else {
+        self.path = path.absolute
+        guard let _ = AudioFormat(rawValue: path.extension ?? "") else {
             throw MediaError.unsupportedFormat
         }
-        self.format = f
+    }
+
+    func move(to plexPath: Path) throws {
     }
 }
