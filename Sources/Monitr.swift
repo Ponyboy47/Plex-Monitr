@@ -92,7 +92,7 @@ class Monitr: DirectoryMonitorDelegate {
     func moveMedia(_ media: [Media]) -> [Media]? {
         var failedMedia: [Media]? = []
 
-        for m in media {
+        for var m in media {
             do {
                 try m.move(to: config.plexDirectory)
             } catch {

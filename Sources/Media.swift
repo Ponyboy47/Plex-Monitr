@@ -10,9 +10,10 @@ protocol Media {
     var path: Path { get set }
     var name: String { get }
     var filename: String { get }
+    var finalDirectory: Path { get }
 
     init(_ path: Path) throws
-    func move(to newDirectory: Path) throws
+    mutating func move(to newDirectory: Path) throws
 }
 
 enum VideoFormat: String {
@@ -40,7 +41,7 @@ struct Video: Media {
     var filename: String {
         return name + (path.extension ?? "")
     }
-    private var directory: Path {
+    var finalDirectory: Path {
         var base: Path = downpour.type == .movie ? "Movies" : "TV Shows"
         base += downpour.type == .movie ? name : "\(downpour.title)/Season \(downpour.season)"
         return base
@@ -48,16 +49,17 @@ struct Video: Media {
 
     init(_ path: Path) throws {
         self.path = path.absolute
-        guard let _ = VideoFormat(rawValue: path.extension ?? "") else {
+        guard let _ = VideoFormat(rawValue: (path.extension ?? "").lowercased()) else {
             throw MediaError.unsupportedFormat
         }
         self.downpour = Downpour(string: path.lastComponentWithoutExtension)
     }
 
-    func move(to plexPath: Path) throws {
-        let mediaDirectory = plexPath + directory
+    mutating func move(to plexPath: Path) throws {
+        let mediaDirectory = plexPath + finalDirectory
         try mediaDirectory.mkpath()
         try path.move(mediaDirectory + filename)
+        path = mediaDirectory + filename
     }
 }
 
@@ -78,6 +80,9 @@ struct Audio: Media {
     var filename: String {
         return name + (path.extension ?? "")
     }
+    var finalDirectory: Path {
+        return "Music"
+    }
 
     init(_ path: Path) throws {
         self.path = path.absolute
@@ -86,6 +91,7 @@ struct Audio: Media {
         }
     }
 
-    func move(to plexPath: Path) throws {
+    mutating func move(to plexPath: Path) throws {
+        let mediaDirectory = plexPath + finalDirectory
     }
 }
