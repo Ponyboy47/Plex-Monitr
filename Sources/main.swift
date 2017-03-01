@@ -105,6 +105,7 @@ let main = Command(usage: "", flags: [configFlag, plexDirFlag, downloadDirFlag, 
 
     // Run once and then start monitoring regularly
     monitr?.run()
+    monitr?.setDelegate()
     monitr?.startMonitoring()
 }
 

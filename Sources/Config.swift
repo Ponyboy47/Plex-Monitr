@@ -79,7 +79,7 @@ struct Config {
 
     /// Sets the delegate of the downloadWatcher
     func setDelegate(_ delegate: DirectoryMonitorDelegate) {
-        downloadWatcher.delegate = delegate
+        downloadWatcher?.delegate = delegate
     }
 }
 
@@ -87,8 +87,8 @@ struct Config {
 extension Config: JSONInitializable {
     /// Initializes by reading the file at the path as a JSON string
     init(_ path: Path) throws {
-        configFile = path
         try self.init(path.read())
+        configFile = path
     }
 
     /// Initialize by reading the string as JSON

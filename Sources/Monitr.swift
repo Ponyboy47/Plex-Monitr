@@ -58,6 +58,11 @@ class Monitr: DirectoryMonitorDelegate {
         //}
     }
 
+    /// Sets the delegate for the downloads directory monitor
+    public func setDelegate() {
+        config.setDelegate(self)
+    }
+
     /// Begin watching the downloads directory
     public func startMonitoring() {
         config.startMonitoring()
