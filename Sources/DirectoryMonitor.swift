@@ -1,12 +1,23 @@
 /*
-    Copyright (C) 2016 Apple Inc. All Rights Reserved.
-    See LICENSE.txt for this sample’s licensing information
-    
-    Abstract:
-    `DirectoryMonitor` is used to monitor the contents of the provided directory by using a GCD dispatch source.
+
+    DirectoryMonitor.swift
+
+    Created By: Jacob Williams
+    Description: This file contains the class that monitors a directory for
+                   write events and notifies a delegate when a new write occurs. This was
+                   originally taken from an Apple website, but I updated it to work with the
+                   latest swift...and to semi-work on Linux. (Currently
+                   DispatchSourceFileSystemObject is not available on Linux).
+    License: MIT License
+
 */
 
 import Foundation
+
+// Linux swift has a separate Dispatch framework required for this
+#if os(Linux)
+import Dispatch
+#endif
 
 /// A protocol that allows delegates of `DirectoryMonitor` to respond to changes in a directory.
 protocol DirectoryMonitorDelegate: class {
@@ -19,14 +30,30 @@ class DirectoryMonitor {
     /// The `DirectoryMonitor`'s delegate who is responsible for responding to `DirectoryMonitor` updates.
     weak var delegate: DirectoryMonitorDelegate?
 
-    /// A file descriptor for the monitored directory.
-    var monitoredDirectoryFileDescriptor: Int32 = -1
-
     /// A dispatch queue used for sending file changes in the directory.
     let directoryMonitorQueue = DispatchQueue(label: "com.monitr.directorymonitor", attributes: [.concurrent])
 
+    #if os(Linux)
+    /// A dispatch source that submits the event handler block based on a timer.
+    var directoryMonitorSource: DispatchSourceTimer?
+
+    /// The interval to run at
+    var interval: Int
+
+    /// The leeway with the running interval
+    var leeway: Int
+
+    // MARK: Initializers
+    init(interval: Int = 60, leeway: Int = 10) {
+        self.interval = interval
+        self.leeway = leeway
+    }
+    #else
     /// A dispatch source to monitor a file descriptor created from the directory.
     var directoryMonitorSource: DispatchSourceFileSystemObject?
+
+    /// A file descriptor for the monitored directory.
+    var monitoredDirectoryFileDescriptor: Int32 = -1
 
     /// URL for the directory being monitored.
     var URL: URL
@@ -35,10 +62,25 @@ class DirectoryMonitor {
     init(URL: URL) {
         self.URL = URL
     }
+    #endif
 
     // MARK: Monitoring
 
     func startMonitoring() {
+        #if os(Linux)
+        if directoryMonitorSource == nil {
+            directoryMonitorSource = DispatchSource.makeTimerSource(queue: directoryMonitorQueue)
+            directoryMonitorSource?.scheduleRepeating(deadline: .now() + .seconds(interval), interval: .seconds(interval), leeway: .seconds(leeway))
+            directoryMonitorSource?.setEventHandler {
+                self.delegate?.directoryMonitorDidObserveChange(self)
+                return
+            }
+
+            directoryMonitorSource?.setCancelHandler {
+                self.directoryMonitorSource = nil
+            }
+        }
+        #else
         // Listen for changes to the directory (if we are not already).
         if directoryMonitorSource == nil && monitoredDirectoryFileDescriptor == -1 {
             // Open the directory referenced by URL for monitoring only.
@@ -60,10 +102,10 @@ class DirectoryMonitor {
                 self.monitoredDirectoryFileDescriptor = -1
                 self.directoryMonitorSource = nil
             }
-
-            // Start monitoring the directory via the source.
-            directoryMonitorSource?.resume()
         }
+        #endif
+        // Start monitoring the directory via the source.
+        directoryMonitorSource?.resume()
     }
 
     /// Stop monitoring the directory via the source.

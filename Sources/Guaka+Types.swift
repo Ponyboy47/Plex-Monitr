@@ -1,3 +1,13 @@
+/*
+
+    Guaka+Types.swift
+
+    Created By: Jacob Williams
+    Description: This file contains the extensions to Guaka to make Double and
+                   Path types usable from the CLI
+    License: MIT License
+
+*/
 import Guaka
 import PathKit
 
