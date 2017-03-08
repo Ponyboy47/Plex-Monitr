@@ -36,12 +36,16 @@ protocol Argument {
     var longName: String? { get set }
     /// The default value for the cli argument
     var `default`: ArgType? { get set }
-    /// The usage description for the cli argument
+    /// The description of the cli argument
     var description: String? { get set }
+    /// The usage string for cli argument
+    var usage: String { get }
     /// Whether or not the argument is required to be set
     var `required`: Bool { get set }
     /// The type of the argument value
     var type: ArgType.Type { get }
+    var usageDescriptionActualLength: Int { get set }
+    var usageDescriptionNiceLength: Int { get set }
 
     /**
      Initializer
@@ -52,7 +56,7 @@ protocol Argument {
      - Parameter description: The usage description for the cli argument
      - Parameter required: Whether or not the argument is required to be set
     */
-    init(_ shortName: Character, longName: String?, `default`: ArgType?, description: String?, `required`: Bool) throws
+    init(_ shortName: Character, longName: String?, `default`: ArgType?, description: String?, `required`: Bool, parser: ArgumentParser?) throws
     /// Parses the cli arguments to get the string value of the argument, or nil if it is not set
     func parse() throws -> ArgType?
     /// Returns the argument's value, it's default value if that is nil, or throws an error if it's required but the value is nil
@@ -60,8 +64,8 @@ protocol Argument {
 }
 
 /// CLI Arguments that come with a value
-class Option<T: ArgumentType>: Argument {
-    typealias ArgType = T
+class Option<A: ArgumentType>: Argument {
+    typealias ArgType = A
     var shortName: Character
     var longName: String?
     var `default`: ArgType?
@@ -70,8 +74,33 @@ class Option<T: ArgumentType>: Argument {
     var type: ArgType.Type {
         return ArgType.self
     }
+    var usage: String {
+        var u = "\t-\(shortName)"
+        if let l = longName {
+            u += ", --\(l)"
+        }
+        usageDescriptionActualLength = u.characters.count
 
-    required init(_ shortName: Character, longName: String? = nil, `default`: ArgType? = nil, description: String? = nil, `required`: Bool = false) throws {
+        while u.characters.count < usageDescriptionNiceLength {
+            u += " "
+        }
+
+        if let d = description {
+            u += ": \(d)"
+        }
+        if let d = `default` {
+            u += "\n\t"
+            for _ in 0...usageDescriptionNiceLength {
+                u += " "
+            }
+            u += "DEFAULT: \(d)"
+        }
+        return u
+    }
+    var usageDescriptionActualLength: Int = 0
+    var usageDescriptionNiceLength: Int = 0
+
+    required init(_ shortName: Character, longName: String? = nil, `default`: ArgType? = nil, description: String? = nil, `required`: Bool = false, parser: ArgumentParser? = nil) throws {
         guard shortName != "h" else {
             throw ArgumentError.invalidShortName("Cannot use 'h' as the short name since it is reserved for help/usage text.")
         }
@@ -85,6 +114,8 @@ class Option<T: ArgumentType>: Argument {
         self.`default` = `default`
         self.description = description
         self.`required` = `required`
+
+        parser?.arguments.append(self)
     }
 
     func parse() throws -> ArgType? {
@@ -155,32 +186,52 @@ extension Path: ArgumentType {
 
 /// Parses the CLI for Arguments
 class ArgumentParser {
+    var usage: String
+    var arguments: [Any] = []
+
+    required init(_ usage: String) {
+        self.usage = usage
+    }
+
     /// Parse for a specific Argument and returns it's string value if it finds one
-    class func parse<T: Argument>(_ argument: T) throws -> String? {
-        // Drop the first argument since it's just the path to the executable
-        let args = CommandLine.arguments.dropFirst()
-        // Go over all the remaining args
+    class func parse<A: Argument>(_ argument: A) throws -> String? {
         if let longName = argument.longName {
-            if let index = args.index(of: "--\(longName)"), index >= 0 {
-                // If the argument we're looking for is a Bool, go ahead and return true
-                guard !(argument.type is Bool) else { return String(true) }
-                // So try and get the string value of the next argument, then return it
-                if let index = args.index(of: "--\(longName)"), args.count <= index + 1 {
-                    let next = args[index + 1]
-                    return next
-                }
-                // Otherwise, return nil
-                return nil
-            }
+            var value = try ArgumentParser.parse(longName: longName, isBool: argument.type is Bool)
+            guard value == nil else { return value! }
         }
 
+        return try ArgumentParser.parse(shortName: argument.shortName, isBool: argument.type is Bool)
+    }
+
+    class func parse(longName: String, isBool: Bool = false) throws -> String? {
+        // Drop the first argument since it's just the path to the executable
+        let args = CommandLine.arguments.dropFirst()
+        // Try and find the index of the long argument
+        if let index = args.index(of: "--\(longName)"), index >= 0 {
+            // If the argument we're looking for is a Bool, go ahead and return true
+            guard !isBool else { return String(true) }
+            // So try and get the string value of the next argument, then return it
+            if let index = args.index(of: "--\(longName)"), args.count <= index + 1 {
+                let next = args[index + 1]
+                return next
+            }
+            // Otherwise, return nil
+            return nil
+        }
+        return nil
+    }
+
+    class func parse(shortName: Character, isBool: Bool = false) -> String? {
+        // Drop the first argument since it's just the path to the executable
+        let args = CommandLine.arguments.dropFirst()
+        // Go over all the flag arguments
         for arg in args.filter({ $0.starts(with: "-") && !$0.starts(with: "--") }) {
             // Get rid of the hyphen and return the remaining characters
             let argChars = arg.dropFirst().characters
             // Look for the argument in the array, else return nil
-            guard let _ = argChars.index(of: argument.shortName) else { continue }
+            guard let _ = argChars.index(of: shortName) else { continue }
             // Make sure it's not a bool, or else just return true
-            guard !(argument.type is Bool) else { return String(true) }
+            guard !isBool else { return String(true) }
             // Get the index from the array of all args
             let index = args.index(of: arg)!
             // Try and return the next argument's string value

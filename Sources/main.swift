@@ -18,13 +18,51 @@ import Dispatch
 #endif
 
 var monitr: Monitr
+let argParser = ArgumentParser("\(CommandLine.arguments.first!) [Options]")
 
 // Args/Flags to configure this program from the CLI
-let configOption = try Option<Path>("f", longName: "config", default: Path("~/.config/monitr/settings.json"), description: "The file from which to read configuration options")
-let plexDirOption = try Option<Path>("p", longName: "plex-dir", description: "The directory where the Plex libraries reside")
-let downloadDirOption = try Option<Path>("t", longName: "download-dir", description: "The directory where media downloads reside")
-let convertFlag = try Flag("c", longName: "convert", description: "Whether or not newly added files should be converted to a Plex DirectPlay format")
-let saveFlag = try Flag("s", longName: "save-settings", default: true, description: "Whether or not the configured settings should be saved to the config options file")
+let configOption = try Option<Path>("f", longName: "config", default: Path("~/.config/monitr/settings.json"), description: "The file from which to read configuration options", parser: argParser)
+let plexDirOption = try Option<Path>("p", longName: "plex-dir", description: "The directory where the Plex libraries reside", parser: argParser)
+let downloadDirOption = try Option<Path>("t", longName: "download-dir", description: "The directory where media downloads reside", parser: argParser)
+let convertFlag = try Flag("c", longName: "convert", description: "Whether or not newly added files should be converted to a Plex DirectPlay format", parser: argParser)
+let saveFlag = try Flag("s", longName: "save-settings", default: true, description: "Whether or not the configured settings should be saved to the config options file", parser: argParser)
+
+// Prints the help/usage text if -h or --help was used
+var h: Bool = false
+do {
+    if let help = try ArgumentParser.parse(longName: "help", isBool: true) {
+        h = try Bool.from(string: help)
+    } else if let help = try ArgumentParser.parse(shortName: "h", isBool: true) {
+        h = try Bool.from(string: help)
+    }
+} catch {
+    print("An error occured determing if the help/usage text needed to be displayed.\n\t\(error)")
+}
+if h {
+    print("Usage: \(argParser.usage)\n\nOptions:")
+    var longest = 0
+    argParser.arguments.forEach { arg in
+        if let flag = arg as? Flag {
+            let _ = flag.usage
+            longest = flag.usageDescriptionActualLength > longest ? flag.usageDescriptionActualLength : longest
+        } else if let path = arg as? Option<Path> {
+            let _ = path.usage
+            longest = path.usageDescriptionActualLength > longest ? path.usageDescriptionActualLength : longest
+        }
+    }
+    for argument in argParser.arguments {
+        if let flag = argument as? Flag {
+            flag.usageDescriptionNiceLength = longest + 4
+            print(flag.usage)
+        } else if let path = argument as? Option<Path> {
+            path.usageDescriptionNiceLength = longest + 4
+            print(path.usage)
+        } else {
+            continue
+        }
+    }
+    exit(EXIT_SUCCESS)
+}
 
 guard let configPath: Path = try configOption.parse() else {
     print("Something went wrong and the configPath option was not set")
