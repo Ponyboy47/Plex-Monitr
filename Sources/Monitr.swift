@@ -11,7 +11,7 @@
 
 import Foundation
 import PathKit
-//import Async
+import Async
 
 enum MonitrError: Swift.Error {
 }
@@ -40,7 +40,8 @@ class Monitr: DirectoryMonitorDelegate {
     /// Gets all media object and moves them to Plex then deletes all the empty
     ///   directories left in the downloads directory
     public func run() {
-        //Async.background {
+        print("Running")
+        Async.background {
             // Set that we're modifying the media as long as we're still contained in the run function
             self.isModifyingMedia = true
             // Unset the isModifyingMedia as soon as the run function completes
@@ -55,7 +56,7 @@ class Monitr: DirectoryMonitorDelegate {
             }
             // Removes all empty directories from the download directory
             self.cleanup(dir: self.config.downloadDirectory)
-        //}
+        }
     }
 
     /// Sets the delegate for the downloads directory monitor
@@ -191,6 +192,7 @@ class Monitr: DirectoryMonitorDelegate {
         do {
             let children = try dir.children()
             guard children.count > 0 else {
+                guard dir != config.downloadDirectory else { return }
                 do {
                     try dir.delete()
                 } catch {

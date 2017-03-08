@@ -72,13 +72,16 @@ class DirectoryMonitor {
             directoryMonitorSource = DispatchSource.makeTimerSource(queue: directoryMonitorQueue)
             directoryMonitorSource?.scheduleRepeating(deadline: .now() + .seconds(interval), interval: .seconds(interval), leeway: .seconds(leeway))
             directoryMonitorSource?.setEventHandler {
+                print("Time event occured")
                 self.delegate?.directoryMonitorDidObserveChange(self)
                 return
             }
 
             directoryMonitorSource?.setCancelHandler {
+                print("Stopping timer")
                 self.directoryMonitorSource = nil
             }
+            print("Started monitor")
         }
         #else
         // Listen for changes to the directory (if we are not already).
