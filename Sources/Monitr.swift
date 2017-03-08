@@ -40,7 +40,6 @@ class Monitr: DirectoryMonitorDelegate {
     /// Gets all media object and moves them to Plex then deletes all the empty
     ///   directories left in the downloads directory
     public func run() {
-        print("Running")
         Async.background {
             // Set that we're modifying the media as long as we're still contained in the run function
             self.isModifyingMedia = true

@@ -20,11 +20,11 @@ import Dispatch
 var monitr: Monitr
 
 // Args/Flags to configure this program from the CLI
-let configOption = Option<Path>("f", longName: "config", default: Path("~/.config/monitr/settings.json"), description: "The file from which to read configuration options")
-let plexDirOption = Option<Path>("p", longName: "plex-dir", description: "The directory where the Plex libraries reside")
-let downloadDirOption = Option<Path>("t", longName: "download-dir", description: "The directory where media downloads reside")
-let convertFlag = Flag("c", longName: "convert", description: "Whether or not newly added files should be converted to a Plex DirectPlay format")
-let saveFlag = Flag("s", longName: "save-settings", default: true, description: "Whether or not the configured settings should be saved to the config options file")
+let configOption = try Option<Path>("f", longName: "config", default: Path("~/.config/monitr/settings.json"), description: "The file from which to read configuration options")
+let plexDirOption = try Option<Path>("p", longName: "plex-dir", description: "The directory where the Plex libraries reside")
+let downloadDirOption = try Option<Path>("t", longName: "download-dir", description: "The directory where media downloads reside")
+let convertFlag = try Flag("c", longName: "convert", description: "Whether or not newly added files should be converted to a Plex DirectPlay format")
+let saveFlag = try Flag("s", longName: "save-settings", default: true, description: "Whether or not the configured settings should be saved to the config options file")
 
 guard let configPath: Path = try configOption.parse() else {
     print("Something went wrong and the configPath option was not set")

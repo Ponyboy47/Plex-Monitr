@@ -13,8 +13,6 @@
 */
 
 import Foundation
-
-// Linux swift has a separate Dispatch framework required for this
 #if os(Linux)
 import Dispatch
 #endif
@@ -81,7 +79,6 @@ class DirectoryMonitor {
                 print("Stopping timer")
                 self.directoryMonitorSource = nil
             }
-            print("Started monitor")
         }
         #else
         // Listen for changes to the directory (if we are not already).
@@ -107,6 +104,7 @@ class DirectoryMonitor {
             }
         }
         #endif
+
         // Start monitoring the directory via the source.
         directoryMonitorSource?.resume()
     }

@@ -17,6 +17,8 @@ enum ArgumentError: Error {
     case conversionError(String)
     case emptyString
     case requiredArgumentNotSet(String)
+    case invalidShortName(String)
+    case invalidLongName(String)
 }
 
 /// Protocol for types to be usable in Arguments on the command line. Types
@@ -50,7 +52,7 @@ protocol Argument {
      - Parameter description: The usage description for the cli argument
      - Parameter required: Whether or not the argument is required to be set
     */
-    init(_ shortName: Character, longName: String?, `default`: ArgType?, description: String?, `required`: Bool)
+    init(_ shortName: Character, longName: String?, `default`: ArgType?, description: String?, `required`: Bool) throws
     /// Parses the cli arguments to get the string value of the argument, or nil if it is not set
     func parse() throws -> ArgType?
     /// Returns the argument's value, it's default value if that is nil, or throws an error if it's required but the value is nil
@@ -69,8 +71,16 @@ class Option<T: ArgumentType>: Argument {
         return ArgType.self
     }
 
-    required init(_ shortName: Character, longName: String? = nil, `default`: ArgType? = nil, description: String? = nil, `required`: Bool = false) {
+    required init(_ shortName: Character, longName: String? = nil, `default`: ArgType? = nil, description: String? = nil, `required`: Bool = false) throws {
+        guard shortName != "h" else {
+            throw ArgumentError.invalidShortName("Cannot use 'h' as the short name since it is reserved for help/usage text.")
+        }
         self.shortName = shortName
+        if let l = longName {
+            guard l != "help" else {
+                throw ArgumentError.invalidLongName("Cannot use 'help' as the long name since it is reserved for help/usage text.")
+            }
+        }
         self.longName = longName
         self.`default` = `default`
         self.description = description
