@@ -87,7 +87,7 @@ class DirectoryMonitor {
         if directoryMonitorSource == nil && monitoredDirectoryFileDescriptor == -1 {
             // Open the directory referenced by URL for monitoring only.
             monitoredDirectoryFileDescriptor = open(URL.path, O_EVTONLY)
-            
+
             // Define a dispatch source monitoring the directory for additions, deletions, and renamings.
             directoryMonitorSource = DispatchSource.makeFileSystemObjectSource(fileDescriptor: monitoredDirectoryFileDescriptor, eventMask: .write, queue: directoryMonitorQueue)
 
