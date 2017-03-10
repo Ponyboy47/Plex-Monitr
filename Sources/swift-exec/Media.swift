@@ -15,91 +15,58 @@ import Downpour
 // Media related errors
 enum MediaError: Swift.Error {
     case unsupportedFormat(format: String)
+    case notImplemented
 }
 
 /// Protocol for the common implementation of Media types
-protocol Media {
+protocol Media: class {
     /// The path to the media file
     var path: Path { get set }
     /// Used to retrieve basic data from the file
     var downpour: Downpour { get set }
 
-    // These are mutating gets so that they can be lazy vars in the protocol implementations
+    // These are gets so that they can be lazy vars in the protocol implementations
 
     /// The name of the file in the proper Plex standardized format
-    var plexName: String { mutating get }
+    var plexName: String { get }
     /// The plex filename (including it's extension)
-    var plexFilename: String { mutating get }
+    var plexFilename: String { get }
     /// The directory where the media should be placed within plex
-    var finalDirectory: Path { mutating get }
+    var finalDirectory: Path { get }
 
     /// Initializer
     init(_ path: Path) throws
     /// Moves the media file to the finalDirectory
-    mutating func move(to newDirectory: Path) throws
+    func move(to newDirectory: Path) throws
     /// Converts the media file to a Plex DirectPlay supported format
-    mutating func convert() throws
+    func convert() throws
     /// Returns whether of not the Media type supported the given format
     static func isSupported(ext: String) -> Bool
 }
 
-/// Management for Video files
-struct Video: Media {
-    /// The supported extensions
-    enum SupportedExtension: String {
-        case mp4
-        case mkv
-        case m4v
-        case avi
-        case wmv
-    }
-
+class BaseMedia: Media {
     var path: Path
     var downpour: Downpour
-
-    // Lazy vars so these are calculated only once
-
-    lazy var plexName: String = {
-        var name: String
-        switch self.downpour.type {
-            // If it's a movie file, plex wants "Title (YYYY)"
-            case .movie:
-                name = "\(self.downpour.title) (\(self.downpour.year))"
-            // If it's a tv show, plex wants "Title - sXXeYY"
-            case .tv:
-                name = "\(self.downpour.title) - s\(self.downpour.season)e\(self.downpour.episode)"
-            // Otherwise just return the title (shouldn't ever actually reach this)
-            default:
-                name = self.downpour.title
-        }
-        // Return the calulated name
-        return name
-    }()
-    lazy var plexFilename: String = {
+    var plexName: String {
+        return self.downpour.title
+    }
+    var plexFilename: String {
         // Return the plexified name + it's extension
-        return self.plexName + (self.path.extension ?? "")
-    }()
-    lazy var finalDirectory: Path = {
-        // The base is either 'Movies' or 'TV Shows'
-        var base: Path = self.downpour.type == .movie ? "Movies" : "TV Shows"
-        // If it's a movie, just use the plexName. If it's a tv show, use the show title/Season ##
-        base += self.downpour.type == .movie ? self.plexName : "\(self.downpour.title)/Season \(self.downpour.season)"
-        // The final directory is set so that multiple versions of videos can easily be incorporated
-        return base
-    }()
+        return self.plexName + "." + (self.path.extension ?? "")
+    }
+    var finalDirectory: Path {
+        print("finalDirectory not implemented!")
+        return ""
+    }
 
-    init(_ path: Path) throws {
-        // Check to make sure the extension of the video file matches one of the supported plex extensions
-        guard Video.isSupported(ext: path.extension ?? "") else {
-            throw MediaError.unsupportedFormat(format: path.extension ?? "")
-        }
+    required init(_ path: Path) throws {
         // Set the media file's path to the absolute path
         self.path = path.absolute
         // Create the downpour object
         self.downpour = Downpour(fullPath: path)
     }
 
-    mutating func move(to plexPath: Path) throws {
+    func move(to plexPath: Path) throws {
         // Get the location of the finalDirectory inside the plexPath
         let mediaDirectory = plexPath + finalDirectory
         // Preemptively try and create the directory
@@ -112,11 +79,73 @@ struct Video: Media {
         path = finalRestingPlace
     }
 
-    mutating func convert() throws {
+    func convert() throws {
+    }
+
+    class func isSupported(ext: String) -> Bool {
+        print("isSupported(ext: String) is not implemented!")
+        return false
+    }
+}
+
+/// Management for Video files
+class Video: BaseMedia {
+    /// The supported extensions
+    enum SupportedExtension: String {
+        case mp4
+        case mkv
+        case m4v
+        case avi
+        case wmv
+    }
+
+    // Lazy vars so these are calculated only once
+
+    override var plexName: String {
+        var name: String
+        switch self.downpour.type {
+            // If it's a movie file, plex wants "Title (YYYY)"
+            case .movie:
+                name = "\(self.downpour.title)"
+                if let year = self.downpour.year {
+                    name += " (\(year))"
+                }
+            // If it's a tv show, plex wants "Title - sXXeYY"
+            case .tv:
+                name = "\(self.downpour.title) - s\(self.downpour.season!)e\(self.downpour.episode!)"
+            // Otherwise just return the title (shouldn't ever actually reach this)
+            default:
+                name = self.downpour.title
+        }
+        // Return the calulated name
+        return name
+    }
+    override var finalDirectory: Path {
+        var base: Path
+        switch self.downpour.type {
+        case .movie:
+            base = Path("Movies\(Path.separator)\(self.plexName)")
+        case .tv:
+            base = Path("TV Shows\(Path.separator)\(self.downpour.title)\(Path.separator)Season \(self.downpour.season!)")
+        default:
+            base = ""
+        }
+        return base
+    }
+
+    required init(_ path: Path) throws {
+        try super.init(path)
+        // Check to make sure the extension of the video file matches one of the supported plex extensions
+        guard Video.isSupported(ext: path.extension ?? "") else {
+            throw MediaError.unsupportedFormat(format: path.extension ?? "")
+        }
+    }
+
+    override func convert() throws {
         // Use the Handbrake CLI to convert to Plex DirectPlay capable video (if necessary)
     }
 
-    static func isSupported(ext: String) -> Bool {
+    override static func isSupported(ext: String) -> Bool {
         guard let _ = SupportedExtension(rawValue: ext.lowercased()) else {
             return false
         }
@@ -125,7 +154,7 @@ struct Video: Media {
 }
 
 /// Management for Audio files
-struct Audio: Media {
+class Audio: BaseMedia {
     /// The supported extensions
     enum SupportedExtension: String {
         case mp3
@@ -136,18 +165,11 @@ struct Audio: Media {
         case wav
     }
 
-    var path: Path
-    var downpour: Downpour
-
-    lazy var plexName: String = {
+    override var plexName: String {
         // Audio files are usually pretty simple
         return self.path.lastComponentWithoutExtension
-    }()
-    lazy var plexFilename: String = {
-        // This pretty much never changes
-        return self.plexName + (self.path.extension ?? "")
-    }()
-    lazy var finalDirectory: Path = {
+    }
+    override var finalDirectory: Path {
         // Music goes in the Music + Artist + Album directory
         var base: Path = "Music"
         guard let artist = self.downpour.artist else { return base + "Unknown" }
@@ -155,34 +177,20 @@ struct Audio: Media {
         guard let album = self.downpour.album else { return base + "Unknown" }
         base += album
         return base
-    }()
+    }
 
-    init(_ path: Path) throws {
+    required init(_ path: Path) throws {
+        try super.init(path)
         guard Audio.isSupported(ext: path.extension ?? "") else {
             throw MediaError.unsupportedFormat(format: path.extension ?? "")
         }
-        self.path = path.absolute
-        self.downpour = Downpour(fullPath: path)
     }
 
-    mutating func move(to plexPath: Path) throws {
-        // Get the location of the finalDirectory inside the plexPath
-        let mediaDirectory = plexPath + finalDirectory
-        // Preemptively try and create the directory
-        try mediaDirectory.mkpath()
-        // Create a path to the location where the file wil RIP
-        let finalRestingPlace = mediaDirectory + plexFilename
-        // Move the file to the correct plex location
-        try path.move(finalRestingPlace)
-        // Change the path now to match it's final resting place
-        path = finalRestingPlace
-    }
-
-    mutating func convert() throws {
+    override func convert() throws {
         // Use the Handbrake CLI to convert to Plex DirectPlay capable audio (if necessary)
     }
 
-	static func isSupported(ext: String) -> Bool {
+	override static func isSupported(ext: String) -> Bool {
         guard let _ = SupportedExtension(rawValue: ext.lowercased()) else {
             return false
         }
@@ -190,7 +198,7 @@ struct Audio: Media {
     }
 }
 
-struct Subtitle: Media {
+class Subtitle: Video {
     enum SupportedExtension: String {
         case srt
         case smi
@@ -199,74 +207,21 @@ struct Subtitle: Media {
         case vtt
     }
 
-    var path: Path
-    var downpour: Downpour
-
-    lazy var plexName: String = {
-		var name: String
-        switch self.downpour.type {
-            // If it's a movie file, plex wants "Title (YYYY)"
-            case .movie:
-                name = "\(self.downpour.title) (\(self.downpour.year))"
-            // If it's a tv show, plex wants "Title - sXXeYY"
-            case .tv:
-                name = "\(self.downpour.title) - s\(self.downpour.season)e\(self.downpour.episode)"
-            // Otherwise just return the title (shouldn't ever actually reach this)
-            default:
-                name = self.downpour.title
-        }
-        // Return the calulated name
-        return name
-    }()
-    lazy var plexFilename: String = {
-        // This really does never change
-        return self.plexName + (self.path.extension ?? "")
-    }()
-    lazy var finalDirectory: Path = {
-		// The base is either 'Movies' or 'TV Shows'
-          var base: Path = self.downpour.type == .movie ? "Movies" : "TV Shows"
-          // If it's a movie, just use the plexName. If it's a tv show, use the show title/Season ##
-          base += self.downpour.type == .movie ? self.plexName : "\(self.downpour.title)/Season \(self.downpour.season)"
-          // The final directory is set so that multiple versions of videos can easily be incorporated
-          return base
-    }()
-
-    init(_ path: Path) throws {
+    required init(_ path: Path) throws {
+        try super.init(path)
         guard Subtitle.isSupported(ext: path.extension ?? "") else {
             throw MediaError.unsupportedFormat(format: path.extension ?? "")
         }
-        self.path = path.absolute
-        self.downpour = Downpour(fullPath: path)
     }
 
-    mutating func move(to plexPath: Path) throws {
-        // Get the location of the finalDirectory inside the plexPath
-        let mediaDirectory = plexPath + finalDirectory
-        // Preemptively try and create the directory
-        try mediaDirectory.mkpath()
-        // Create a path to the location where the file wil RIP
-        let finalRestingPlace = mediaDirectory + plexFilename
-        // Move the file to the correct plex location
-        try path.move(finalRestingPlace)
-        // Change the path now to match it's final resting place
-        path = finalRestingPlace
-    }
-
-    mutating func convert() throws {
+    override func convert() throws {
         // Subtitles can't/don't need to be converted
         return
-    }
-
-	static func isSupported(ext: String) -> Bool {
-        guard let _ = SupportedExtension(rawValue: ext.lowercased()) else {
-            return false
-        }
-        return true
     }
 }
 
 /// Management for media types that we don't care about and can just delete
-struct Ignore: Media {
+class Ignore: BaseMedia {
     enum SupportedExtension: String {
         case txt
         case png
@@ -277,37 +232,33 @@ struct Ignore: Media {
         case md
     }
 
-    var path: Path
-    var downpour: Downpour
-
-    lazy var plexName: String = {
+    override var plexName: String {
         return self.path.lastComponentWithoutExtension
-    }()
-    lazy var plexFilename: String = {
+    }
+    override var plexFilename: String {
         return self.plexName + (self.path.extension ?? "")
-    }()
-    lazy var finalDirectory: Path = {
+    }
+    override var finalDirectory: Path {
         return "/dev/null"
-    }()
+    }
 
-    init(_ path: Path) throws {
+    required init(_ path: Path) throws {
+        try super.init(path)
         guard Ignore.isSupported(ext: path.extension ?? "") else {
             throw MediaError.unsupportedFormat(format: path.extension ?? "")
         }
-        self.path = path.absolute
-        self.downpour = Downpour(fullPath: path)
     }
 
-    mutating func move(to plexPath: Path) throws {
+    override func move(to plexPath: Path) throws {
         try path.delete()
     }
 
-    mutating func convert() throws {
+    override func convert() throws {
         // Ignored files don't need to be converted
         return
     }
 
-	static func isSupported(ext: String) -> Bool {
+	override static func isSupported(ext: String) -> Bool {
         guard let _ = SupportedExtension(rawValue: ext.lowercased()) else {
             return false
         }
