@@ -196,7 +196,7 @@ class ArgumentParser {
     /// Parse for a specific Argument and returns it's string value if it finds one
     class func parse<A: Argument>(_ argument: A) throws -> String? {
         if let longName = argument.longName {
-            var value = try ArgumentParser.parse(longName: longName, isBool: argument.type is Bool)
+            let value = try ArgumentParser.parse(longName: longName, isBool: argument.type is Bool)
             guard value == nil else { return value! }
         }
 

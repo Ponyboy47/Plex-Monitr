@@ -28,11 +28,7 @@ struct Config {
         set {
             // When this is set, update the DirectoryMonitor
             _downloadDirectory = newValue
-            #if os(Linux)
-            downloadWatcher = DirectoryMonitor()
-            #else
             downloadWatcher = DirectoryMonitor(URL: newValue.url)
-            #endif
         }
         get {
             return _downloadDirectory
@@ -69,7 +65,11 @@ struct Config {
 
     /// Starts monitoring the downloads directory for changes
     func startMonitoring() {
-        downloadWatcher?.startMonitoring()
+        do {
+            try downloadWatcher?.startMonitoring()
+        } catch {
+            print("Error starting watcher.\n\t\(error)")
+        }
     }
 
     /// Stops monitoring the downloads directory

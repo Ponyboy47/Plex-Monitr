@@ -15,11 +15,22 @@
 import Foundation
 #if os(Linux)
 import Dispatch
+import Glibc
+import inotify
+import CSelect
+public let O_EVTONLY = O_RDONLY
 #endif
 
 /// A protocol that allows delegates of `DirectoryMonitor` to respond to changes in a directory.
 protocol DirectoryMonitorDelegate: class {
     func directoryMonitorDidObserveChange(_ directoryMonitor: DirectoryMonitor)
+}
+
+enum DirectoryMonitorError: Error {
+    enum invalidFileDescriptor: Error {
+        case inotify
+        case directory
+    }
 }
 
 class DirectoryMonitor {
@@ -32,23 +43,11 @@ class DirectoryMonitor {
     let directoryMonitorQueue = DispatchQueue(label: "com.monitr.directorymonitor", attributes: [.concurrent])
 
     #if os(Linux)
-    /// A dispatch source that submits the event handler block based on a timer.
-    var directoryMonitorSource: DispatchSourceTimer?
-
-    /// The interval to run at
-    var interval: Int
-
-    /// The leeway with the running interval
-    var leeway: Int
-
-    // MARK: Initializers
-    init(interval: Int = 60, leeway: Int = 10) {
-        self.interval = interval
-        self.leeway = leeway
-    }
+    var inotifyFileDescriptor: Int32 = -1
     #else
     /// A dispatch source to monitor a file descriptor created from the directory.
     var directoryMonitorSource: DispatchSourceFileSystemObject?
+    #endif
 
     /// A file descriptor for the monitored directory.
     var monitoredDirectoryFileDescriptor: Int32 = -1
@@ -60,32 +59,35 @@ class DirectoryMonitor {
     init(URL: URL) {
         self.URL = URL
     }
-    #endif
 
     // MARK: Monitoring
 
-    func startMonitoring() {
+    func startMonitoring() throws {
+        // Listen for changes to the directory (if we are not already).
         #if os(Linux)
-        if directoryMonitorSource == nil {
-            directoryMonitorSource = DispatchSource.makeTimerSource(queue: directoryMonitorQueue)
-            directoryMonitorSource?.scheduleRepeating(deadline: .now() + .seconds(interval), interval: .seconds(interval), leeway: .seconds(leeway))
-            directoryMonitorSource?.setEventHandler {
-                print("Time event occured")
-                self.delegate?.directoryMonitorDidObserveChange(self)
-                return
-            }
+        inotifyFileDescriptor = inotify_init()
+        guard inotifyFileDescriptor > 0 else {
+            throw DirectoryMonitorError.invalidFileDescriptor.inotify
+        }
+        monitoredDirectoryFileDescriptor = inotify_add_watch(inotifyFileDescriptor, URL.path, UInt32(IN_MOVED_TO))
+        directoryMonitorQueue.async {
+            while true {
+                var fileDescriptorSet: fd_set = fd_set()
+                fd_zero(&fileDescriptorSet)
+                fd_setter(self.inotifyFileDescriptor, &fileDescriptorSet)
 
-            directoryMonitorSource?.setCancelHandler {
-                print("Stopping timer")
-                self.directoryMonitorSource = nil
+                let fileDescriptor = select(FD_SETSIZE, &fileDescriptorSet, nil, nil, nil)
+                if fileDescriptor > 0 {
+                    print("Event happened")
+                    self.delegate?.directoryMonitorDidObserveChange(self)
+                }
             }
         }
         #else
-        // Listen for changes to the directory (if we are not already).
         if directoryMonitorSource == nil && monitoredDirectoryFileDescriptor == -1 {
             // Open the directory referenced by URL for monitoring only.
             monitoredDirectoryFileDescriptor = open(URL.path, O_EVTONLY)
-
+            
             // Define a dispatch source monitoring the directory for additions, deletions, and renamings.
             directoryMonitorSource = DispatchSource.makeFileSystemObjectSource(fileDescriptor: monitoredDirectoryFileDescriptor, eventMask: .write, queue: directoryMonitorQueue)
 
@@ -103,14 +105,18 @@ class DirectoryMonitor {
                 self.directoryMonitorSource = nil
             }
         }
-        #endif
 
         // Start monitoring the directory via the source.
         directoryMonitorSource?.resume()
+        #endif
     }
 
     /// Stop monitoring the directory via the source.
     func stopMonitoring() {
+        #if os(Linux)
+        close(inotifyFileDescriptor)
+        #else
         directoryMonitorSource?.cancel()
+        #endif
     }
 }
