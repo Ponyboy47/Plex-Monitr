@@ -120,7 +120,7 @@ class Option<A: ArgumentType>: Argument {
 
     func parse() throws -> ArgType? {
         // Try and get the string value of the argument from the cli
-        if let stringValue = try ArgumentParser.parse(self) {
+        if let stringValue = ArgumentParser.parse(self) {
             // Try and convert that string value to the proper type
             return try getValue(from: stringValue)
         }
@@ -194,16 +194,16 @@ class ArgumentParser {
     }
 
     /// Parse for a specific Argument and returns it's string value if it finds one
-    class func parse<A: Argument>(_ argument: A) throws -> String? {
+    class func parse<A: Argument>(_ argument: A) -> String? {
         if let longName = argument.longName {
-            let value = try ArgumentParser.parse(longName: longName, isBool: argument.type is Bool)
+            let value = ArgumentParser.parse(longName: longName, isBool: argument.type is Bool)
             guard value == nil else { return value! }
         }
 
-        return try ArgumentParser.parse(shortName: argument.shortName, isBool: argument.type is Bool)
+        return ArgumentParser.parse(shortName: argument.shortName, isBool: argument.type is Bool)
     }
 
-    class func parse(longName: String, isBool: Bool = false) throws -> String? {
+    class func parse(longName: String, isBool: Bool = false) -> String? {
         // Drop the first argument since it's just the path to the executable
         let args = CommandLine.arguments.dropFirst()
         // Try and find the index of the long argument

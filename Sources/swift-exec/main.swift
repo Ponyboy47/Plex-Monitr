@@ -30,9 +30,9 @@ let saveFlag = try Flag("s", longName: "save-settings", default: true, descripti
 // Prints the help/usage text if -h or --help was used
 var h: Bool = false
 do {
-    if let help = try ArgumentParser.parse(longName: "help", isBool: true) {
+    if let help = ArgumentParser.parse(longName: "help", isBool: true) {
         h = try Bool.from(string: help)
-    } else if let help = try ArgumentParser.parse(shortName: "h", isBool: true) {
+    } else if let help = ArgumentParser.parse(shortName: "h", isBool: true) {
         h = try Bool.from(string: help)
     }
 } catch {
