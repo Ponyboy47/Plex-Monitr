@@ -80,6 +80,7 @@ class BaseMedia: Media {
     }
 
     func convert() throws {
+        throw MediaError.notImplemented
     }
 
     class func isSupported(ext: String) -> Bool {
@@ -273,6 +274,7 @@ class Ignore: BaseMedia {
         case rst
         case md
         case nfo
+        case sfv
     }
 
     override var plexName: String {
