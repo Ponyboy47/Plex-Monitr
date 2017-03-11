@@ -78,8 +78,11 @@ class DirectoryMonitor {
 
                 let fileDescriptor = select(FD_SETSIZE, &fileDescriptorSet, nil, nil, nil)
                 if fileDescriptor > 0 {
-                    print("Event happened")
+                    let bufferSize = 1024
+                    let buffer = UnsafeMutableRawPointer(malloc(bufferSize))
+                    let _ = read(self.inotifyFileDescriptor, buffer!, bufferSize)
                     self.delegate?.directoryMonitorDidObserveChange(self)
+                    free(buffer)
                 }
             }
         }

@@ -230,6 +230,7 @@ class Ignore: BaseMedia {
         case gif
         case rst
         case md
+        case nfo
     }
 
     override var plexName: String {

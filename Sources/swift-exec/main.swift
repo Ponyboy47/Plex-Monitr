@@ -25,7 +25,7 @@ let configOption = try Option<Path>("f", longName: "config", default: Path("~/.c
 let plexDirOption = try Option<Path>("p", longName: "plex-dir", description: "The directory where the Plex libraries reside", parser: argParser)
 let downloadDirOption = try Option<Path>("t", longName: "download-dir", description: "The directory where media downloads reside", parser: argParser)
 let convertFlag = try Flag("c", longName: "convert", description: "Whether or not newly added files should be converted to a Plex DirectPlay format", parser: argParser)
-let saveFlag = try Flag("s", longName: "save-settings", default: true, description: "Whether or not the configured settings should be saved to the config options file", parser: argParser)
+let saveFlag = try Flag("s", longName: "save-settings", default: false, description: "Whether or not the configured settings should be saved to the config options file", parser: argParser)
 
 // Prints the help/usage text if -h or --help was used
 var h: Bool = false
