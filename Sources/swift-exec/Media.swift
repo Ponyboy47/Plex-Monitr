@@ -198,7 +198,7 @@ class Audio: BaseMedia {
     }
 }
 
-class Subtitle: Video {
+class Subtitle: BaseMedia {
     enum SupportedExtension: String {
         case srt
         case smi
@@ -207,16 +207,58 @@ class Subtitle: Video {
         case vtt
     }
 
+    // Lazy vars so these are calculated only once
+
+    override var plexName: String {
+        var name: String
+        switch self.downpour.type {
+            // If it's a movie file, plex wants "Title (YYYY)"
+            case .movie:
+                name = "\(self.downpour.title)"
+                if let year = self.downpour.year {
+                    name += " (\(year))"
+                }
+            // If it's a tv show, plex wants "Title - sXXeYY"
+            case .tv:
+                name = "\(self.downpour.title) - s\(self.downpour.season!)e\(self.downpour.episode!)"
+            // Otherwise just return the title (shouldn't ever actually reach this)
+            default:
+                name = self.downpour.title
+        }
+        // Return the calulated name
+        return name
+    }
+    override var finalDirectory: Path {
+        var base: Path
+        switch self.downpour.type {
+        case .movie:
+            base = Path("Movies\(Path.separator)\(self.plexName)")
+        case .tv:
+            base = Path("TV Shows\(Path.separator)\(self.downpour.title)\(Path.separator)Season \(self.downpour.season!)")
+        default:
+            base = ""
+        }
+        return base
+    }
+
     required init(_ path: Path) throws {
         try super.init(path)
+        // Check to make sure the extension of the video file matches one of the supported plex extensions
         guard Subtitle.isSupported(ext: path.extension ?? "") else {
             throw MediaError.unsupportedFormat(format: path.extension ?? "")
         }
     }
 
     override func convert() throws {
-        // Subtitles can't/don't need to be converted
+        // Subtitles don't need to be converted
         return
+    }
+
+    override static func isSupported(ext: String) -> Bool {
+        guard let _ = SupportedExtension(rawValue: ext.lowercased()) else {
+            return false
+        }
+        return true
     }
 }
 
