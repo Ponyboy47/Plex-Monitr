@@ -11,6 +11,29 @@
 import Foundation
 
 extension String {
+    /// A randomly generated, unique string of 64 characters
+    public static var uniq: String {
+        let letters : NSString = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        #if os(Linux)
+        let len = letters.length
+        #else
+        let len = UInt32(letters.length)
+        #endif
+
+        var randomString = ""
+
+        for _ in 1...64 {
+            #if os(Linux)
+            let rand = random() % len
+            #else
+            let rand = arc4random_uniform(len)
+            #endif
+            var nextChar = letters.character(at: Int(rand))
+            randomString += String(nextChar)
+        }
+        return randomString
+    }
+
     /**
      Checks if a string ends with a specified string
      - Parameter string: The string to test against

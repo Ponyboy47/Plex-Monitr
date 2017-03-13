@@ -16,6 +16,7 @@ import Downpour
 enum MediaError: Swift.Error {
     case unsupportedFormat(format: String)
     case notImplemented
+    case sampleMedia
 }
 
 /// Protocol for the common implementation of Media types
@@ -127,7 +128,7 @@ class Video: BaseMedia {
         case .movie:
             base = Path("Movies\(Path.separator)\(self.plexName)")
         case .tv:
-            base = Path("TV Shows\(Path.separator)\(self.downpour.title)\(Path.separator)Season \(self.downpour.season!)")
+            base = Path("TV Shows\(Path.separator)\(self.downpour.title)\(Path.separator)Season \(self.downpour.season!)\(Path.separator)\(self.plexName)")
         default:
             base = ""
         }
@@ -135,11 +136,14 @@ class Video: BaseMedia {
     }
 
     required init(_ path: Path) throws {
-        try super.init(path)
         // Check to make sure the extension of the video file matches one of the supported plex extensions
         guard Video.isSupported(ext: path.extension ?? "") else {
             throw MediaError.unsupportedFormat(format: path.extension ?? "")
         }
+        guard !path.string.lowercased().contains("sample") else {
+            throw MediaError.sampleMedia
+        }
+        try super.init(path)
     }
 
     override func convert() throws {
@@ -208,6 +212,14 @@ class Subtitle: BaseMedia {
         case vtt
     }
 
+    /// Common subtitle languages to look out for
+    private let commonLanguages: [String] = [
+                                             "english", "spanish", "portuguese",
+                                             "german", "swedish", "russian",
+                                             "french", "chinese", "japanese",
+                                             "hindu", "persian", "italian"
+                                            ]
+
     // Lazy vars so these are calculated only once
 
     override var plexName: String {
@@ -226,6 +238,24 @@ class Subtitle: BaseMedia {
             default:
                 name = self.downpour.title
         }
+        var language: String?
+        if let match = self.path.lastComponent.range(of: "anoXmous_([a-z]{3})", options: .regularExpression) {
+            language = self.path.lastComponent[match].replacingOccurrences(of: "anoXmous_", with: "")
+        } else {
+            for lang in self.commonLanguages {
+                if self.path.lastComponent.lowercased().contains(lang) {
+                    language = lang.substring(to: 3)
+                    break
+                }
+            }
+        }
+
+        if let lang = language {
+            name += ".\(lang)"
+        } else {
+            name += ".unknown-\(self.path.lastComponent)"
+        }
+
         // Return the calulated name
         return name
     }
@@ -235,7 +265,7 @@ class Subtitle: BaseMedia {
         case .movie:
             base = Path("Movies\(Path.separator)\(self.plexName)")
         case .tv:
-            base = Path("TV Shows\(Path.separator)\(self.downpour.title)\(Path.separator)Season \(self.downpour.season!)")
+            base = Path("TV Shows\(Path.separator)\(self.downpour.title)\(Path.separator)Season \(self.downpour.season!)\(Path.separator)\(self.plexName)")
         default:
             base = ""
         }
@@ -266,15 +296,15 @@ class Subtitle: BaseMedia {
 /// Management for media types that we don't care about and can just delete
 class Ignore: BaseMedia {
     enum SupportedExtension: String {
-        case txt
-        case png
-        case jpg
-        case jpeg
-        case gif
-        case rst
-        case md
-        case nfo
-        case sfv
+        case txt; case png
+        case jpg; case jpeg
+        case gif; case rst
+        case md; case nfo
+        case sfv; case sub
+        case idx; case css
+        case js; case htm
+        case html; case url
+        case php
     }
 
     override var plexName: String {
@@ -288,10 +318,12 @@ class Ignore: BaseMedia {
     }
 
     required init(_ path: Path) throws {
-        try super.init(path)
-        guard Ignore.isSupported(ext: path.extension ?? "") else {
-            throw MediaError.unsupportedFormat(format: path.extension ?? "")
+        if !path.string.lowercased().contains("sample") {
+            guard Ignore.isSupported(ext: path.extension ?? "") else {
+                throw MediaError.unsupportedFormat(format: path.extension ?? "")
+            }
         }
+        try super.init(path)
     }
 
     override func move(to plexPath: Path) throws {

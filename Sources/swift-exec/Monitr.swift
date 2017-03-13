@@ -120,7 +120,11 @@ class Monitr: DirectoryMonitorDelegate {
 		let ext = file.extension ?? ""
         do {
             if Video.isSupported(ext: ext) {
-                m = try Video(file)
+                do {
+                    m = try Video(file)
+                } catch MediaError.sampleMedia {
+                    m = try Ignore(file)
+                }
             } else if Audio.isSupported(ext: ext) {
                 m = try Audio(file)
             } else if Subtitle.isSupported(ext: ext) {
