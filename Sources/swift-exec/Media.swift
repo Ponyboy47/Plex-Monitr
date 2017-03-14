@@ -49,11 +49,11 @@ class BaseMedia: Media {
     var path: Path
     var downpour: Downpour
     var plexName: String {
-        return self.downpour.title
+        return downpour.title
     }
     var plexFilename: String {
         // Return the plexified name + it's extension
-        return self.plexName + "." + (self.path.extension ?? "")
+        return plexName + "." + (path.extension ?? "")
     }
     var finalDirectory: Path {
         print("finalDirectory not implemented!")
@@ -64,7 +64,7 @@ class BaseMedia: Media {
         // Set the media file's path to the absolute path
         self.path = path.absolute
         // Create the downpour object
-        self.downpour = Downpour(fullPath: path)
+        downpour = Downpour(fullPath: path)
     }
 
     func move(to plexPath: Path) throws {
@@ -105,30 +105,30 @@ class Video: BaseMedia {
 
     override var plexName: String {
         var name: String
-        switch self.downpour.type {
+        switch downpour.type {
             // If it's a movie file, plex wants "Title (YYYY)"
             case .movie:
-                name = "\(self.downpour.title)"
-                if let year = self.downpour.year {
+                name = "\(downpour.title)"
+                if let year = downpour.year {
                     name += " (\(year))"
                 }
             // If it's a tv show, plex wants "Title - sXXeYY"
             case .tv:
-                name = "\(self.downpour.title) - s\(self.downpour.season!)e\(self.downpour.episode!)"
+                name = "\(downpour.title) - s\(downpour.season!)e\(downpour.episode!)"
             // Otherwise just return the title (shouldn't ever actually reach this)
             default:
-                name = self.downpour.title
+                name = downpour.title
         }
         // Return the calulated name
         return name
     }
     override var finalDirectory: Path {
         var base: Path
-        switch self.downpour.type {
+        switch downpour.type {
         case .movie:
-            base = Path("Movies\(Path.separator)\(self.plexName)")
+            base = Path("Movies\(Path.separator)\(plexName)")
         case .tv:
-            base = Path("TV Shows\(Path.separator)\(self.downpour.title)\(Path.separator)Season \(self.downpour.season!)\(Path.separator)\(self.plexName)")
+            base = Path("TV Shows\(Path.separator)\(downpour.title)\(Path.separator)Season \(downpour.season!)\(Path.separator)\(plexName)")
         default:
             base = ""
         }
@@ -172,14 +172,14 @@ class Audio: BaseMedia {
 
     override var plexName: String {
         // Audio files are usually pretty simple
-        return self.path.lastComponentWithoutExtension
+        return path.lastComponentWithoutExtension
     }
     override var finalDirectory: Path {
         // Music goes in the Music + Artist + Album directory
         var base: Path = "Music"
-        guard let artist = self.downpour.artist else { return base + "Unknown" }
+        guard let artist = downpour.artist else { return base + "Unknown" }
         base += artist
-        guard let album = self.downpour.album else { return base + "Unknown" }
+        guard let album = downpour.album else { return base + "Unknown" }
         base += album
         return base
     }
@@ -224,26 +224,26 @@ class Subtitle: BaseMedia {
 
     override var plexName: String {
         var name: String
-        switch self.downpour.type {
+        switch downpour.type {
             // If it's a movie file, plex wants "Title (YYYY)"
             case .movie:
-                name = "\(self.downpour.title)"
-                if let year = self.downpour.year {
+                name = "\(downpour.title)"
+                if let year = downpour.year {
                     name += " (\(year))"
                 }
             // If it's a tv show, plex wants "Title - sXXeYY"
             case .tv:
-                name = "\(self.downpour.title) - s\(self.downpour.season!)e\(self.downpour.episode!)"
+                name = "\(downpour.title) - s\(downpour.season!)e\(downpour.episode!)"
             // Otherwise just return the title (shouldn't ever actually reach this)
             default:
-                name = self.downpour.title
+                name = downpour.title
         }
         var language: String?
-        if let match = self.path.lastComponent.range(of: "anoXmous_([a-z]{3})", options: .regularExpression) {
-            language = self.path.lastComponent[match].replacingOccurrences(of: "anoXmous_", with: "")
+        if let match = path.lastComponent.range(of: "anoXmous_([a-z]{3})", options: .regularExpression) {
+            language = path.lastComponent[match].replacingOccurrences(of: "anoXmous_", with: "")
         } else {
-            for lang in self.commonLanguages {
-                if self.path.lastComponent.lowercased().contains(lang) {
+            for lang in commonLanguages {
+                if path.lastComponent.lowercased().contains(lang) {
                     language = lang.substring(to: 3)
                     break
                 }
@@ -253,7 +253,7 @@ class Subtitle: BaseMedia {
         if let lang = language {
             name += ".\(lang)"
         } else {
-            name += ".unknown-\(self.path.lastComponent)"
+            name += ".unknown-\(path.lastComponent)"
         }
 
         // Return the calulated name
@@ -261,11 +261,11 @@ class Subtitle: BaseMedia {
     }
     override var finalDirectory: Path {
         var base: Path
-        switch self.downpour.type {
+        switch downpour.type {
         case .movie:
-            base = Path("Movies\(Path.separator)\(self.plexName)")
+            base = Path("Movies\(Path.separator)\(plexName)")
         case .tv:
-            base = Path("TV Shows\(Path.separator)\(self.downpour.title)\(Path.separator)Season \(self.downpour.season!)\(Path.separator)\(self.plexName)")
+            base = Path("TV Shows\(Path.separator)\(downpour.title)\(Path.separator)Season \(downpour.season!)\(Path.separator)\(Path(Path(plexName).lastComponentWithoutExtension).lastComponentWithoutExtension)")
         default:
             base = ""
         }
@@ -308,10 +308,10 @@ class Ignore: BaseMedia {
     }
 
     override var plexName: String {
-        return self.path.lastComponentWithoutExtension
+        return path.lastComponentWithoutExtension
     }
     override var plexFilename: String {
-        return self.plexName + (self.path.extension ?? "")
+        return plexName + (path.extension ?? "")
     }
     override var finalDirectory: Path {
         return "/dev/null"
