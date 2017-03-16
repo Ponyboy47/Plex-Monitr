@@ -13,7 +13,7 @@ import Foundation
 extension String {
     /// A randomly generated, unique string of 64 characters
     public static var uniq: String {
-        let letters : NSString = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        let letters: NSString = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
         #if os(Linux)
         let len = letters.length
         #else
@@ -28,7 +28,7 @@ extension String {
             #else
             let rand = arc4random_uniform(len)
             #endif
-            var nextChar = letters.character(at: Int(rand))
+            let nextChar = letters.character(at: Int(rand))
             randomString += String(nextChar)
         }
         return randomString
