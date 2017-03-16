@@ -26,8 +26,6 @@ protocol Media: class {
     /// Used to retrieve basic data from the file
     var downpour: Downpour { get set }
 
-    // These are gets so that they can be lazy vars in the protocol implementations
-
     /// The name of the file in the proper Plex standardized format
     var plexName: String { get }
     /// The plex filename (including it's extension)
@@ -69,7 +67,6 @@ class BaseMedia: Media {
     func move(to plexPath: Path) throws {
         // Get the location of the finalDirectory inside the plexPath
         let mediaDirectory = plexPath + finalDirectory
-        print("Moving '\(path)' -> '\(mediaDirectory)'")
         // Preemptively try and create the directory
         try mediaDirectory.mkpath()
         // Create a path to the location where the file will RIP
@@ -221,8 +218,9 @@ class Subtitle: BaseMedia {
                                              "greek"
                                             ]
 
-    // Lazy vars so these are calculated only once
-
+    override var plexFilename: String {
+        return plexName + lang! + "." + (path.extension ?? "")
+    }
     override var plexName: String {
         var name: String
         switch downpour.type {
@@ -251,22 +249,27 @@ class Subtitle: BaseMedia {
             }
         }
 
-        if let lang = language {
-            name += ".\(lang)"
+        if let l = language {
+            lang = l
         } else {
-            name += ".unknown-\(path.lastComponent)"
+            lang = ".unknown-\(path.lastComponent)"
         }
 
         // Return the calulated name
         return name
     }
+    var lang: String?
     override var finalDirectory: Path {
+        var name = plexName
+        while name.contains("unknown") {
+            name = Path(name).lastComponentWithoutExtension
+        }
         var base: Path
         switch downpour.type {
         case .movie:
-            base = Path("Movies\(Path.separator)\(Path(Path(plexName).lastComponentWithoutExtension).lastComponentWithoutExtension)")
+            base = Path("Movies\(Path.separator)\(plexName)")
         case .tv:
-            base = Path("TV Shows\(Path.separator)\(downpour.title)\(Path.separator)Season \(downpour.season!)\(Path.separator)\(Path(Path(plexName).lastComponentWithoutExtension).lastComponentWithoutExtension)")
+            base = Path("TV Shows\(Path.separator)\(downpour.title)\(Path.separator)Season \(downpour.season!)\(Path.separator)\(plexName)")
         default:
             base = ""
         }
@@ -311,9 +314,6 @@ class Ignore: BaseMedia {
 
     override var plexName: String {
         return path.lastComponentWithoutExtension
-    }
-    override var plexFilename: String {
-        return plexName + (path.extension ?? "")
     }
     override var finalDirectory: Path {
         return "/dev/null"
