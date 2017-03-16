@@ -56,7 +56,6 @@ class BaseMedia: Media {
         return plexName + "." + (path.extension ?? "")
     }
     var finalDirectory: Path {
-        print("finalDirectory not implemented!")
         return ""
     }
 
@@ -70,6 +69,7 @@ class BaseMedia: Media {
     func move(to plexPath: Path) throws {
         // Get the location of the finalDirectory inside the plexPath
         let mediaDirectory = plexPath + finalDirectory
+        print("Moving '\(path)' -> '\(mediaDirectory)'")
         // Preemptively try and create the directory
         try mediaDirectory.mkpath()
         // Create a path to the location where the file will RIP
@@ -114,7 +114,7 @@ class Video: BaseMedia {
                 }
             // If it's a tv show, plex wants "Title - sXXeYY"
             case .tv:
-                name = "\(downpour.title) - s\(downpour.season!)e\(downpour.episode!)"
+                name = "\(downpour.title) - s\(String(format: "%02d", Int(downpour.season!)!))e\(String(format: "%02d", Int(downpour.episode!)!))"
             // Otherwise just return the title (shouldn't ever actually reach this)
             default:
                 name = downpour.title
@@ -128,7 +128,7 @@ class Video: BaseMedia {
         case .movie:
             base = Path("Movies\(Path.separator)\(plexName)")
         case .tv:
-            base = Path("TV Shows\(Path.separator)\(downpour.title)\(Path.separator)Season \(downpour.season!)\(Path.separator)\(plexName)")
+            base = Path("TV Shows\(Path.separator)\(downpour.title)\(Path.separator)Season \(String(format: "%02d", Int(downpour.season!)!))\(Path.separator)\(plexName)")
         default:
             base = ""
         }
@@ -217,7 +217,8 @@ class Subtitle: BaseMedia {
                                              "english", "spanish", "portuguese",
                                              "german", "swedish", "russian",
                                              "french", "chinese", "japanese",
-                                             "hindu", "persian", "italian"
+                                             "hindu", "persian", "italian",
+                                             "greek"
                                             ]
 
     // Lazy vars so these are calculated only once
@@ -263,7 +264,7 @@ class Subtitle: BaseMedia {
         var base: Path
         switch downpour.type {
         case .movie:
-            base = Path("Movies\(Path.separator)\(plexName)")
+            base = Path("Movies\(Path.separator)\(Path(Path(plexName).lastComponentWithoutExtension).lastComponentWithoutExtension)")
         case .tv:
             base = Path("TV Shows\(Path.separator)\(downpour.title)\(Path.separator)Season \(downpour.season!)\(Path.separator)\(Path(Path(plexName).lastComponentWithoutExtension).lastComponentWithoutExtension)")
         default:
@@ -304,7 +305,8 @@ class Ignore: BaseMedia {
         case idx; case css
         case js; case htm
         case html; case url
-        case php
+        case php; case md5
+        case doc; case docx
     }
 
     override var plexName: String {
