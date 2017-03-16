@@ -47,7 +47,7 @@ class BaseMedia: Media {
     var path: Path
     var downpour: Downpour
     var plexName: String {
-        return downpour.title
+        return downpour.title.wordCased
     }
     var plexFilename: String {
         // Return the plexified name + it's extension
@@ -105,16 +105,16 @@ class Video: BaseMedia {
         switch downpour.type {
             // If it's a movie file, plex wants "Title (YYYY)"
             case .movie:
-                name = "\(downpour.title)"
+                name = "\(downpour.title.wordCased)"
                 if let year = downpour.year {
                     name += " (\(year))"
                 }
             // If it's a tv show, plex wants "Title - sXXeYY"
             case .tv:
-                name = "\(downpour.title) - s\(String(format: "%02d", Int(downpour.season!)!))e\(String(format: "%02d", Int(downpour.episode!)!))"
+                name = "\(downpour.title.wordCased) - s\(String(format: "%02d", Int(downpour.season!)!))e\(String(format: "%02d", Int(downpour.episode!)!))"
             // Otherwise just return the title (shouldn't ever actually reach this)
             default:
-                name = downpour.title
+                name = downpour.title.wordCased
         }
         // Return the calulated name
         return name
@@ -125,7 +125,7 @@ class Video: BaseMedia {
         case .movie:
             base = Path("Movies\(Path.separator)\(plexName)")
         case .tv:
-            base = Path("TV Shows\(Path.separator)\(downpour.title)\(Path.separator)Season \(String(format: "%02d", Int(downpour.season!)!))\(Path.separator)\(plexName)")
+            base = Path("TV Shows\(Path.separator)\(downpour.title.wordCased)\(Path.separator)Season \(String(format: "%02d", Int(downpour.season!)!))\(Path.separator)\(plexName)")
         default:
             base = ""
         }
@@ -219,23 +219,28 @@ class Subtitle: BaseMedia {
                                             ]
 
     override var plexFilename: String {
-        return plexName + lang! + "." + (path.extension ?? "")
+        var name = "\(plexName)."
+        if let l = lang {
+            name += "\(l)."
+        }
+        name += path.extension ?? "uft"
+        return name
     }
     override var plexName: String {
         var name: String
         switch downpour.type {
             // If it's a movie file, plex wants "Title (YYYY)"
             case .movie:
-                name = "\(downpour.title)"
+                name = "\(downpour.title.wordCased)"
                 if let year = downpour.year {
                     name += " (\(year))"
                 }
             // If it's a tv show, plex wants "Title - sXXeYY"
             case .tv:
-                name = "\(downpour.title) - s\(downpour.season!)e\(downpour.episode!)"
+                name = "\(downpour.title.wordCased) - s\(String(format: "%02d", Int(downpour.season!)!))e\(String(format: "%02d", Int(downpour.episode!)!))"
             // Otherwise just return the title (shouldn't ever actually reach this)
             default:
-                name = downpour.title
+                name = downpour.title.wordCased
         }
         var language: String?
         if let match = path.lastComponent.range(of: "anoXmous_([a-z]{3})", options: .regularExpression) {
@@ -252,7 +257,7 @@ class Subtitle: BaseMedia {
         if let l = language {
             lang = l
         } else {
-            lang = ".unknown-\(path.lastComponent)"
+            lang = "unknown-\(path.lastComponent)"
         }
 
         // Return the calulated name
@@ -269,7 +274,7 @@ class Subtitle: BaseMedia {
         case .movie:
             base = Path("Movies\(Path.separator)\(plexName)")
         case .tv:
-            base = Path("TV Shows\(Path.separator)\(downpour.title)\(Path.separator)Season \(downpour.season!)\(Path.separator)\(plexName)")
+            base = Path("TV Shows\(Path.separator)\(downpour.title.wordCased)\(Path.separator)Season \(String(format: "%02d", Int(downpour.season!)!))\(Path.separator)\(plexName)")
         default:
             base = ""
         }

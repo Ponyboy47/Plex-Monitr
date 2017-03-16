@@ -24,6 +24,7 @@ extension String {
 
         for _ in 1...64 {
             #if os(Linux)
+            // TODO: linux random doesn't work correctly (but I'm not using it so...oh well)
             let rand = random() % len
             #else
             let rand = arc4random_uniform(len)
@@ -32,6 +33,26 @@ extension String {
             randomString += String(nextChar)
         }
         return randomString
+    }
+
+    /// Capitalizes the first character and lowercases the rest
+    public var sentenceCased: String {
+        let first = String(characters.prefix(1)).capitalized
+        let other = String(characters.dropFirst())
+        return first + other
+    }
+
+    /// Capitalizes the first letter of every word and lowercases the rest
+    public var wordCased: String {
+        let charset = CharacterSet(charactersIn: " _")
+        let words = self.components(separatedBy: charset)
+
+        var capitalizedString = ""
+
+        for word in words {
+            capitalizedString += word.sentenceCased + " "
+        }
+        return capitalizedString.dropLast()
     }
 
     /**
@@ -61,11 +82,11 @@ extension String {
     }
 
 	public func dropFirst() -> String {
-        return substring(from: 1)
+        return String(characters.dropFirst())
     }
 
 	public func dropLast() -> String {
-        return substring(to: -2)
+        return String(characters.dropLast())
     }
 
     public func substring(from: Int = 0, to: Int = -1) -> String {
