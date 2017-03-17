@@ -34,6 +34,7 @@ Use the -h or --help flags to see the usage/help text
 ---
 
 ## TODO:
+- [ ] Make a graphic
 - [ ] Logging
 - [ ] The CLI boolean flags with a default value of true cannot be set to false. Fix it.
 - [ ] Do something with files that failed to be moved
