@@ -1,6 +1,8 @@
-# Monitr
+# Monitr:
 Watch a directory for new media and add it to the proper corresponding location in a Plex library.
+
 ---
+
 ## Features:
 * Cross-system compatability
   * Linux (tested on Ubuntu 16.04)
@@ -11,7 +13,9 @@ Watch a directory for new media and add it to the proper corresponding location 
     * Including subtitles
   * Music
   * Home videos would be placed in either the Movies or TV Shows directories (depends on the file name)
+
 ---
+
 ## Usage:
 Clone the repo and build it:
 ```bash
@@ -26,7 +30,9 @@ Use the -h or --help flags to see the usage/help text
 ```bash
 .build/release/swift-exec -h
 ```
+
 ---
+
 ## TODO:
 - [ ] Logging
 - [ ] The CLI boolean flags with a default value of true cannot be set to false. Fix it.
