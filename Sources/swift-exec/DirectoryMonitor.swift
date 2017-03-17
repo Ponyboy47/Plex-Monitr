@@ -8,7 +8,9 @@
                    originally taken from an Apple website, but I updated it to work with the
                    latest swift...and to semi-work on Linux. (Currently
                    DispatchSourceFileSystemObject is not available on Linux).
-    License: MIT License
+                   Here is the link to the original file:
+                       https://developer.apple.com/library/content/samplecode/Lister/Listings/ListerKit_DirectoryMonitor_swift.html
+    License: Apple License (See DirectoryMonitor_LICENSE.txt)
 
 */
 
