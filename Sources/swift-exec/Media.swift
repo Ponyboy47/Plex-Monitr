@@ -14,9 +14,10 @@ import Downpour
 
 // Media related errors
 enum MediaError: Swift.Error {
-    case unsupportedFormat(format: String)
+    case unsupportedFormat(String)
     case notImplemented
     case sampleMedia
+    case alreadyExists(Path)
 }
 
 /// Protocol for the common implementation of Media types
@@ -67,10 +68,19 @@ class BaseMedia: Media {
     func move(to plexPath: Path) throws {
         // Get the location of the finalDirectory inside the plexPath
         let mediaDirectory = plexPath + finalDirectory
-        // Preemptively try and create the directory
-        try mediaDirectory.mkpath()
+        // Create the directory
+        if !mediaDirectory.isDirectory {
+            try mediaDirectory.mkpath()
+        }
+
         // Create a path to the location where the file will RIP
         let finalRestingPlace = mediaDirectory + plexFilename
+
+        // Ensure the finalRestingPlace doesn't already exist
+        guard !finalRestingPlace.isFile else {
+            throw MediaError.alreadyExists(finalRestingPlace)
+        }
+        
         // Move the file to the correct plex location
         try path.move(finalRestingPlace)
         // Change the path now to match
@@ -135,7 +145,7 @@ class Video: BaseMedia {
     required init(_ path: Path) throws {
         // Check to make sure the extension of the video file matches one of the supported plex extensions
         guard Video.isSupported(ext: path.extension ?? "") else {
-            throw MediaError.unsupportedFormat(format: path.extension ?? "")
+            throw MediaError.unsupportedFormat(path.extension ?? "")
         }
         guard !path.string.lowercased().contains("sample") else {
             throw MediaError.sampleMedia
@@ -184,7 +194,7 @@ class Audio: BaseMedia {
     required init(_ path: Path) throws {
         try super.init(path)
         guard Audio.isSupported(ext: path.extension ?? "") else {
-            throw MediaError.unsupportedFormat(format: path.extension ?? "")
+            throw MediaError.unsupportedFormat(path.extension ?? "")
         }
     }
 
@@ -285,7 +295,7 @@ class Subtitle: BaseMedia {
         try super.init(path)
         // Check to make sure the extension of the video file matches one of the supported plex extensions
         guard Subtitle.isSupported(ext: path.extension ?? "") else {
-            throw MediaError.unsupportedFormat(format: path.extension ?? "")
+            throw MediaError.unsupportedFormat(path.extension ?? "")
         }
     }
 
@@ -327,7 +337,7 @@ class Ignore: BaseMedia {
     required init(_ path: Path) throws {
         if !path.string.lowercased().contains("sample") {
             guard Ignore.isSupported(ext: path.extension ?? "") else {
-                throw MediaError.unsupportedFormat(format: path.extension ?? "")
+                throw MediaError.unsupportedFormat(path.extension ?? "")
             }
         }
         try super.init(path)
