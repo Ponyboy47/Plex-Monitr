@@ -10,12 +10,15 @@
 */
 
 import Foundation
+import SwiftyBeaver
 import PathKit
 import Signals
 import Async
 #if os(Linux)
 import Dispatch
 #endif
+
+let log = SwiftyBeaver.self
 
 var monitr: Monitr
 let argParser = ArgumentParser("\(CommandLine.arguments.first!) [Options]")
@@ -26,6 +29,8 @@ let plexDirOption = try Option<Path>("p", longName: "plex-dir", description: "Th
 let downloadDirOption = try Option<Path>("t", longName: "download-dir", description: "The directory where media downloads reside", parser: argParser)
 let convertFlag = try Flag("c", longName: "convert", description: "Whether or not newly added files should be converted to a Plex DirectPlay format", parser: argParser)
 let saveFlag = try Flag("s", longName: "save-settings", default: false, description: "Whether or not the configured settings should be saved to the config options file", parser: argParser)
+let logLevelOption = try Option<Int>("d", default: 0, description: "The logging level to use. Higher numbers mean more logging. Valid number range is 0-4.", parser: argParser)
+let logFileOption = try Option<Path>("l", longName: "log-file", default: "/var/log/monitr/monitr.log", description: "Where to write the log file.", parser: argParser)
 
 // Prints the help/usage text if -h or --help was used
 var h: Bool = false
@@ -71,6 +76,25 @@ guard let configPath: Path = try configOption.parse() else {
 guard let saveConfig: Bool = try saveFlag.parse() else {
     print("Something went wrong and the save flag was not set")
     exit(EXIT_FAILURE)
+}
+guard let logLevel: Int = try logLevelOption.parse() else {
+    print("Something went wrong and the logLevel option was not set")
+    exit(EXIT_FAILURE)
+}
+guard let logFile: Path = try logFileOption.parse() else {
+    print("Something went wrong and the logFile option was not set")
+    exit(EXIT_FAILURE)
+}
+
+if (logFile.extension ?? "").lowercased() != "log" || logLevel >= 3 {
+    let console = ConsoleDestination()
+    console.minLevel = Level(rawValue: 4 - logLevel)
+    log.addDestination(console)
+}
+if (logFile.extension ?? "").lowercased() == "log" {
+    let file = FileDestination()
+    file.logFileURL = logFile.url
+    file.minLevel = Level(rawValue: 4 - logLevel)
 }
 
 let plexDirectory: Path? = try plexDirOption.parse()

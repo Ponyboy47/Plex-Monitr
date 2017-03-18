@@ -5,7 +5,8 @@ var dependencies: [Package.Dependency] = [
         // My Downpour fork requires vdka/JSON so I don't need it's dependency here
         .Package(url: "https://github.com/Ponyboy47/Downpour.git", majorVersion: 0, minor: 3),
         .Package(url: "https://github.com/IBM-Swift/BlueSignals.git", majorVersion: 0, minor: 9),
-        .Package(url: "https://github.com/Ponyboy47/Async.git", majorVersion: 2)
+        .Package(url: "https://github.com/Ponyboy47/Async.git", majorVersion: 2),
+        .Package(url: "https://github.com/SwiftyBeaver/SwiftyBeaver.git", majorVersion: 1)
 ]
 
 var targets: [Target] = []

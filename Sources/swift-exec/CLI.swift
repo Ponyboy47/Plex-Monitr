@@ -174,6 +174,20 @@ extension Bool: ArgumentType {
     }
 }
 
+/// Allows Ints to be used as cli arguments
+extension Int: ArgumentType {
+    static func from(string value: String) throws -> Path {
+        guard value.characters.count > 0 else {
+            throw ArgumentError.emptyString
+        }
+        guard let val = Int(value) else {
+            throw ArgumentError.conversionError("cannot convert '\(value)' to '\(Int.self)' ")
+        }
+
+        return val
+    }
+}
+
 /// Allows Paths to be used as cli arguments
 extension Path: ArgumentType {
     static func from(string value: String) throws -> Path {
@@ -195,14 +209,36 @@ class ArgumentParser {
 
     /// Parse for a specific Argument and returns it's string value if it finds one
     class func parse<A: Argument>(_ argument: A) -> String? {
+        let isBool = argument.type is Bool.type
+
+        // If the argument has a long name, let's look for that first
         if let longName = argument.longName {
-            let value = ArgumentParser.parse(longName: longName, isBool: argument.type is Bool.Type)
-            guard value == nil else { return value! }
+            // If the long name has a value...
+            if let value = ArgumentParser.parse(longName: longName, isBool: isBool) {
+		// If the value is a bool or the argument has no default value,
+		//   then just return what we got
+                guard !isBool, let d = argument.`default` else { return value }
+
+                // Otherwise return the opposite boolean of the default value
+                return !d
+            }
         }
 
-        return ArgumentParser.parse(shortName: argument.shortName, isBool: argument.type is Bool.Type)
+        // Now check to see if we find a short name value
+        if let value = ArgumentParser.parse(shortName: argument.shortName, isBool: isBool) {
+            // If the value is a bool or the argument has no default value,
+            //   then just return what we got
+            guard !isBool, let d = argument.`default` else { return value }
+
+            // Otherwise return the opposite boolean of the default value
+            return !d
+        }
+
+        // If we didn't find the cli argument, return nil
+        return nil
     }
 
+    /// Parse for a specific longName argument
     class func parse(longName: String, isBool: Bool = false) -> String? {
         // Drop the first argument since it's just the path to the executable
         let args = CommandLine.arguments.dropFirst()
@@ -221,6 +257,7 @@ class ArgumentParser {
         return nil
     }
 
+    /// Parse for a specific shortName argument
     class func parse(shortName: Character, isBool: Bool = false) -> String? {
         // Drop the first argument since it's just the path to the executable
         let args = CommandLine.arguments.dropFirst()
