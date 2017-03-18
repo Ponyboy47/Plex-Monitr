@@ -49,3 +49,4 @@ Use the -h or --help flags to see the usage/help text
 - [ ] Get show name/season from parent directory?
 - [ ] Convert media to Plex Direct Play/Strem formats with Handbrake CLI or ffmpeg
 - [ ] Preserve TV show episode titles
+- [ ] Support multi-part TV show episodes
