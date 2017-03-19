@@ -77,9 +77,15 @@ guard let saveConfig: Bool = try saveFlag.parse() else {
     print("Something went wrong and the save flag was not set")
     exit(EXIT_FAILURE)
 }
-guard let logLevel: Int = try logLevelOption.parse() else {
+guard var logLevel: Int = try logLevelOption.parse() else {
     print("Something went wrong and the logLevel option was not set")
     exit(EXIT_FAILURE)
+}
+// Caps the maximum/minimum logLevel
+if logLevel > 4 {
+    logLevel = 4
+} else if logLevel < 0 {
+    logLevel = 0
 }
 guard let logFile: Path = try logFileOption.parse() else {
     print("Something went wrong and the logFile option was not set")
@@ -88,13 +94,13 @@ guard let logFile: Path = try logFileOption.parse() else {
 
 if (logFile.extension ?? "").lowercased() != "log" || logLevel >= 3 {
     let console = ConsoleDestination()
-    console.minLevel = Level(rawValue: 4 - logLevel)
+    console.minLevel = SwiftyBeaver.Level(rawValue: 4 - logLevel)!
     log.addDestination(console)
 }
 if (logFile.extension ?? "").lowercased() == "log" {
     let file = FileDestination()
     file.logFileURL = logFile.url
-    file.minLevel = Level(rawValue: 4 - logLevel)
+    file.minLevel = SwiftyBeaver.Level(rawValue: 4 - logLevel)!
 }
 
 let plexDirectory: Path? = try plexDirOption.parse()

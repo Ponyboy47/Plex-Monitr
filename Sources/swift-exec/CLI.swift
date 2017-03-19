@@ -176,7 +176,7 @@ extension Bool: ArgumentType {
 
 /// Allows Ints to be used as cli arguments
 extension Int: ArgumentType {
-    static func from(string value: String) throws -> Path {
+    static func from(string value: String) throws -> Int {
         guard value.characters.count > 0 else {
             throw ArgumentError.emptyString
         }
@@ -209,7 +209,7 @@ class ArgumentParser {
 
     /// Parse for a specific Argument and returns it's string value if it finds one
     class func parse<A: Argument>(_ argument: A) -> String? {
-        let isBool = argument.type is Bool.type
+        let isBool = argument.type is Bool.Type
 
         // If the argument has a long name, let's look for that first
         if let longName = argument.longName {
@@ -220,7 +220,7 @@ class ArgumentParser {
                 guard !isBool, let d = argument.`default` else { return value }
 
                 // Otherwise return the opposite boolean of the default value
-                return !d
+                return String(!(d as! Bool))
             }
         }
 
@@ -231,7 +231,7 @@ class ArgumentParser {
             guard !isBool, let d = argument.`default` else { return value }
 
             // Otherwise return the opposite boolean of the default value
-            return !d
+            return String(!(d as! Bool))
         }
 
         // If we didn't find the cli argument, return nil

@@ -257,7 +257,7 @@ class Subtitle: BaseMedia {
             language = path.lastComponent[match].replacingOccurrences(of: "anoXmous_", with: "")
         } else {
             for lang in commonLanguages {
-                if path.lastComponent.lowercased().contains(lang) {
+                if path.lastComponent.lowercased().contains(lang) || path.lastComponent.lowercased().contains(".\(lang.substring(to: 3)).") {
                     language = lang.substring(to: 3)
                     break
                 }
@@ -325,6 +325,7 @@ class Ignore: BaseMedia {
         case html; case url
         case php; case md5
         case doc; case docx
+        case rtf
     }
 
     override var plexName: String {
