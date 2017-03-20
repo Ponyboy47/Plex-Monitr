@@ -11,6 +11,7 @@
 import Foundation
 import PathKit
 import JSON
+import SwiftyBeaver
 
 enum ConfigError: Error {
     case pathIsNotDirectory(Path)
@@ -36,15 +37,19 @@ struct Config {
     }
     /// Whether the media should be converted to Plex DirectPlay formats automatically
     var convert: Bool = false
+    var logFile: Path?
+    var log: SwiftyBeaver.Type
 
     /// Watches the download directory for new files
     private var downloadWatcher: DirectoryMonitor?
 
-    init(_ configFile: Path? = nil, _ plexDirectory: Path? = nil, _ downloadDirectory: Path? = nil, _ convert: Bool? = nil) throws {
+    init(_ configFile: Path? = nil, _ plexDirectory: Path? = nil, _ downloadDirectory: Path? = nil, _ convert: Bool? = nil, _ logFile: Path? = nil, logger: SwiftyBeaver.Type) throws {
+        self.log = logger
         self.configFile = configFile ?? self.configFile
         self.plexDirectory = plexDirectory ?? self.plexDirectory
         self.downloadDirectory = downloadDirectory ?? self._downloadDirectory
         self.convert = convert ?? self.convert
+        self.logFile = logFile
 
         // Verify the plex/download directories exist and are in fact, directories
 
@@ -64,12 +69,16 @@ struct Config {
     }
 
     /// Starts monitoring the downloads directory for changes
-    func startMonitoring() {
+    @discardableResult
+    func startMonitoring() -> Bool {
         do {
             try downloadWatcher?.startMonitoring()
         } catch {
-            print("Error starting watcher.\n\t\(error)")
+            log.warning("Failed to start directory watcher.")
+            log.error(error)
+            return false
         }
+        return true
     }
 
     /// Stops monitoring the downloads directory
@@ -86,24 +95,37 @@ struct Config {
 /// Allows the config to be initialized from a json file
 extension Config: JSONInitializable {
     /// Initializes by reading the file at the path as a JSON string
-    init(_ path: Path) throws {
-        try self.init(path.read())
+    init(_ path: Path, logger: SwiftyBeaver.Type) throws {
+        try self.init(path.read(), logger: logger)
         configFile = path
     }
 
     /// Initialize by reading the string as JSON
-    init(_ str: String) throws {
-        try self.init(json: JSON.Parser.parse(str))
+    init(_ str: String, logger: SwiftyBeaver.Type) throws {
+        try self.init(json: JSON.Parser.parse(str), logger: logger)
+    }
+
+    /// Initialize the config from a JSON object
+    init(json: JSON, logger: SwiftyBeaver.Type) throws {
+        try self.init(json: json)
+        log = logger
     }
 
     /// Initialize the config from a JSON object
     init(json: JSON) throws {
+        log = SwiftyBeaver.self
+
         plexDirectory = Path(try json.get("plexDirectory"))
         downloadDirectory = Path(try json.get("downloadDirectory"))
         do {
             convert = try json.get("convert")
         } catch {
             convert = false
+        }
+        if let lFile: String = try? json.get("logFile") {
+            logFile = Path(lFile)
+        } else {
+            logFile = nil
         }
 
         guard plexDirectory.exists else {
@@ -130,11 +152,15 @@ extension Config: JSONRepresentable {
      - Returns: A JSON representation of the Config
     */
     func encoded() -> JSON {
-        return [
+        var json: JSON = [
             "plexDirectory": plexDirectory.string,
             "downloadDirectory": downloadDirectory.string,
             "convert": convert
         ]
+        if let lFile = logFile {
+            json["logFile"] = lFile.string.encoded()
+        }
+        return json
     }
 
     /**

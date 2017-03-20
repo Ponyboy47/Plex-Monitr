@@ -41,10 +41,10 @@ Use the -h or --help flags to see the usage/help text
 
 ## TODO:
 - [ ] Make a graphic
-- [ ] Logging
-- [ ] The CLI boolean flags with a default value of true cannot be set to false. Fix it.
+- [x] Logging
+- [x] The CLI boolean flags with a default value of true cannot be set to false. Fix it.
 - [ ] Do something with files that failed to be moved
-- [ ] Don't register downloads with x264 as a TV show of Season 2 Episode 64
+- [x] Don't register downloads with x264 as a TV show of Season 2 Episode 64
 - [ ] Better subtitle file support
 - [ ] Get show name/season from parent directory?
 - [ ] Convert media to Plex Direct Play/Strem formats with Handbrake CLI or ffmpeg

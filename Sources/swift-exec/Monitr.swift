@@ -25,6 +25,7 @@ class Monitr: DirectoryMonitorDelegate {
     private var isModifyingMedia: Bool = false {
         didSet {
             if !isModifyingMedia && needsUpdate {
+                config.log.info("Finished moving media, but new media has already been added. Running again.")
                 needsUpdate = false
                 run()
             }
@@ -45,16 +46,45 @@ class Monitr: DirectoryMonitorDelegate {
             self.isModifyingMedia = true
             // Unset the isModifyingMedia as soon as the run function completes
             defer {
+                // Removes all empty directories from the download directory
+                self.cleanup(dir: self.config.downloadDirectory)
                 self.isModifyingMedia = false
             }
             // Get all the media in the downloads directory
             let media = self.getAllMedia(from: self.config.downloadDirectory)
-            // If we gathered any supported media files, move them to their plex location
-            if media.count > 0, let unmovedMedia = self.moveMedia(media) {
-                print("Failed to move media to plex:\n\t\(unmovedMedia)")
+
+            guard media.count > 0 else {
+                self.config.log.info("No media found.")
+                return
             }
-            // Removes all empty directories from the download directory
-            self.cleanup(dir: self.config.downloadDirectory)
+
+            let video = media.filter { $0 is Video }
+            let subtitle = media.filter { $0 is Subtitle }
+            let audio = media.filter { $0 is Audio }
+            let other = media.filter { $0 is Ignore }
+
+            self.config.log.info("Found \(media.count) files in the download directory!")
+            if video.count > 0 {
+                self.config.log.info("\t \(video.count) video files")
+                self.config.log.verbose(video.map { $0.path })
+            }
+            if subtitle.count > 0 {
+                self.config.log.info("\t \(subtitle.count) subtitle files")
+                self.config.log.verbose(subtitle.map { $0.path })
+            }
+            if audio.count > 0 {
+                self.config.log.info("\t \(audio.count) audio files")
+                self.config.log.verbose(audio.map { $0.path })
+            }
+            if other.count > 0 {
+                self.config.log.info("\t \(other.count) other files")
+                self.config.log.verbose(other.map { $0.path })
+            }
+
+            // If we gathered any supported media files, move them to their plex location
+            if let unmovedMedia = self.moveMedia(media) {
+                self.config.log.warning("Failed to move media to plex:\n\t\(unmovedMedia)")
+            }
         }
     }
 
@@ -64,8 +94,9 @@ class Monitr: DirectoryMonitorDelegate {
     }
 
     /// Begin watching the downloads directory
-    public func startMonitoring() {
-        config.startMonitoring()
+    @discardableResult
+    public func startMonitoring() -> Bool {
+        return config.startMonitoring()
     }
 
     /**
@@ -74,6 +105,7 @@ class Monitr: DirectoryMonitorDelegate {
      - Parameter now: If true, kills any active media management. Defaults to false
     */
     public func shutdown(now: Bool = false) {
+        config.log.info("Shutting down monitr.")
         config.stopMonitoring()
         if now {
             // Kill any other stuff going on
@@ -98,12 +130,13 @@ class Monitr: DirectoryMonitorDelegate {
                 if let m = getMedia(with: childFile) {
                     media.append(m)
                 } else {
-                    print("Unknown/unsupported file found: \(childFile)")
+                    config.log.warning("Unknown/unsupported file found: \(childFile)")
                 }
             }
             return media
         } catch {
-            print("Failed to get recursive children from the downloads directory.\n\t\(error)")
+            config.log.warning("Failed to get recursive children from the downloads directory.")
+            config.log.error(error)
         }
         return []
     }
@@ -133,7 +166,8 @@ class Monitr: DirectoryMonitorDelegate {
                 m = try Ignore(file)
             }
         } catch {
-            print("Error occured trying to get media.\n\t\(error)")
+            config.log.warning("Error occured trying to create media object from '\(file)'.")
+            config.log.error(error)
         }
         return m
     }
@@ -152,7 +186,8 @@ class Monitr: DirectoryMonitorDelegate {
             do {
                 try m.move(to: config.plexDirectory)
             } catch {
-                print("Failed to move media: \(m)\n\t\(error)")
+                config.log.warning("Failed to move media: \(m)")
+                config.log.error(error)
                 failedMedia.append(m)
             }
         }
@@ -176,7 +211,8 @@ class Monitr: DirectoryMonitorDelegate {
             do {
                 try m.convert()
             } catch {
-                print("Failed to convert media: \(m)\n\t\(error)")
+                config.log.warning("Failed to convert media: \(m)")
+                config.log.error(error)
                 failedMedia.append(m)
             }
         }
@@ -199,7 +235,8 @@ class Monitr: DirectoryMonitorDelegate {
                 do {
                     try dir.delete()
                 } catch {
-                    print("Failed to delete directory.\n\t\(error)")
+                    config.log.warning("Failed to delete directory '\(dir)'.")
+                    config.log.error(error)
                 }
                 return
             }
@@ -207,7 +244,8 @@ class Monitr: DirectoryMonitorDelegate {
                 cleanup(dir: childDirectory)
             }
         } catch {
-            print("Failed to get the directory's children.\n\t\(error)")
+            config.log.warning("Failed to get the '\(dir)' directory's children.")
+            config.log.error(error)
         }
     }
 
@@ -231,6 +269,7 @@ class Monitr: DirectoryMonitorDelegate {
         // Make sure we're not already modifying media, otherwise just set the
         //   needsUpdate variable so that it's run again once it finishes
         guard !isModifyingMedia else {
+            config.log.info("Currently moving media. Will move new media after the current operation is completed.")
             needsUpdate = true
             return
         }

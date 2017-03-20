@@ -181,7 +181,7 @@ extension Int: ArgumentType {
             throw ArgumentError.emptyString
         }
         guard let val = Int(value) else {
-            throw ArgumentError.conversionError("cannot convert '\(value)' to '\(Int.self)' ")
+            throw ArgumentError.conversionError("Cannot convert '\(value)' to '\(Int.self)' ")
         }
 
         return val
@@ -210,14 +210,13 @@ class ArgumentParser {
     /// Parse for a specific Argument and returns it's string value if it finds one
     class func parse<A: Argument>(_ argument: A) -> String? {
         let isBool = argument.type is Bool.Type
-
         // If the argument has a long name, let's look for that first
         if let longName = argument.longName {
             // If the long name has a value...
             if let value = ArgumentParser.parse(longName: longName, isBool: isBool) {
-		// If the value is a bool or the argument has no default value,
-		//   then just return what we got
-                guard !isBool, let d = argument.`default` else { return value }
+        		// If the value is a bool or the argument has no default value,
+		        //   then just return what we got
+                guard isBool, let d = argument.`default` else { return value }
 
                 // Otherwise return the opposite boolean of the default value
                 return String(!(d as! Bool))
@@ -228,7 +227,7 @@ class ArgumentParser {
         if let value = ArgumentParser.parse(shortName: argument.shortName, isBool: isBool) {
             // If the value is a bool or the argument has no default value,
             //   then just return what we got
-            guard !isBool, let d = argument.`default` else { return value }
+            guard isBool, let d = argument.`default` else { return value }
 
             // Otherwise return the opposite boolean of the default value
             return String(!(d as! Bool))
