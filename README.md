@@ -30,13 +30,13 @@ Clone the repo and build it:
 ```bash
 git clone https://github.com/Ponyboy47/Monitr.git
 cd Monitr
-swift build -c=release
+swift build
 ```
-There should be a binary executable at .build/release/swift-exec
+There should be a binary executable at .build/debug/monitr
 Run it just like any other executable!
 
 ```bash
-.build/release/swift-exec
+.build/debug/monitr
 ```
 
 ### CLI Arguments:
@@ -45,41 +45,41 @@ There are a number of ways to configure your Monitr. Like any CLI application, a
 See the usage/help text:
 `-h` or `--help`
 ```bash
-/path/to/monitr/executable -h
+.build/debug/monitr -h
 ```
 
 Set the Config file to use/save to:
 `-f` or `--config`
 ```bash
-/path/to/monitr/executable --config /path/to/config.json
+.build/debug/monitr --config /path/to/config.json
 ```
 The default value for this is ~/.config/monitr/settings.json.
 
 Set the Plex Library directory:
 `-p` or `--plex-dir`
 ```bash
-/path/to/monitr/executable --plex-dir /path/to/plexmediaserver/Library
+.build/debug/monitr --plex-dir /path/to/plexmediaserver/Library
 ```
 If this is not specified, then /var/lib/plexmediaserver/Library is used.
 
 Set the Download directory to monitor:
 `-t` or `--download-dir`
 ```bash
-/path/to/monitr/executable --download-dir /path/to/downloads/dir
+.build/debug/monitr --download-dir /path/to/downloads/dir
 ```
 If left unspecified, then /var/lib/deluge/Downloads is used.
 
 Set the Convert flag (whether to convert media to Direct Play formats for plex):
 `-c` or `--convert`
 ```bash
-/path/to/monitr/executable --convert
+.build/debug/monitr --convert
 ```
 Defaults to false.
 
 Set whether or not to save these config settings to the config file:
 `-s` or `--save-settings`
 ```bash
-/path/to/monitr/executable --save-settings
+.build/debug/monitr --save-settings
 ```
 Defaults to false.
   NOTE: If true, subsequent monitr instances can be run and will load in the settings file and use it's config values.
@@ -87,14 +87,14 @@ Defaults to false.
 Set the default logging level to use:
 `-d`
 ```bash
-/path/to/monitr/executable -d 3
+.build/debug/monitr -d 3
 ```
 Default value is 0 (Errors only). Valid values range from 0-4.
 
 Set the log file to use:
 `-l` or `--log-file`
 ```bash
-/path/to/monitr/executable --log-file /var/log/monitr/monitr.log
+.build/debug/monitr --log-file /var/log/monitr/monitr.log
 ```
 Default is nil, which means logs are only written to stdout.
   NOTE: If set, and logging level >= 3 (debug or higher), logs are written both to the file specified, and also to stdout.

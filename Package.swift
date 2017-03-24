@@ -24,7 +24,7 @@ excludes.append("Sources/CSelect")
 #endif
 
 // The swift directory is always required
-targets.append(Target(name: "swift-exec", dependencies: swiftDependencies))
+targets.append(Target(name: "monitr", dependencies: swiftDependencies))
 
 let package = Package(
     name: "monitr",
