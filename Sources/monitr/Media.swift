@@ -98,7 +98,7 @@ class BaseMedia: Media {
 }
 
 /// Management for Video files
-class Video: BaseMedia {
+final class Video: BaseMedia {
     /// The supported extensions
     enum SupportedExtension: String {
         case mp4
@@ -166,7 +166,7 @@ class Video: BaseMedia {
 }
 
 /// Management for Audio files
-class Audio: BaseMedia {
+final class Audio: BaseMedia {
     /// The supported extensions
     enum SupportedExtension: String {
         case mp3
@@ -210,7 +210,7 @@ class Audio: BaseMedia {
     }
 }
 
-class Subtitle: BaseMedia {
+final class Subtitle: BaseMedia {
     enum SupportedExtension: String {
         case srt
         case smi
@@ -313,7 +313,7 @@ class Subtitle: BaseMedia {
 }
 
 /// Management for media types that we don't care about and can just delete
-class Ignore: BaseMedia {
+final class Ignore: BaseMedia {
     enum SupportedExtension: String {
         case txt; case png
         case jpg; case jpeg

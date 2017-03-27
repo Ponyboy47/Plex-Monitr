@@ -17,7 +17,7 @@ enum MonitrError: Swift.Error {
 }
 
 /// Checks the downloads directory for new content to add to Plex
-class Monitr: DirectoryMonitorDelegate {
+final class Monitr: DirectoryMonitorDelegate {
     /// The configuration to use for the monitor
     private var config: Config
     /// Whether or not media is currently being migrated to Plex. Automatically

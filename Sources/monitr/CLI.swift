@@ -64,7 +64,7 @@ protocol Argument {
 }
 
 /// CLI Arguments that come with a value
-class Option<A: ArgumentType>: Argument {
+final class Option<A: ArgumentType>: Argument {
     typealias ArgType = A
     var shortName: Character
     var longName: String?
@@ -199,7 +199,7 @@ extension Path: ArgumentType {
 }
 
 /// Parses the CLI for Arguments
-class ArgumentParser {
+final class ArgumentParser {
     var usage: String
     var arguments: [Any] = []
 

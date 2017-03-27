@@ -35,7 +35,7 @@ enum DirectoryMonitorError: Error {
     }
 }
 
-class DirectoryMonitor {
+final class DirectoryMonitor {
     // MARK: Properties
 
     /// The `DirectoryMonitor`'s delegate who is responsible for responding to `DirectoryMonitor` updates.
