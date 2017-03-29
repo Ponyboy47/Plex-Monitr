@@ -135,7 +135,7 @@ if configPath.isFile && ext == "json" {
         config.convert = c
     }
     if let l = logFile, config.logFile != l {
-        log.info("Log File is changing from '\(config.logFile)' to '\(l)'.")
+        log.info("Log File is changing from '\(config.logFile ?? "nil")' to '\(l)'.")
         config.logFile = l
         let file = FileDestination()
         file.logFileURL = l.url
