@@ -33,45 +33,8 @@ let logLevelOption = try Option<Int>("d", default: 0, description: "The logging 
 let logFileOption = try Option<Path>("l", longName: "log-file", description: "Where to write the log file.", parser: argParser)
 
 // Prints the help/usage text if -h or --help was used
-var h: Bool = false
-do {
-    if let help = ArgumentParser.parse(longName: "help", isBool: true) {
-        h = try Bool.from(string: help)
-    } else if let help = ArgumentParser.parse(shortName: "h", isBool: true) {
-        h = try Bool.from(string: help)
-    }
-} catch {
-    print("An error occured determing if the help/usage text needed to be displayed.\n\t\(error)")
-}
-if h {
-    print("Usage: \(argParser.usage)\n\nOptions:")
-    var longest = 0
-    argParser.arguments.forEach { arg in
-        if let flag = arg as? Flag {
-            let _ = flag.usage
-            longest = flag.usageDescriptionActualLength > longest ? flag.usageDescriptionActualLength : longest
-        } else if let path = arg as? Option<Path> {
-            let _ = path.usage
-            longest = path.usageDescriptionActualLength > longest ? path.usageDescriptionActualLength : longest
-        } else if let int = arg as? Option<Int> {
-            let _ = int.usage
-            longest = int.usageDescriptionActualLength > longest ? int.usageDescriptionActualLength : longest
-        }
-    }
-    for argument in argParser.arguments {
-        if let flag = argument as? Flag {
-            flag.usageDescriptionNiceLength = longest + 4
-            print(flag.usage)
-        } else if let path = argument as? Option<Path> {
-            path.usageDescriptionNiceLength = longest + 4
-            print(path.usage)
-        } else if let int = argument as? Option<Int> {
-            int.usageDescriptionNiceLength = longest + 4
-            print(int.usage)
-        } else {
-            continue
-        }
-    }
+guard !ArgumentParser.needsHelp else {
+    argParser.printHelp()
     exit(EXIT_SUCCESS)
 }
 

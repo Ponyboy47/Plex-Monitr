@@ -207,6 +207,20 @@ final class ArgumentParser {
         self.usage = usage
     }
 
+    static var needsHelp: Bool = {
+        var h: Bool = false
+        do {
+            if let help = ArgumentParser.parse(longName: "help", isBool: true) {
+                h = try Bool.from(string: help)
+            } else if let help = ArgumentParser.parse(shortName: "h", isBool: true) {
+                h = try Bool.from(string: help)
+            }
+        } catch {
+            print("An error occured determing if the help/usage text needed to be displayed.\n\t\(error)")
+        }
+        return h
+    }()
+
     /// Parse for a specific Argument and returns it's string value if it finds one
     class func parse<A: Argument>(_ argument: A) -> String? {
         let isBool = argument.type is Bool.Type
@@ -275,5 +289,41 @@ final class ArgumentParser {
         }
         // Returns nil only when there were no arguments
         return nil
+    }
+
+    /// Prints the usage text for all of the arguments included in the parser
+    func printHelp() {
+        print("Usage: \(usage)\n\nOptions:")
+        // Get the length of the longest usage description so that we can
+        // format everything nicely
+        var longest = 0
+        for arg in arguments {
+            if let flag = arg as? Flag {
+                let _ = flag.usage
+                longest = flag.usageDescriptionActualLength > longest ? flag.usageDescriptionActualLength : longest
+            } else if let path = arg as? Option<Path> {
+                let _ = path.usage
+                longest = path.usageDescriptionActualLength > longest ? path.usageDescriptionActualLength : longest
+            } else if let int = arg as? Option<Int> {
+                let _ = int.usage
+                longest = int.usageDescriptionActualLength > longest ? int.usageDescriptionActualLength : longest
+            }
+        }
+
+        // Now do the actual printing of arguments' usage descriptions
+        for arg in arguments {
+            if let flag = arg as? Flag {
+                flag.usageDescriptionNiceLength = longest + 4
+                print(flag.usage)
+            } else if let path = arg as? Option<Path> {
+                path.usageDescriptionNiceLength = longest + 4
+                print(path.usage)
+            } else if let int = arg as? Option<Int> {
+                int.usageDescriptionNiceLength = longest + 4
+                print(int.usage)
+            } else {
+                continue
+            }
+        }
     }
 }
