@@ -42,62 +42,62 @@ Run it just like any other executable!
 ### CLI Arguments:
 There are a number of ways to configure your Monitr. Like any CLI application, any of these arguments can be used at the same time to create the exact Monitr that you need.
 
-See the usage/help text:
+#### See the usage/help text:
 `-h` or `--help`
 ```bash
 .build/debug/monitr -h
 ```
 
-Set the Config file to use/save to:
+#### Set the Config file to use/save to:
 `-f` or `--config`
 ```bash
 .build/debug/monitr --config /path/to/config.json
 ```
 The default value for this is ~/.config/monitr/settings.json.
 
-Set the Plex Library directory:
+#### Set the Plex Library directory:
 `-p` or `--plex-dir`
 ```bash
 .build/debug/monitr --plex-dir /path/to/plexmediaserver/Library
 ```
 If this is not specified, then /var/lib/plexmediaserver/Library is used.
 
-Set the Download directory to monitor:
+#### Set the Download directory to monitor:
 `-t` or `--download-dir`
 ```bash
 .build/debug/monitr --download-dir /path/to/downloads/dir
 ```
 If left unspecified, then /var/lib/deluge/Downloads is used.
 
-Set the Convert flag (whether to convert media to Direct Play formats for plex):
+#### Set the Convert flag (whether to convert media to Direct Play formats for plex):
 `-c` or `--convert`
 ```bash
 .build/debug/monitr --convert
 ```
 Defaults to false.
 
-Set whether or not to save these config settings to the config file:
+#### Set whether or not to save these config settings to the config file:
 `-s` or `--save-settings`
 ```bash
 .build/debug/monitr --save-settings
 ```
-Defaults to false.
-  NOTE: If true, subsequent monitr instances can be run and will load in the settings file and use it's config values.
+<p>Defaults to false.<br />
+NOTE: If true, subsequent monitr instances can be run and will load in the settings file and use it's config values.</p>
 
-Set the default logging level to use:
+#### Set the default logging level to use:
 `-d`
 ```bash
 .build/debug/monitr -d 3
 ```
 Default value is 0 (Errors only). Valid values range from 0-4.
 
-Set the log file to use:
+#### Set the log file to use:
 `-l` or `--log-file`
 ```bash
 .build/debug/monitr --log-file /var/log/monitr/monitr.log
 ```
-Default is nil, which means logs are only written to stdout.
-  NOTE: If set, and logging level >= 3 (debug or higher), logs are written both to the file specified, and also to stdout.
+<p>Default is nil, which means logs are only written to stdout.<br />
+NOTE: If set, and logging level >= 3 (debug or higher), logs are written both to the file specified, and also to stdout.</p>
 
 ---
 
