@@ -1,6 +1,6 @@
 # Monitr:
 
-<p align="center"><img src="https://github.com/Ponyboy47/Monitr/blob/master/img/monitr.jpg" width=100 /></p>
+<p align="center"><img src="https://github.com/Ponyboy47/Plex-Monitr/blob/master/img/monitr.jpg" width=100 /></p>
 
 Let's be honest. Managing your Plex media can be a pain. Especially when you have a ton of new stuff you want to add all at once or if you are just constantly adding new stuff! That's where Monitr comes in.
 
@@ -28,8 +28,8 @@ It supports either Linux or macOS operating systems using Apple's Swift language
 ## Usage:
 Clone the repo and build it:
 ```bash
-git clone https://github.com/Ponyboy47/Monitr.git
-cd Monitr
+git clone https://github.com/Ponyboy47/Plex-Monitr.git
+cd Plex-Monitr
 swift build
 ```
 There should be a binary executable at .build/debug/monitr
