@@ -74,16 +74,22 @@ final class DirectoryMonitor {
         monitoredDirectoryFileDescriptor = inotify_add_watch(inotifyFileDescriptor, URL.path, UInt32(IN_MOVED_TO))
         directoryMonitorQueue.async {
             while true {
+                // Get the set of file descriptors
                 var fileDescriptorSet: fd_set = fd_set()
                 fd_zero(&fileDescriptorSet)
                 fd_setter(self.inotifyFileDescriptor, &fileDescriptorSet)
 
+                // We wait here until an inotify event is triggered
                 let fileDescriptor = select(FD_SETSIZE, &fileDescriptorSet, nil, nil, nil)
                 if fileDescriptor > 0 {
                     let bufferSize = 1024
                     let buffer = UnsafeMutableRawPointer(malloc(bufferSize))
+                    // If we don't read inotify's buffer, then it doesn't get
+                    // cleared and this triggers the delegate method infinitely
                     let _ = read(self.inotifyFileDescriptor, buffer!, bufferSize)
+                    // Trigger the even on the delegate
                     self.delegate?.directoryMonitorDidObserveChange(self)
+                    // Free the buffer when we're done to prevent memory leaks
                     free(buffer)
                 }
             }
@@ -120,6 +126,8 @@ final class DirectoryMonitor {
     func stopMonitoring() {
         #if os(Linux)
         close(inotifyFileDescriptor)
+        // Set this to -1 to prevent reusing an old file descriptor
+        inotifyFileDescriptor = -1
         #else
         directoryMonitorSource?.cancel()
         #endif
