@@ -108,7 +108,7 @@ Default is nil, which means logs are only written to stdout.
 - [ ] Do something with files that failed to be moved
 - [x] Don't register downloads with x264 as a TV show of Season 2 Episode 64
 - [ ] Better subtitle file support
-- [ ] Get show name/season from parent directory?
-- [ ] Convert media to Plex Direct Play/Strem formats with Handbrake CLI or ffmpeg
+- [ ] Get show name/season from parent directory? (Useful when there is an organized directory structure, but file names do not contain all the relevant info)
+- [ ] Convert media to Plex Direct Play/Stream formats with Handbrake CLI or ffmpeg
 - [ ] Preserve TV show episode titles
 - [ ] Support multi-part TV show episodes
