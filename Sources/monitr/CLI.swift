@@ -104,12 +104,22 @@ final class Option<A: ArgumentType>: Argument {
         guard shortName != "h" else {
             throw ArgumentError.invalidShortName("Cannot use 'h' as the short name since it is reserved for help/usage text.")
         }
-        self.shortName = shortName
         if let l = longName {
             guard l != "help" else {
                 throw ArgumentError.invalidLongName("Cannot use 'help' as the long name since it is reserved for help/usage text.")
             }
         }
+        if let shortNames = parser?.shortNames {
+            guard !shortNames.contains(shortName) else {
+                throw ArgumentError.invalidShortName("Cannot use '\(shortName)' as the short name since it is already used by a different argument.")
+            }
+        }
+        if let longNames = parser?.longNames, let lName = longName {
+            guard !longNames.contains(lName) else {
+                throw ArgumentError.invalidLongName("Cannot use '\(lName)' as the long name since it is already used by a different argument.")
+            }
+        }
+        self.shortName = shortName
         self.longName = longName
         self.`default` = `default`
         self.description = description
@@ -188,6 +198,16 @@ extension Int: ArgumentType {
     }
 }
 
+/// Allows Strings to be used as cli arguments
+extension String: ArgumentType {
+    static func from(string value: String) throws -> String {
+        guard value.characters.count > 0 else {
+            throw ArgumentError.emptyString
+        }
+        return value
+    }
+}
+
 /// Allows Paths to be used as cli arguments
 extension Path: ArgumentType {
     static func from(string value: String) throws -> Path {
@@ -202,6 +222,51 @@ extension Path: ArgumentType {
 final class ArgumentParser {
     var usage: String
     var arguments: [Any] = []
+
+    var shortNames: [Character] {
+        var sNames: [Character] = []
+        for arg in arguments {
+            switch arg {
+                case is Flag:
+                    sNames.append((arg as! Flag).shortName)
+                case is Option<Int>:
+                    sNames.append((arg as! Option<Int>).shortName)
+                case is Option<String>:
+                    sNames.append((arg as! Option<String>).shortName)
+                case is Option<Path>:
+                    sNames.append((arg as! Option<Path>).shortName)
+                default:
+                    continue
+            }
+        }
+        return sNames
+    }
+    var longNames: [String] {
+        var lNames: [String] = []
+        for arg in arguments {
+            switch arg {
+                case is Flag:
+                    if let lName = (arg as! Flag).longName {
+                        lNames.append(lName)
+                    }
+                case is Option<Int>:
+                    if let lName = (arg as! Option<Int>).longName {
+                        lNames.append(lName)
+                    }
+                case is Option<String>:
+                    if let lName = (arg as! Option<String>).longName {
+                        lNames.append(lName)
+                    }
+                case is Option<Path>:
+                    if let lName = (arg as! Option<Path>).longName {
+                        lNames.append(lName)
+                    }
+                default:
+                    continue
+            }
+        }
+        return lNames
+    }
 
     required init(_ usage: String) {
         self.usage = usage
@@ -301,6 +366,9 @@ final class ArgumentParser {
             if let flag = arg as? Flag {
                 let _ = flag.usage
                 longest = flag.usageDescriptionActualLength > longest ? flag.usageDescriptionActualLength : longest
+            } else if let str = arg as? Option<String> {
+                let _ = str.usage
+                longest = str.usageDescriptionActualLength > longest ? str.usageDescriptionActualLength : longest
             } else if let path = arg as? Option<Path> {
                 let _ = path.usage
                 longest = path.usageDescriptionActualLength > longest ? path.usageDescriptionActualLength : longest
@@ -315,6 +383,9 @@ final class ArgumentParser {
             if let flag = arg as? Flag {
                 flag.usageDescriptionNiceLength = longest + 4
                 print(flag.usage)
+            } else if let str = arg as? Option<String> {
+                str.usageDescriptionNiceLength = longest + 4
+                print(str.usage)
             } else if let path = arg as? Option<Path> {
                 path.usageDescriptionNiceLength = longest + 4
                 print(path.usage)
