@@ -37,18 +37,26 @@ struct Config {
     }
     /// Whether the media should be converted to Plex DirectPlay formats automatically
     var convert: Bool = false
+    var convertImmediately: Bool = true
+    var convertStartTime: Time = "0:00"
+    var convertEndTime: Time = "8:00"
+    var convertThreads: Int = 2
     var logFile: Path?
     var log: SwiftyBeaver.Type
 
     /// Watches the download directory for new files
     private var downloadWatcher: DirectoryMonitor?
 
-    init(_ configFile: Path? = nil, _ plexDirectory: Path? = nil, _ downloadDirectory: Path? = nil, _ convert: Bool? = nil, _ logFile: Path? = nil, logger: SwiftyBeaver.Type) throws {
+    init(_ configFile: Path? = nil, _ plexDirectory: Path? = nil, _ downloadDirectory: Path? = nil, _ convert: Bool? = nil, _ convertImmediately: Bool? = nil, _ convertStartTime: Time? = nil, _ convertEndTime: Time? = nil, _ convertThreads: Int? = nil, _ logFile: Path? = nil, logger: SwiftyBeaver.Type) throws {
         self.log = logger
         self.configFile = configFile ?? self.configFile
         self.plexDirectory = plexDirectory ?? self.plexDirectory
         self.downloadDirectory = downloadDirectory ?? self._downloadDirectory
         self.convert = convert ?? self.convert
+        self.convertImmediately = convertImmediately ?? self.convertImmediately
+        self.convertStartTime = convertStartTime ?? self.convertStartTime
+        self.convertEndTime = convertEndTime ?? self.convertEndTime
+        self.convertThreads = convertThreads ?? self.convertThreads
         self.logFile = logFile
 
         // Verify the plex/download directories exist and are in fact, directories
@@ -122,6 +130,26 @@ extension Config: JSONInitializable {
         } catch {
             convert = false
         }
+        do {
+            convertImmediately = try json.get("convertImmediately")
+        } catch {
+            convertImmediately = true
+        }
+        do {
+            convertStartTime = try Time(try json.get("convertStartTime"))
+        } catch {
+            convertStartTime = "0:00"
+        }
+        do {
+            convertEndTime = try Time(try json.get("convertEndTime"))
+        } catch {
+            convertEndTime = "8:00"
+        }
+        do {
+            convertThreads = try json.get("convertThreads")
+        } catch {
+            convertThreads = 2
+        }
         if let lFile: String = try? json.get("logFile") {
             logFile = Path(lFile)
         } else {
@@ -155,7 +183,11 @@ extension Config: JSONRepresentable {
         var json: JSON = [
             "plexDirectory": plexDirectory.string,
             "downloadDirectory": downloadDirectory.string,
-            "convert": convert
+            "convert": convert,
+            "convertImmediately": convertImmediately,
+            "convertStartTime": convertStartTime.string,
+            "convertEndTime": convertEndTime.string,
+            "convertThreads": convertThreads
         ]
         if let lFile = logFile {
             json["logFile"] = lFile.string.encoded()

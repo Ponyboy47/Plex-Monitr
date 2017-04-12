@@ -208,6 +208,16 @@ extension String: ArgumentType {
     }
 }
 
+/// Allows Times to be used as cli arguments
+extension Time: ArgumentType {
+    static func from(string value: String) throws -> Time {
+        guard value.characters.count > 0 else {
+            throw ArgumentError.emptyString
+        }
+        return try Time(value)
+    }
+}
+
 /// Allows Paths to be used as cli arguments
 extension Path: ArgumentType {
     static func from(string value: String) throws -> Path {

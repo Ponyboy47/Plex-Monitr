@@ -28,8 +28,12 @@ let configOption = try Option<Path>("f", longName: "config", default: Path("~/.c
 let plexDirOption = try Option<Path>("p", longName: "plex-dir", description: "The directory where the Plex libraries reside", parser: argParser)
 let downloadDirOption = try Option<Path>("t", longName: "download-dir", description: "The directory where media downloads reside", parser: argParser)
 let convertFlag = try Flag("c", longName: "convert", description: "Whether or not newly added files should be converted to a Plex DirectPlay format", parser: argParser)
+let convertImmediatelyFlag = try Flag("i", longName: "convert-immediately", description: "Whether to convert media before sending it to the Plex directory, or to convert it as a scheduled task when the CPU is more likely to be free", parser: argParser)
+let convertStartTimeOption = try Option<Time>("b", longName: "convert-start", description: "The time at which converting jobs can start. In 24 hour time format. ie: 2:00 for 2:00 am, 14:30 for 2:30 pm.", parser: argParser)
+let convertEndTimeOption = try Option<Time>("e", longName: "convert-end", description: "The time at which converting jobs should stop. In 24 hour time format. ie: 2:00 for 2:00 am, 14:30 for 2:30 pm.", parser: argParser)
+let convertThreadsOption = try Option<Int>("r", longName: "convert-threads", description: "The number of threads that can simultaneously be converting media", parser: argParser)
 let saveFlag = try Flag("s", longName: "save-settings", default: false, description: "Whether or not the configured settings should be saved to the config options file", parser: argParser)
-let logLevelOption = try Option<Int>("d", default: 0, description: "The logging level to use. Higher numbers mean more logging. Valid number range is 0-4.", parser: argParser)
+let logLevelOption = try Option<Int>("d", longName: "log-level", default: 0, description: "The logging level to use. Higher numbers mean more logging. Valid number range is 0-4.", parser: argParser)
 let logFileOption = try Option<Path>("l", longName: "log-file", description: "Where to write the log file.", parser: argParser)
 
 // Prints the help/usage text if -h or --help was used
@@ -50,12 +54,14 @@ guard var logLevel: Int = try logLevelOption.parse() else {
     print("Something went wrong and the logLevel option was not set")
     exit(EXIT_FAILURE)
 }
+
 // Caps logLevel to the maximum/minimum level
 if logLevel > 4 {
     logLevel = 4
 } else if logLevel < 0 {
     logLevel = 0
 }
+
 let minLevel = SwiftyBeaver.Level(rawValue: 4 - logLevel)!
 
 let console = ConsoleDestination()
@@ -67,7 +73,12 @@ log.verbose("Got minimum required arguments from the CLI.")
 let plexDirectory: Path? = try plexDirOption.parse()
 let downloadDirectory: Path? = try downloadDirOption.parse()
 let convert: Bool? = try convertFlag.parse()
+let convertImmediately: Bool? = try convertFlag.parse()
+let convertStartTime: Time? = try convertStartTimeOption.parse()
+let convertEndTime: Time? = try convertEndTimeOption.parse()
+let convertThreads: Int? = try convertThreadsOption.parse()
 let logFile: Path? = try logFileOption.parse()
+
 // We'll use this in a minute to make sure the config is a json file (hopefully people use file extensions if creating their config manually)
 let ext = (configPath.extension ?? "").lowercased()
 
@@ -97,6 +108,22 @@ if configPath.isFile && ext == "json" {
         log.info("Convert is changing from '\(config.convert)' to '\(c)'.")
         config.convert = c
     }
+    if let cI = convertImmediately, config.convertImmediately != cI {
+        log.info("Convert Immediately is changing from '\(config.convertImmediately)' to '\(cI)'.")
+        config.convertImmediately = cI
+    }
+    if let cST = convertStartTime, config.convertStartTime != cST {
+        log.info("Convert Start Time is changing from '\(config.convertStartTime)' to '\(cST)'.")
+        config.convertStartTime = cST
+    }
+    if let cET = convertEndTime, config.convertEndTime != cET {
+        log.info("Convert End Time is changing from '\(config.convertEndTime)' to '\(cET)'.")
+        config.convertEndTime = cET
+    }
+    if let cT = convertThreads, config.convertThreads != cT {
+        log.info("Convert Threads is changing from '\(config.convertThreads)' to '\(cT)'.")
+        config.convertThreads = cT
+    }
     if let l = logFile, config.logFile != l {
         log.info("Log File is changing from '\(config.logFile ?? "nil")' to '\(l)'.")
         config.logFile = l
@@ -108,7 +135,7 @@ if configPath.isFile && ext == "json" {
 } else {
     // Try and create the Config from the command line args (fails if anything is not set)
     do {
-        config = try Config(configPath, plexDirectory, downloadDirectory, convert, logFile, logger: log)
+        config = try Config(configPath, plexDirectory, downloadDirectory, convert, convertImmediately, convertStartTime, convertEndTime, convertThreads, logFile, logger: log)
         if let l = logFile {
             let file = FileDestination()
             file.logFileURL = l.url
