@@ -315,17 +315,12 @@ final class Subtitle: BaseMedia {
 /// Management for media types that we don't care about and can just delete
 final class Ignore: BaseMedia {
     enum SupportedExtension: String {
-        case txt; case png
-        case jpg; case jpeg
-        case gif; case rst
-        case md; case nfo
-        case sfv; case sub
-        case idx; case css
-        case js; case htm
-        case html; case url
-        case php; case md5
-        case doc; case docx
-        case rtf
+        case txt; case png; case jpg; case jpeg
+        case gif; case rst; case md; case nfo
+        case sfv; case sub; case idx; case css
+        case js; case htm; case html; case url
+        case php; case md5; case doc; case docx
+        case rtf; case db; case ds_store
     }
 
     override var plexName: String {
