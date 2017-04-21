@@ -147,7 +147,7 @@ final class Video: BaseMedia {
         guard Video.isSupported(ext: path.extension ?? "") else {
             throw MediaError.unsupportedFormat(path.extension ?? "")
         }
-        guard !path.string.lowercased().contains("sample") else {
+        guard !path.string.lowercased().contains("sample") && !path.string.lowercased().contains(".ds_store") else {
             throw MediaError.sampleMedia
         }
         try super.init(path)
