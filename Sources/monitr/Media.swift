@@ -320,7 +320,7 @@ final class Ignore: BaseMedia {
         case sfv; case sub; case idx; case css
         case js; case htm; case html; case url
         case php; case md5; case doc; case docx
-        case rtf; case db; case ds_store
+        case rtf; case db
     }
 
     override var plexName: String {
@@ -331,7 +331,7 @@ final class Ignore: BaseMedia {
     }
 
     required init(_ path: Path) throws {
-        if !path.string.lowercased().contains("sample") {
+        if !path.string.lowercased().contains("sample") && !path.string.lowercased().contains(".ds_store") {
             guard Ignore.isSupported(ext: path.extension ?? "") else {
                 throw MediaError.unsupportedFormat(path.extension ?? "")
             }
