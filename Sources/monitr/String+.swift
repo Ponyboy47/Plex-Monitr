@@ -64,7 +64,7 @@ extension String {
         if string.characters.count > characters.count {
             return false
         }
-        let ending = substring(from: string.characters.count * -1)
+        let ending = substring(from: characters.count - string.characters.count, to: characters.count)
         return ending == string
     }
 

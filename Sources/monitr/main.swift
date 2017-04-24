@@ -189,13 +189,14 @@ Signals.trap(signals: [.int, .term, .kill, .quit]) { _ in
 }
 
 // Run once and then start monitoring regularly
-log.info("Running Monitr once for startup!")
-Async.background {
+let block = Async.main {
+    log.info("Running Monitr once for startup!")
     monitr.run()
     monitr.setDelegate()
     log.info("Monitoring '\(config.downloadDirectory)' for new files.")
     monitr.startMonitoring()
 }
+block.wait()
 
 let group = DispatchGroup()
 group.enter()

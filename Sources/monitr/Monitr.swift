@@ -51,18 +51,18 @@ final class Monitr: DirectoryMonitorDelegate {
     ///   directories left in the downloads directory
     public func run() {
         // Set that we're modifying the media as long as we're still contained in the run function
-        self.isModifyingMedia = true
+        isModifyingMedia = true
         // Unset the isModifyingMedia as soon as the run function completes
         defer {
             // Removes all empty directories from the download directory
-            self.cleanup(dir: self.config.downloadDirectory)
-            self.isModifyingMedia = false
+            cleanup(dir: config.downloadDirectory)
+            isModifyingMedia = false
         }
         // Get all the media in the downloads directory
-        let media = self.getAllMedia(from: self.config.downloadDirectory)
+        let media = getAllMedia(from: config.downloadDirectory)
 
         guard media.count > 0 else {
-            self.config.log.info("No media found.")
+            config.log.info("No media found.")
             return
         }
 
@@ -71,34 +71,34 @@ final class Monitr: DirectoryMonitorDelegate {
         let audio = media.filter { $0 is Audio }
         let other = media.filter { $0 is Ignore }
 
-        self.config.log.info("Found \(media.count) files in the download directory!")
+        config.log.info("Found \(media.count) files in the download directory!")
         if video.count > 0 {
-            self.config.log.info("\t \(video.count) video files")
-            self.config.log.verbose(video.map { $0.path })
+            config.log.info("\t \(video.count) video files")
+            config.log.verbose(video.map { $0.path })
         }
         if subtitle.count > 0 {
-            self.config.log.info("\t \(subtitle.count) subtitle files")
-            self.config.log.verbose(subtitle.map { $0.path })
+            config.log.info("\t \(subtitle.count) subtitle files")
+            config.log.verbose(subtitle.map { $0.path })
         }
         if audio.count > 0 {
-            self.config.log.info("\t \(audio.count) audio files")
-            self.config.log.verbose(audio.map { $0.path })
+            config.log.info("\t \(audio.count) audio files")
+            config.log.verbose(audio.map { $0.path })
         }
         if other.count > 0 {
-            self.config.log.info("\t \(other.count) other files")
-            self.config.log.verbose(other.map { $0.path })
+            config.log.info("\t \(other.count) other files")
+            config.log.verbose(other.map { $0.path })
         }
 
         // If we want to convert media, lets do that before we move it to plex
         //   NOTE: If convertImmediately is false, then a queue of conversion 
         //         jobs are created to be run during the scheduled time period
-        if self.config.convert, let unconvertedMedia = self.convertMedia(media) {
-            self.config.log.warning("Failed to convert media:\n\t\(unconvertedMedia)")
+        if config.convert, let unconvertedMedia = convertMedia(media) {
+            config.log.warning("Failed to convert media:\n\t\(unconvertedMedia)")
         }
 
         // If we gathered any supported media files, move them to their plex location
-        if let unmovedMedia = self.moveMedia(media) {
-            self.config.log.warning("Failed to move media to plex:\n\t\(unmovedMedia)")
+        if let unmovedMedia = moveMedia(media) {
+            config.log.warning("Failed to move media to plex:\n\t\(unmovedMedia)")
         }
     }
 
