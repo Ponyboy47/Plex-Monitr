@@ -39,9 +39,9 @@ protocol Media: class, JSONInitializable, JSONRepresentable {
     /// Initializer
     init(_ path: Path) throws
     /// Moves the media file to the finalDirectory
-    func move(to newDirectory: Path, log: SwiftyBeaver.Type) throws
+    func move(to newDirectory: Path, log: SwiftyBeaver.Type) throws -> Self
     /// Converts the media file to a Plex DirectPlay supported format
-    func convert(_ log: SwiftyBeaver.Type?) throws
+    func convert(_ log: SwiftyBeaver.Type?) throws -> Self
     /// Returns whether or not the Media type supports the given format
     static func isSupported(ext: String) -> Bool
     /// Returns whether or not the Media type needs to be converted for Plex
@@ -78,7 +78,7 @@ class BaseMedia: Media {
         downpour = Downpour(fullPath: path)
     }
 
-    func move(to plexPath: Path, log: SwiftyBeaver.Type) throws {
+    func move(to plexPath: Path, log: SwiftyBeaver.Type) throws -> Self {
         log.verbose("Preparing to move file: \(path.string)")
         // Get the location of the finalDirectory inside the plexPath
         let mediaDirectory = plexPath + finalDirectory
@@ -102,10 +102,12 @@ class BaseMedia: Media {
         log.verbose("Successfully moved file to '\(finalRestingPlace.string)'")
         // Change the path now to match
         path = finalRestingPlace
+        return self
     }
 
-    func convert(_ log: SwiftyBeaver.Type? = nil) throws {
+    func convert(_ log: SwiftyBeaver.Type? = nil) throws -> Self {
         throw MediaError.notImplemented
+        return self
     }
 
     class func isSupported(ext: String) -> Bool {
@@ -195,8 +197,13 @@ final class Video: BaseMedia {
         try super.init(json: json)
     }
 
-    override func convert(_ log: SwiftyBeaver.Type? = nil) throws {
+    override func move(to: Path, log: SwiftyBeaver.Type) throws -> Video {
+        return try super.move(to: to, log: log) as! Video
+    }
+
+    override func convert(_ log: SwiftyBeaver.Type? = nil) throws -> Video {
         // Use the Handbrake CLI to convert to Plex DirectPlay capable video (if necessary)
+        return self
     }
 
     override class func isSupported(ext: String) -> Bool {
@@ -254,8 +261,13 @@ final class Audio: BaseMedia {
         try super.init(json: json)
     }
 
-    override func convert(_ log: SwiftyBeaver.Type? = nil) throws {
+    override func move(to: Path, log: SwiftyBeaver.Type) throws -> Audio {
+        return try super.move(to: to, log: log) as! Audio
+    }
+
+    override func convert(_ log: SwiftyBeaver.Type? = nil) throws -> Audio {
         // Use the Handbrake CLI to convert to Plex DirectPlay capable audio (if necessary)
+        return self
     }
 
 	override class func isSupported(ext: String) -> Bool {
@@ -369,9 +381,13 @@ final class Subtitle: BaseMedia {
         try super.init(json: json)
     }
 
-    override func convert(_ log: SwiftyBeaver.Type? = nil) throws {
+    override func move(to: Path, log: SwiftyBeaver.Type) throws -> Subtitle {
+        return try super.move(to: to, log: log) as! Subtitle
+    }
+
+    override func convert(_ log: SwiftyBeaver.Type? = nil) throws -> Subtitle {
         // Subtitles don't need to be converted
-        return
+        return self
     }
 
     override class func isSupported(ext: String) -> Bool {
@@ -420,14 +436,16 @@ final class Ignore: BaseMedia {
         try super.init(json: json)
     }
 
-    override func move(to plexPath: Path, log: SwiftyBeaver.Type) throws {
+    override func move(to: Path, log: SwiftyBeaver.Type) throws -> Ignore {
         log.verbose("Deleting ignorable file: \(path.string)")
         try path.delete()
+        path = ""
+        return self
     }
 
-    override func convert(_ log: SwiftyBeaver.Type? = nil) throws {
+    override func convert(_ log: SwiftyBeaver.Type? = nil) throws -> Ignore {
         // Ignored files don't need to be converted
-        return
+        return self
     }
 
 	override class func isSupported(ext: String) -> Bool {

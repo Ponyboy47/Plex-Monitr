@@ -59,7 +59,7 @@ final class Monitr: DirectoryMonitorDelegate {
             isModifyingMedia = false
         }
         // Get all the media in the downloads directory
-        let media = getAllMedia(from: config.downloadDirectory)
+        var media = getAllMedia(from: config.downloadDirectory)
 
         guard media.count > 0 else {
             config.log.info("No media found.")
@@ -92,12 +92,12 @@ final class Monitr: DirectoryMonitorDelegate {
         // If we want to convert media, lets do that before we move it to plex
         //   NOTE: If convertImmediately is false, then a queue of conversion 
         //         jobs are created to be run during the scheduled time period
-        if config.convert, let unconvertedMedia = convertMedia(media) {
+        if config.convert, let unconvertedMedia = convertMedia(&media) {
             config.log.warning("Failed to convert media:\n\t\(unconvertedMedia)")
         }
 
         // If we gathered any supported media files, move them to their plex location
-        if let unmovedMedia = moveMedia(media) {
+        if let unmovedMedia = moveMedia(&media) {
             config.log.warning("Failed to move media to plex:\n\t\(unmovedMedia)")
         }
     }
@@ -193,14 +193,14 @@ final class Monitr: DirectoryMonitorDelegate {
 
      - Returns: An array of Media objects that failed to move
     */
-    func moveMedia(_ media: [Media]) -> [Media]? {
+    func moveMedia(_ media: inout [Media]) -> [Media]? {
         var failedMedia: [Media] = []
 
-        for m in media {
+        for var m in media {
             Async.utility {
                 self.statistics.measure(.move) {
                     do {
-                        try m.move(to: self.config.plexDirectory, log: self.config.log)
+                        m = try m.move(to: self.config.plexDirectory, log: self.config.log)
                     } catch {
                         self.config.log.warning("Failed to move media: \(m)")
                         self.config.log.error(error)
@@ -222,16 +222,16 @@ final class Monitr: DirectoryMonitorDelegate {
 
      - Returns: An array of Media objects that failed to be converted
     */
-    func convertMedia(_ media: [Media]) -> [Media]? {
+    func convertMedia(_ media: inout [Media]) -> [Media]? {
         var failedMedia: [Media] = []
 
         if config.convertImmediately {
             config.log.verbose("Converting media immediately")
-            for m in media {
+            for var m in media {
                 Async.utility {
                     self.statistics.measure(.convert) {
                         do {
-                            try m.convert(self.config.log)
+                            m = try m.convert(self.config.log)
                         } catch {
                             self.config.log.warning("Failed to convert media: \(m)")
                             self.config.log.error(error)
