@@ -14,6 +14,7 @@ import SwiftyBeaver
 import PathKit
 import Signals
 import Cron
+import Async
 #if os(Linux)
 import Dispatch
 #endif
@@ -189,10 +190,12 @@ Signals.trap(signals: [.int, .term, .kill, .quit]) { _ in
 
 // Run once and then start monitoring regularly
 log.info("Running Monitr once for startup!")
-monitr.run()
-monitr.setDelegate()
-log.info("Monitoring '\(config.downloadDirectory)' for new files.")
-monitr.startMonitoring()
+Async.background {
+    monitr.run()
+    monitr.setDelegate()
+    log.info("Monitoring '\(config.downloadDirectory)' for new files.")
+    monitr.startMonitoring()
+}
 
 let group = DispatchGroup()
 group.enter()

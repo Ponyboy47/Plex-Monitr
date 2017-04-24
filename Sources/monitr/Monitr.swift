@@ -50,57 +50,55 @@ final class Monitr: DirectoryMonitorDelegate {
     /// Gets all media object and moves them to Plex then deletes all the empty
     ///   directories left in the downloads directory
     public func run() {
-        Async.background {
-            // Set that we're modifying the media as long as we're still contained in the run function
-            self.isModifyingMedia = true
-            // Unset the isModifyingMedia as soon as the run function completes
-            defer {
-                // Removes all empty directories from the download directory
-                self.cleanup(dir: self.config.downloadDirectory)
-                self.isModifyingMedia = false
-            }
-            // Get all the media in the downloads directory
-            let media = self.getAllMedia(from: self.config.downloadDirectory)
+        // Set that we're modifying the media as long as we're still contained in the run function
+        self.isModifyingMedia = true
+        // Unset the isModifyingMedia as soon as the run function completes
+        defer {
+            // Removes all empty directories from the download directory
+            self.cleanup(dir: self.config.downloadDirectory)
+            self.isModifyingMedia = false
+        }
+        // Get all the media in the downloads directory
+        let media = self.getAllMedia(from: self.config.downloadDirectory)
 
-            guard media.count > 0 else {
-                self.config.log.info("No media found.")
-                return
-            }
+        guard media.count > 0 else {
+            self.config.log.info("No media found.")
+            return
+        }
 
-            let video = media.filter { $0 is Video }
-            let subtitle = media.filter { $0 is Subtitle }
-            let audio = media.filter { $0 is Audio }
-            let other = media.filter { $0 is Ignore }
+        let video = media.filter { $0 is Video }
+        let subtitle = media.filter { $0 is Subtitle }
+        let audio = media.filter { $0 is Audio }
+        let other = media.filter { $0 is Ignore }
 
-            self.config.log.info("Found \(media.count) files in the download directory!")
-            if video.count > 0 {
-                self.config.log.info("\t \(video.count) video files")
-                self.config.log.verbose(video.map { $0.path })
-            }
-            if subtitle.count > 0 {
-                self.config.log.info("\t \(subtitle.count) subtitle files")
-                self.config.log.verbose(subtitle.map { $0.path })
-            }
-            if audio.count > 0 {
-                self.config.log.info("\t \(audio.count) audio files")
-                self.config.log.verbose(audio.map { $0.path })
-            }
-            if other.count > 0 {
-                self.config.log.info("\t \(other.count) other files")
-                self.config.log.verbose(other.map { $0.path })
-            }
+        self.config.log.info("Found \(media.count) files in the download directory!")
+        if video.count > 0 {
+            self.config.log.info("\t \(video.count) video files")
+            self.config.log.verbose(video.map { $0.path })
+        }
+        if subtitle.count > 0 {
+            self.config.log.info("\t \(subtitle.count) subtitle files")
+            self.config.log.verbose(subtitle.map { $0.path })
+        }
+        if audio.count > 0 {
+            self.config.log.info("\t \(audio.count) audio files")
+            self.config.log.verbose(audio.map { $0.path })
+        }
+        if other.count > 0 {
+            self.config.log.info("\t \(other.count) other files")
+            self.config.log.verbose(other.map { $0.path })
+        }
 
-            // If we want to convert media, lets do that before we move it to plex
-            //   NOTE: If convertImmediately is false, then a queue of conversion 
-            //         jobs are created to be run during the scheduled time period
-            if self.config.convert, let unconvertedMedia = self.convertMedia(media) {
-                self.config.log.warning("Failed to convert media:\n\t\(unconvertedMedia)")
-            }
+        // If we want to convert media, lets do that before we move it to plex
+        //   NOTE: If convertImmediately is false, then a queue of conversion 
+        //         jobs are created to be run during the scheduled time period
+        if self.config.convert, let unconvertedMedia = self.convertMedia(media) {
+            self.config.log.warning("Failed to convert media:\n\t\(unconvertedMedia)")
+        }
 
-            // If we gathered any supported media files, move them to their plex location
-            if let unmovedMedia = self.moveMedia(media) {
-                self.config.log.warning("Failed to move media to plex:\n\t\(unmovedMedia)")
-            }
+        // If we gathered any supported media files, move them to their plex location
+        if let unmovedMedia = self.moveMedia(media) {
+            self.config.log.warning("Failed to move media to plex:\n\t\(unmovedMedia)")
         }
     }
 
@@ -199,12 +197,16 @@ final class Monitr: DirectoryMonitorDelegate {
         var failedMedia: [Media] = []
 
         for m in media {
-            do {
-                try m.move(to: config.plexDirectory, log: config.log)
-            } catch {
-                config.log.warning("Failed to move media: \(m)")
-                config.log.error(error)
-                failedMedia.append(m)
+            Async.utility {
+                self.statistics.measure(.move) {
+                    do {
+                        try m.move(to: self.config.plexDirectory, log: self.config.log)
+                    } catch {
+                        self.config.log.warning("Failed to move media: \(m)")
+                        self.config.log.error(error)
+                        failedMedia.append(m)
+                    }
+                }
             }
         }
 
@@ -226,12 +228,16 @@ final class Monitr: DirectoryMonitorDelegate {
         if config.convertImmediately {
             config.log.verbose("Converting media immediately")
             for m in media {
-                do {
-                    try m.convert(config.log)
-                } catch {
-                    config.log.warning("Failed to convert media: \(m)")
-                    config.log.error(error)
-                    failedMedia.append(m)
+                Async.utility {
+                    self.statistics.measure(.convert) {
+                        do {
+                            try m.convert(self.config.log)
+                        } catch {
+                            self.config.log.warning("Failed to convert media: \(m)")
+                            self.config.log.error(error)
+                            failedMedia.append(m)
+                        }
+                    }
                 }
             }
         } else {
