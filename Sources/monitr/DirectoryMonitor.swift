@@ -83,10 +83,13 @@ final class DirectoryMonitor {
                 let fileDescriptor = select(FD_SETSIZE, &fileDescriptorSet, nil, nil, nil)
                 if fileDescriptor > 0 {
                     let bufferSize = 1024
-                    let buffer = UnsafeMutableRawPointer(malloc(bufferSize))
+                    guard let buffer = UnsafeMutableRawPointer(malloc(bufferSize)) else {
+                        print("Unable to allocate memory for the buffer to read inotify events")
+                        return
+                    }
                     // If we don't read inotify's buffer, then it doesn't get
                     // cleared and this triggers the delegate method infinitely
-                    let _ = read(self.inotifyFileDescriptor, buffer!, bufferSize)
+                    let _ = read(self.inotifyFileDescriptor, buffer, bufferSize)
                     // Trigger the even on the delegate
                     self.delegate?.directoryMonitorDidObserveChange(self)
                     // Free the buffer when we're done to prevent memory leaks

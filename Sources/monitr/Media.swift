@@ -15,11 +15,15 @@ import SwiftyBeaver
 import JSON
 
 // Media related errors
-enum MediaError: Swift.Error {
+enum MediaError: Error {
     case unsupportedFormat(String)
     case notImplemented
     case sampleMedia
     case alreadyExists(Path)
+    enum Downpour: Error {
+        case missingTVSeason(String)
+        case missingTVEpisode(String)
+    }
 }
 
 /// Protocol for the common implementation of Media types
@@ -181,7 +185,17 @@ final class Video: BaseMedia {
         guard !path.string.lowercased().contains("sample") else {
             throw MediaError.sampleMedia
         }
+
         try super.init(path)
+
+        if downpour.type == .tv {
+            guard let _ = downpour.season else {
+                throw MediaError.Downpour.missingTVSeason(path.string)
+            }
+            guard let _ = downpour.episode else {
+                throw MediaError.Downpour.missingTVEpisode(path.string)
+            }
+        }
     }
 
     /// JSONInitializable protocol requirement
@@ -194,7 +208,17 @@ final class Video: BaseMedia {
         guard !p.string.lowercased().contains("sample") else {
             throw MediaError.sampleMedia
         }
+
         try super.init(json: json)
+
+        if downpour.type == .tv {
+            guard let _ = downpour.season else {
+                throw MediaError.Downpour.missingTVSeason(path.string)
+            }
+            guard let _ = downpour.episode else {
+                throw MediaError.Downpour.missingTVEpisode(path.string)
+            }
+        }
     }
 
     override func move(to: Path, log: SwiftyBeaver.Type) throws -> Video {
@@ -369,6 +393,15 @@ final class Subtitle: BaseMedia {
         guard Subtitle.isSupported(ext: path.extension ?? "") else {
             throw MediaError.unsupportedFormat(path.extension ?? "")
         }
+
+        if downpour.type == .tv {
+            guard let _ = downpour.season else {
+                throw MediaError.Downpour.missingTVSeason(path.string)
+            }
+            guard let _ = downpour.episode else {
+                throw MediaError.Downpour.missingTVEpisode(path.string)
+            }
+        }
     }
 
     /// JSONInitializable protocol requirement
@@ -379,6 +412,15 @@ final class Subtitle: BaseMedia {
             throw MediaError.unsupportedFormat(p.extension ?? "")
         }
         try super.init(json: json)
+
+        if downpour.type == .tv {
+            guard let _ = downpour.season else {
+                throw MediaError.Downpour.missingTVSeason(p.string)
+            }
+            guard let _ = downpour.episode else {
+                throw MediaError.Downpour.missingTVEpisode(p.string)
+            }
+        }
     }
 
     override func move(to: Path, log: SwiftyBeaver.Type) throws -> Subtitle {
