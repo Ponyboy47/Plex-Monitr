@@ -189,7 +189,7 @@ Signals.trap(signals: [.int, .term, .kill, .quit]) { _ in
 }
 
 // Run once and then start monitoring regularly
-let block = Async.main {
+let block = Async.background {
     log.info("Running Monitr once for startup!")
     monitr.run()
     monitr.setDelegate()
