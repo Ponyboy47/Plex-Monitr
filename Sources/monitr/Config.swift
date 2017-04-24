@@ -12,10 +12,12 @@ import Foundation
 import PathKit
 import JSON
 import SwiftyBeaver
+import Cron
 
 enum ConfigError: Error {
     case pathIsNotDirectory(Path)
     case pathDoesNotExist(Path)
+    case invalidCronString(String)
 }
 
 struct Config {
@@ -37,26 +39,38 @@ struct Config {
     }
     /// Whether the media should be converted to Plex DirectPlay formats automatically
     var convert: Bool = false
+    /// Whether media should be converted immediately, or during a configurable time when the server is less likely to be busy
     var convertImmediately: Bool = true
-    var convertStartTime: Time = "0:00"
-    var convertEndTime: Time = "8:00"
+    /// The Cron string describing when scheduled media conversions may begin
+    var convertCronStart: String = "0 0 0 * * * *"
+    /// The Cron string describing when scheduled media conversions should be finished
+    var convertCronEnd: String = "0 0 8 * * * *"
+    /// The number of simultaneous threads to convert media on
     var convertThreads: Int = 2
+    /// Whether the original media file should be deleted after a successful conversion
+    var deleteOriginal: Bool = true
+
+    /// The queue of conversion jobs
+    var conversionQueue: ConversionQueue?
+
     var logFile: Path?
     var log: SwiftyBeaver.Type
 
     /// Watches the download directory for new files
     private var downloadWatcher: DirectoryMonitor?
 
-    init(_ configFile: Path? = nil, _ plexDirectory: Path? = nil, _ downloadDirectory: Path? = nil, _ convert: Bool? = nil, _ convertImmediately: Bool? = nil, _ convertStartTime: Time? = nil, _ convertEndTime: Time? = nil, _ convertThreads: Int? = nil, _ logFile: Path? = nil, logger: SwiftyBeaver.Type) throws {
+    init(_ configFile: Path? = nil, _ plexDirectory: Path? = nil, _ downloadDirectory: Path? = nil, _ convert: Bool? = nil, _ convertImmediately: Bool? = nil, _ convertCronStart: String? = nil, _ convertCronEnd: String? = nil, _ convertThreads: Int? = nil, _ deleteOriginal: Bool? = nil,_ logFile: Path? = nil, logger: SwiftyBeaver.Type) throws {
         self.log = logger
         self.configFile = configFile ?? self.configFile
         self.plexDirectory = plexDirectory ?? self.plexDirectory
         self.downloadDirectory = downloadDirectory ?? self._downloadDirectory
         self.convert = convert ?? self.convert
         self.convertImmediately = convertImmediately ?? self.convertImmediately
-        self.convertStartTime = convertStartTime ?? self.convertStartTime
-        self.convertEndTime = convertEndTime ?? self.convertEndTime
+        self.convertCronStart = convertCronStart ?? self.convertCronStart
+        self.convertCronEnd = convertCronEnd ?? self.convertCronEnd
         self.convertThreads = convertThreads ?? self.convertThreads
+        self.deleteOriginal = deleteOriginal ?? self.deleteOriginal
+
         self.logFile = logFile
 
         // Verify the plex/download directories exist and are in fact, directories
@@ -73,6 +87,14 @@ struct Config {
         }
         guard self.downloadDirectory.isDirectory else {
             throw ConfigError.pathIsNotDirectory(self.downloadDirectory)
+        }
+
+        // Validate the Cron strings
+        guard let _ = try? Cron.parseExpression(self.convertCronStart) else {
+            throw ConfigError.invalidCronString(self.convertCronStart)
+        }
+        guard let _ = try? Cron.parseExpression(self.convertCronEnd) else {
+            throw ConfigError.invalidCronString(self.convertCronEnd)
         }
     }
 
@@ -104,19 +126,14 @@ struct Config {
 extension Config: JSONInitializable {
     /// Initializes by reading the file at the path as a JSON string
     init(_ path: Path, logger: SwiftyBeaver.Type) throws {
-        try self.init(path.read(), logger: logger)
+        try self.init(path.read())
         configFile = path
+        log = logger
     }
 
     /// Initialize by reading the string as JSON
-    init(_ str: String, logger: SwiftyBeaver.Type) throws {
-        try self.init(json: JSON.Parser.parse(str), logger: logger)
-    }
-
-    /// Initialize the config from a JSON object
-    init(json: JSON, logger: SwiftyBeaver.Type) throws {
-        try self.init(json: json)
-        log = logger
+    init(_ str: String) throws {
+        try self.init(json: JSON.Parser.parse(str))
     }
 
     /// Initialize the config from a JSON object
@@ -136,19 +153,26 @@ extension Config: JSONInitializable {
             convertImmediately = true
         }
         do {
-            convertStartTime = try Time(try json.get("convertStartTime"))
+            convertCronStart = try json.get("convertCronStart")
+            try Cron.parseExpression(convertCronStart)
         } catch {
-            convertStartTime = "0:00"
+            convertCronStart = "0 0 0 * * * *"
         }
         do {
-            convertEndTime = try Time(try json.get("convertEndTime"))
+            convertCronEnd = try json.get("convertCronEnd")
+            try Cron.parseExpression(convertCronStart)
         } catch {
-            convertEndTime = "8:00"
+            convertCronEnd = "0 0 8 * * * *"
         }
         do {
             convertThreads = try json.get("convertThreads")
         } catch {
             convertThreads = 2
+        }
+        do {
+            deleteOriginal = try json.get("deleteOriginal")
+        } catch {
+            deleteOriginal = true
         }
         if let lFile: String = try? json.get("logFile") {
             logFile = Path(lFile)
@@ -185,9 +209,10 @@ extension Config: JSONRepresentable {
             "downloadDirectory": downloadDirectory.string,
             "convert": convert,
             "convertImmediately": convertImmediately,
-            "convertStartTime": convertStartTime.string,
-            "convertEndTime": convertEndTime.string,
-            "convertThreads": convertThreads
+            "convertCronStart": convertCronStart,
+            "convertCronEnd": convertCronEnd,
+            "convertThreads": convertThreads,
+            "deleteOriginal": deleteOriginal
         ]
         if let lFile = logFile {
             json["logFile"] = lFile.string.encoded()

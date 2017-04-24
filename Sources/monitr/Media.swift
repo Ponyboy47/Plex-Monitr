@@ -11,6 +11,8 @@
 import Foundation
 import PathKit
 import Downpour
+import SwiftyBeaver
+import JSON
 
 // Media related errors
 enum MediaError: Swift.Error {
@@ -21,7 +23,7 @@ enum MediaError: Swift.Error {
 }
 
 /// Protocol for the common implementation of Media types
-protocol Media: class {
+protocol Media: class, JSONInitializable, JSONRepresentable {
     /// The path to the media file
     var path: Path { get set }
     /// Used to retrieve basic data from the file
@@ -37,11 +39,14 @@ protocol Media: class {
     /// Initializer
     init(_ path: Path) throws
     /// Moves the media file to the finalDirectory
-    func move(to newDirectory: Path) throws
+    func move(to newDirectory: Path, log: SwiftyBeaver.Type) throws
     /// Converts the media file to a Plex DirectPlay supported format
-    func convert() throws
-    /// Returns whether of not the Media type supported the given format
+    func convert(_ log: SwiftyBeaver.Type?) throws
+    /// Returns whether or not the Media type supports the given format
     static func isSupported(ext: String) -> Bool
+    /// Returns whether or not the Media type needs to be converted for Plex
+    ///   DirectPlay capabilities to be enabled
+    static func needsConversion(file: Path) -> Bool
 }
 
 class BaseMedia: Media {
@@ -65,11 +70,21 @@ class BaseMedia: Media {
         downpour = Downpour(fullPath: path)
     }
 
-    func move(to plexPath: Path) throws {
+    /// JSONInitializable protocol requirement
+    required init(json: JSON) throws {
+        // Set the media file's path to the absolute path
+        path = Path(try json.get("path")).absolute
+        // Create the downpour object
+        downpour = Downpour(fullPath: path)
+    }
+
+    func move(to plexPath: Path, log: SwiftyBeaver.Type) throws {
+        log.verbose("Preparing to move file: \(path.string)")
         // Get the location of the finalDirectory inside the plexPath
         let mediaDirectory = plexPath + finalDirectory
         // Create the directory
         if !mediaDirectory.isDirectory {
+            log.verbose("Creating the media file's directory: \(mediaDirectory.string)")
             try mediaDirectory.mkpath()
         }
 
@@ -80,20 +95,34 @@ class BaseMedia: Media {
         guard !finalRestingPlace.isFile else {
             throw MediaError.alreadyExists(finalRestingPlace)
         }
-        
+
+        log.verbose("Moving media file '\(path.string)' => '\(finalRestingPlace.string)'")
         // Move the file to the correct plex location
         try path.move(finalRestingPlace)
+        log.verbose("Successfully moved file to '\(finalRestingPlace.string)'")
         // Change the path now to match
         path = finalRestingPlace
     }
 
-    func convert() throws {
+    func convert(_ log: SwiftyBeaver.Type? = nil) throws {
         throw MediaError.notImplemented
     }
 
     class func isSupported(ext: String) -> Bool {
         print("isSupported(ext: String) is not implemented!")
         return false
+    }
+
+    class func needsConversion(file: Path) -> Bool {
+        print("needsConversion(file: Path) is not implemented!")
+        return false
+    }
+
+    /// JSONRepresentable protocol requirement
+    func encoded() -> JSON {
+        return [
+            "path": path.string
+        ]
     }
 }
 
@@ -147,21 +176,38 @@ final class Video: BaseMedia {
         guard Video.isSupported(ext: path.extension ?? "") else {
             throw MediaError.unsupportedFormat(path.extension ?? "")
         }
-        guard !path.string.lowercased().contains("sample") && !path.string.lowercased().contains(".ds_store") else {
+        guard !path.string.lowercased().contains("sample") else {
             throw MediaError.sampleMedia
         }
         try super.init(path)
     }
 
-    override func convert() throws {
+    /// JSONInitializable protocol requirement
+    required init(json: JSON) throws {
+        let p = Path(try json.get("path"))
+        // Check to make sure the extension of the video file matches one of the supported plex extensions
+        guard Video.isSupported(ext: p.extension ?? "") else {
+            throw MediaError.unsupportedFormat(p.extension ?? "")
+        }
+        guard !p.string.lowercased().contains("sample") else {
+            throw MediaError.sampleMedia
+        }
+        try super.init(json: json)
+    }
+
+    override func convert(_ log: SwiftyBeaver.Type? = nil) throws {
         // Use the Handbrake CLI to convert to Plex DirectPlay capable video (if necessary)
     }
 
-    override static func isSupported(ext: String) -> Bool {
+    override class func isSupported(ext: String) -> Bool {
         guard let _ = SupportedExtension(rawValue: ext.lowercased()) else {
             return false
         }
         return true
+    }
+
+    override class func needsConversion(file: Path) -> Bool {
+        return false
     }
 }
 
@@ -192,21 +238,35 @@ final class Audio: BaseMedia {
     }
 
     required init(_ path: Path) throws {
-        try super.init(path)
         guard Audio.isSupported(ext: path.extension ?? "") else {
             throw MediaError.unsupportedFormat(path.extension ?? "")
         }
+        try super.init(path)
     }
 
-    override func convert() throws {
+    /// JSONInitializable protocol requirement
+    required init(json: JSON) throws {
+        let p = Path(try json.get("path"))
+        // Check to make sure the extension of the video file matches one of the supported plex extensions
+        guard Audio.isSupported(ext: p.extension ?? "") else {
+            throw MediaError.unsupportedFormat(p.extension ?? "")
+        }
+        try super.init(json: json)
+    }
+
+    override func convert(_ log: SwiftyBeaver.Type? = nil) throws {
         // Use the Handbrake CLI to convert to Plex DirectPlay capable audio (if necessary)
     }
 
-	override static func isSupported(ext: String) -> Bool {
+	override class func isSupported(ext: String) -> Bool {
         guard let _ = SupportedExtension(rawValue: ext.lowercased()) else {
             return false
         }
         return true
+    }
+
+    override class func needsConversion(file: Path) -> Bool {
+        return false
     }
 }
 
@@ -299,12 +359,22 @@ final class Subtitle: BaseMedia {
         }
     }
 
-    override func convert() throws {
+    /// JSONInitializable protocol requirement
+    required init(json: JSON) throws {
+        let p = Path(try json.get("path"))
+        // Check to make sure the extension of the video file matches one of the supported plex extensions
+        guard Subtitle.isSupported(ext: p.extension ?? "") else {
+            throw MediaError.unsupportedFormat(p.extension ?? "")
+        }
+        try super.init(json: json)
+    }
+
+    override func convert(_ log: SwiftyBeaver.Type? = nil) throws {
         // Subtitles don't need to be converted
         return
     }
 
-    override static func isSupported(ext: String) -> Bool {
+    override class func isSupported(ext: String) -> Bool {
         guard let _ = SupportedExtension(rawValue: ext.lowercased()) else {
             return false
         }
@@ -339,16 +409,28 @@ final class Ignore: BaseMedia {
         try super.init(path)
     }
 
-    override func move(to plexPath: Path) throws {
+    /// JSONInitializable protocol requirement
+    required init(json: JSON) throws {
+        let p = Path(try json.get("path"))
+        if !p.string.lowercased().contains("sample") && !p.string.lowercased().contains(".ds_store") {
+            guard Ignore.isSupported(ext: p.extension ?? "") else {
+                throw MediaError.unsupportedFormat(p.extension ?? "")
+            }
+        }
+        try super.init(json: json)
+    }
+
+    override func move(to plexPath: Path, log: SwiftyBeaver.Type) throws {
+        log.verbose("Deleting ignorable file: \(path.string)")
         try path.delete()
     }
 
-    override func convert() throws {
+    override func convert(_ log: SwiftyBeaver.Type? = nil) throws {
         // Ignored files don't need to be converted
         return
     }
 
-	override static func isSupported(ext: String) -> Bool {
+	override class func isSupported(ext: String) -> Bool {
         guard let _ = SupportedExtension(rawValue: ext.lowercased()) else {
             return false
         }

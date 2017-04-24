@@ -20,6 +20,10 @@ enum MonitrError: Swift.Error {
 final class Monitr: DirectoryMonitorDelegate {
     /// The configuration to use for the monitor
     private var config: Config
+
+    /// The statistics object to track useage data for the monitor
+    private var statistics: Statistic = Statistic()
+
     /// Whether or not media is currently being migrated to Plex. Automatically
     ///   runs a new again if new media has been added since the run routine began
     private var isModifyingMedia: Bool = false {
@@ -34,8 +38,13 @@ final class Monitr: DirectoryMonitorDelegate {
     /// If new content has been added since the run routine began
     private var needsUpdate: Bool = false
 
-    init(_ config: Config) {
+    init(_ config: Config) throws {
         self.config = config
+
+        let statFile = config.configFile.parent + Statistic.filename
+        if statFile.exists && statFile.isFile {
+            self.statistics = try Statistic(statFile)
+        }
     }
 
     /// Gets all media object and moves them to Plex then deletes all the empty
@@ -79,6 +88,13 @@ final class Monitr: DirectoryMonitorDelegate {
             if other.count > 0 {
                 self.config.log.info("\t \(other.count) other files")
                 self.config.log.verbose(other.map { $0.path })
+            }
+
+            // If we want to convert media, lets do that before we move it to plex
+            //   NOTE: If convertImmediately is false, then a queue of conversion 
+            //         jobs are created to be run during the scheduled time period
+            if self.config.convert, let unconvertedMedia = self.convertMedia(media) {
+                self.config.log.warning("Failed to convert media:\n\t\(unconvertedMedia)")
             }
 
             // If we gathered any supported media files, move them to their plex location
@@ -162,7 +178,7 @@ final class Monitr: DirectoryMonitorDelegate {
                 m = try Audio(file)
             } else if Subtitle.isSupported(ext: ext) {
                 m = try Subtitle(file)
-            } else if Ignore.isSupported(ext: ext) {
+            } else if Ignore.isSupported(ext: ext) || file.string.lowercased().ends(with: ".ds_store") {
                 m = try Ignore(file)
             }
         } catch {
@@ -184,7 +200,7 @@ final class Monitr: DirectoryMonitorDelegate {
 
         for m in media {
             do {
-                try m.move(to: config.plexDirectory)
+                try m.move(to: config.plexDirectory, log: config.log)
             } catch {
                 config.log.warning("Failed to move media: \(m)")
                 config.log.error(error)
@@ -207,13 +223,32 @@ final class Monitr: DirectoryMonitorDelegate {
     func convertMedia(_ media: [Media]) -> [Media]? {
         var failedMedia: [Media] = []
 
-        for m in media {
-            do {
-                try m.convert()
-            } catch {
-                config.log.warning("Failed to convert media: \(m)")
-                config.log.error(error)
-                failedMedia.append(m)
+        if config.convertImmediately {
+            config.log.verbose("Converting media immediately")
+            for m in media {
+                do {
+                    try m.convert(config.log)
+                } catch {
+                    config.log.warning("Failed to convert media: \(m)")
+                    config.log.error(error)
+                    failedMedia.append(m)
+                }
+            }
+        } else {
+            if config.conversionQueue == nil {
+                config.log.info("Creating a conversion queue")
+                config.conversionQueue = ConversionQueue(config, statistics: statistics)
+            } else {
+                config.log.info("Using existing conversion queue")
+            }
+
+            // Create a queue of conversion jobs for later
+            for m in media {
+                if Video.isSupported(ext: m.path.`extension` ?? "") && Video.needsConversion(file: m.path) {
+                    config.conversionQueue?.push(m as! Video)
+                } else if Audio.isSupported(ext: m.path.`extension` ?? "") && Audio.needsConversion(file: m.path) {
+                    config.conversionQueue?.push(m as! Audio)
+                }
             }
         }
 

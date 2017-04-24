@@ -11,6 +11,7 @@
 import Foundation
 import PathKit
 import Async
+import Cron
 
 /// Errors that occur in the CLI
 enum ArgumentError: Error {
@@ -205,16 +206,6 @@ extension String: ArgumentType {
             throw ArgumentError.emptyString
         }
         return value
-    }
-}
-
-/// Allows Times to be used as cli arguments
-extension Time: ArgumentType {
-    static func from(string value: String) throws -> Time {
-        guard value.characters.count > 0 else {
-            throw ArgumentError.emptyString
-        }
-        return try Time(value)
     }
 }
 
