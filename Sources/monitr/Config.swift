@@ -54,12 +54,13 @@ struct Config {
     var conversionQueue: ConversionQueue?
 
     var logFile: Path?
+    var logLevel: Int = 0
     var log: SwiftyBeaver.Type
 
     /// Watches the download directory for new files
     private var downloadWatcher: DirectoryMonitor?
 
-    init(_ configFile: Path? = nil, _ plexDirectory: Path? = nil, _ downloadDirectory: Path? = nil, _ convert: Bool? = nil, _ convertImmediately: Bool? = nil, _ convertCronStart: String? = nil, _ convertCronEnd: String? = nil, _ convertThreads: Int? = nil, _ deleteOriginal: Bool? = nil,_ logFile: Path? = nil, logger: SwiftyBeaver.Type) throws {
+    init(_ configFile: Path? = nil, _ plexDirectory: Path? = nil, _ downloadDirectory: Path? = nil, _ convert: Bool? = nil, _ convertImmediately: Bool? = nil, _ convertCronStart: String? = nil, _ convertCronEnd: String? = nil, _ convertThreads: Int? = nil, _ deleteOriginal: Bool? = nil, _ logLevel: Int? = nil, _ logFile: Path? = nil, logger: SwiftyBeaver.Type) throws {
         self.log = logger
         self.configFile = configFile ?? self.configFile
         self.plexDirectory = plexDirectory ?? self.plexDirectory
@@ -70,7 +71,7 @@ struct Config {
         self.convertCronEnd = convertCronEnd ?? self.convertCronEnd
         self.convertThreads = convertThreads ?? self.convertThreads
         self.deleteOriginal = deleteOriginal ?? self.deleteOriginal
-
+        self.logLevel = logLevel ?? self.logLevel
         self.logFile = logFile
 
         // Verify the plex/download directories exist and are in fact, directories
@@ -174,6 +175,11 @@ extension Config: JSONInitializable {
         } catch {
             deleteOriginal = true
         }
+        do {
+            logLevel = try json.get("logLevel")
+        } catch {
+            logLevel = 0
+        }
         if let lFile: String = try? json.get("logFile") {
             logFile = Path(lFile)
         } else {
@@ -212,7 +218,8 @@ extension Config: JSONRepresentable {
             "convertCronStart": convertCronStart,
             "convertCronEnd": convertCronEnd,
             "convertThreads": convertThreads,
-            "deleteOriginal": deleteOriginal
+            "deleteOriginal": deleteOriginal,
+            "logLevel": logLevel
         ]
         if let lFile = logFile {
             json["logFile"] = lFile.string.encoded()

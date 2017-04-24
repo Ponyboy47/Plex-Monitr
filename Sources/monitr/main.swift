@@ -35,7 +35,7 @@ let convertCronEndOption = try Option<String>("z", longName: "convert-cron-end",
 let convertThreadsOption = try Option<Int>("r", longName: "convert-threads", description: "The number of threads that can simultaneously be converting media", parser: argParser)
 let deleteOriginalOption = try Flag("o", longName: "delete-original", description: "Whether the original media file should be deleted upon successful conversion to a Plex DirectPlay format", parser: argParser)
 let saveFlag = try Flag("s", longName: "save-settings", default: false, description: "Whether or not the configured settings should be saved to the config options file", required: true, parser: argParser)
-let logLevelOption = try Option<Int>("d", longName: "log-level", default: 0, description: "The logging level to use. Higher numbers mean more logging. Valid number range is 0-4.", parser: argParser)
+let logLevelOption = try Option<Int>("d", longName: "log-level", description: "The logging level to use. Higher numbers mean more logging. Valid number range is 0-4.", parser: argParser)
 let logFileOption = try Option<Path>("l", longName: "log-file", description: "Where to write the log file.", parser: argParser)
 
 // Prints the help/usage text if -h or --help was used
@@ -52,22 +52,8 @@ guard let saveConfig: Bool = try saveFlag.parse() else {
     print("Something went wrong and the save flag was not set")
     exit(EXIT_FAILURE)
 }
-guard var logLevel: Int = try logLevelOption.parse() else {
-    print("Something went wrong and the logLevel option was not set")
-    exit(EXIT_FAILURE)
-}
-
-// Caps logLevel to the maximum/minimum level
-if logLevel > 4 {
-    logLevel = 4
-} else if logLevel < 0 {
-    logLevel = 0
-}
-
-let minLevel = SwiftyBeaver.Level(rawValue: 4 - logLevel)!
 
 let console = ConsoleDestination()
-console.minLevel = minLevel
 log.addDestination(console)
 
 log.verbose("Got minimum required arguments from the CLI.")
@@ -80,6 +66,7 @@ let convertCronStart: String? = try convertCronStartOption.parse()
 let convertCronEnd: String? = try convertCronStartOption.parse()
 let convertThreads: Int? = try convertThreadsOption.parse()
 let deleteOriginal: Bool? = try deleteOriginalOption.parse()
+let logLevel: Int? = try logLevelOption.parse()
 let logFile: Path? = try logFileOption.parse()
 
 // We'll use this in a minute to make sure the config is a json file (hopefully people use file extensions if creating their config manually)
@@ -131,22 +118,24 @@ if configPath.isFile && ext == "json" {
         log.info("Delete Original is changing from '\(config.deleteOriginal)' to '\(dO)'.")
         config.deleteOriginal = dO
     }
-    if let l = logFile, config.logFile != l {
-        log.info("Log File is changing from '\(config.logFile ?? "nil")' to '\(l)'.")
-        config.logFile = l
+    if let lL = logLevel, config.logLevel != lL {
+        log.info("Log Level is changing from '\(config.logLevel)' to '\(lL)'.")
+        config.logLevel = lL
+    }
+    if let lF = logFile, config.logFile != lF {
+        log.info("Log File is changing from '\(config.logFile ?? "nil")' to '\(lF)'.")
+        config.logFile = lF
         let file = FileDestination()
-        file.logFileURL = l.url
-        file.minLevel = minLevel
+        file.logFileURL = lF.url
         log.addDestination(file)
     }
 } else {
     // Try and create the Config from the command line args (fails if anything is not set)
     do {
-        config = try Config(configPath, plexDirectory, downloadDirectory, convert, convertImmediately, convertCronStart, convertCronEnd, convertThreads, deleteOriginal, logFile, logger: log)
+        config = try Config(configPath, plexDirectory, downloadDirectory, convert, convertImmediately, convertCronStart, convertCronEnd, convertThreads, deleteOriginal, logLevel, logFile, logger: log)
         if let l = logFile {
             let file = FileDestination()
             file.logFileURL = l.url
-            file.minLevel = minLevel
             log.addDestination(file)
         }
     } catch {
@@ -157,9 +146,21 @@ if configPath.isFile && ext == "json" {
 }
 // Only log to console when we're not logging to a file or if the logLevel
 //   is debug/verbose
-if logLevel < 3 && logFile != nil {
+var lL = logLevel ?? 0
+
+if lL < 3 && logFile != nil {
     log.removeDestination(console)
 }
+
+// Caps logLevel to the maximum/minimum level
+if lL > 4 {
+    lL = 4
+} else if lL < 0 {
+    lL = 0
+}
+
+let minLevel = SwiftyBeaver.Level(rawValue: 4 - lL)!
+log.destinations.forEach({ $0.minLevel = minLevel })
 
 // Try and save the config (if the flag is set to true)
 if saveConfig {
