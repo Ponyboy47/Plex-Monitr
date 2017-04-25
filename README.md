@@ -1,4 +1,4 @@
-# Monitr:
+# Monitr: [![Build Status](https://travis-ci.org/Ponyboy47/Plex-Monitr.svg?branch=master)](https://travis-ci.org/Ponyboy47/Plex-Monitr)
 
 <p align="center"><img src="https://github.com/Ponyboy47/Plex-Monitr/blob/master/img/monitr.jpg" width=100 /></p>
 
