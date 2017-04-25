@@ -20,7 +20,8 @@ enum ConfigError: Error {
     case invalidCronString(String)
 }
 
-struct Config {
+/// Allows the config to be initialized from a json file
+class Config: JSONInitializable {
     /// Where the config file should be saved (if the save flag was set to true)
     var configFile: Path = "~/.config/monitr/settings.json"
     /// The directory where the plex Libraries reside
@@ -99,46 +100,20 @@ struct Config {
         }
     }
 
-    /// Starts monitoring the downloads directory for changes
-    @discardableResult
-    func startMonitoring() -> Bool {
-        do {
-            try downloadWatcher?.startMonitoring()
-        } catch {
-            log.warning("Failed to start directory watcher.")
-            log.error(error)
-            return false
-        }
-        return true
-    }
-
-    /// Stops monitoring the downloads directory
-    func stopMonitoring() {
-       downloadWatcher?.stopMonitoring()
-    }
-
-    /// Sets the delegate of the downloadWatcher
-    func setDelegate(_ delegate: DirectoryMonitorDelegate) {
-        downloadWatcher?.delegate = delegate
-    }
-}
-
-/// Allows the config to be initialized from a json file
-extension Config: JSONInitializable {
     /// Initializes by reading the file at the path as a JSON string
-    init(_ path: Path, logger: SwiftyBeaver.Type) throws {
+    convenience init(_ path: Path, logger: SwiftyBeaver.Type) throws {
         try self.init(path.read())
         configFile = path
         log = logger
     }
 
     /// Initialize by reading the string as JSON
-    init(_ str: String) throws {
+    convenience init(_ str: String) throws {
         try self.init(json: JSON.Parser.parse(str))
     }
 
     /// Initialize the config from a JSON object
-    init(json: JSON) throws {
+    required init(json: JSON) throws {
         log = SwiftyBeaver.self
 
         plexDirectory = Path(try json.get("plexDirectory"))
@@ -199,6 +174,29 @@ extension Config: JSONInitializable {
         guard downloadDirectory.isDirectory else {
             throw ConfigError.pathIsNotDirectory(downloadDirectory)
         }
+    }
+
+    /// Starts monitoring the downloads directory for changes
+    @discardableResult
+    func startMonitoring() -> Bool {
+        do {
+            try downloadWatcher?.startMonitoring()
+        } catch {
+            log.warning("Failed to start directory watcher.")
+            log.error(error)
+            return false
+        }
+        return true
+    }
+
+    /// Stops monitoring the downloads directory
+    func stopMonitoring() {
+       downloadWatcher?.stopMonitoring()
+    }
+
+    /// Sets the delegate of the downloadWatcher
+    func setDelegate(_ delegate: DirectoryMonitorDelegate) {
+        downloadWatcher?.delegate = delegate
     }
 }
 
