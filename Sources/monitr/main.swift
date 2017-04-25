@@ -118,49 +118,52 @@ if configPath.isFile && ext == "json" {
         log.info("Delete Original is changing from '\(config.deleteOriginal)' to '\(dO)'.")
         config.deleteOriginal = dO
     }
-    if let lL = logLevel, config.logLevel != lL {
-        log.info("Log Level is changing from '\(config.logLevel)' to '\(lL)'.")
-        config.logLevel = lL
+    if var lL = logLevel, config.logLevel != lL {
+        // Caps logLevel to the maximum/minimum level
+        if lL > 4 {
+            lL = 4
+        } else if lL < 0 {
+            lL = 0
+        }
+
+        if lL != config.logLevel {
+            log.info("Log Level is changing from '\(config.logLevel)' to '\(lL)'.")
+            config.logLevel = lL
+        }
     }
     if let lF = logFile, config.logFile != lF {
         log.info("Log File is changing from '\(config.logFile ?? "nil")' to '\(lF)'.")
         config.logFile = lF
-        let file = FileDestination()
-        file.logFileURL = lF.url
-        log.addDestination(file)
     }
 } else {
     // Try and create the Config from the command line args (fails if anything is not set)
     do {
         config = try Config(configPath, plexDirectory, downloadDirectory, convert, convertImmediately, convertCronStart, convertCronEnd, convertThreads, deleteOriginal, logLevel, logFile, logger: log)
-        if let l = logFile {
-            let file = FileDestination()
-            file.logFileURL = l.url
-            log.addDestination(file)
-        }
     } catch {
         log.warning("Failed to initialize config.")
         log.error(error)
         exit(EXIT_FAILURE)
     }
 }
+
+log.verbose("Configuration:\n\(config.printable())")
+
 // Only log to console when we're not logging to a file or if the logLevel
 //   is debug/verbose
-var lL = logLevel ?? 0
-
-if lL < 3 && logFile != nil {
+if config.logLevel < 3 && config.logFile != nil {
     log.removeDestination(console)
 }
 
-// Caps logLevel to the maximum/minimum level
-if lL > 4 {
-    lL = 4
-} else if lL < 0 {
-    lL = 0
+if let lF = config.logFile {
+    let file = FileDestination()
+    file.logFileURL = lF.url
+    log.addDestination(file)
 }
 
-let minLevel = SwiftyBeaver.Level(rawValue: 4 - lL)!
-log.destinations.forEach({ $0.minLevel = minLevel })
+let minLevel = SwiftyBeaver.Level(rawValue: 4 - config.logLevel)!
+for var dest in log.destinations {
+    dest.minLevel = minLevel
+}
 
 // Try and save the config (if the flag is set to true)
 if saveConfig {
@@ -176,6 +179,7 @@ if saveConfig {
 // Create the monitr
 do {
     monitr = try Monitr(config)
+    log.verbose("Sucessfully created the Monitr object from the config")
 } catch {
     log.info("Failed to create the monitr. Correct the error and try again.")
     log.error(error)
@@ -190,14 +194,11 @@ Signals.trap(signals: [.int, .term, .kill, .quit]) { _ in
 }
 
 // Run once and then start monitoring regularly
-let block = Async.background {
-    log.info("Running Monitr once for startup!")
-    monitr.run()
-    monitr.setDelegate()
-    log.info("Monitoring '\(config.downloadDirectory)' for new files.")
-    monitr.startMonitoring()
-}
-block.wait()
+log.info("Running Monitr once for startup!")
+monitr.run()
+monitr.setDelegate()
+log.info("Monitoring '\(config.downloadDirectory)' for new files.")
+monitr.startMonitoring()
 
 let group = DispatchGroup()
 group.enter()

@@ -71,7 +71,7 @@ class BaseMedia: Media {
         // Set the media file's path to the absolute path
         self.path = path.absolute
         // Create the downpour object
-        downpour = Downpour(fullPath: path)
+        self.downpour = Downpour(fullPath: path.absolute)
     }
 
     /// JSONInitializable protocol requirement
@@ -188,12 +188,12 @@ final class Video: BaseMedia {
 
         try super.init(path)
 
-        if downpour.type == .tv {
-            guard let _ = downpour.season else {
-                throw MediaError.Downpour.missingTVSeason(path.string)
+        if self.downpour.type == .tv {
+            guard let _ = self.downpour.season else {
+                throw MediaError.Downpour.missingTVSeason(self.path.string)
             }
-            guard let _ = downpour.episode else {
-                throw MediaError.Downpour.missingTVEpisode(path.string)
+            guard let _ = self.downpour.episode else {
+                throw MediaError.Downpour.missingTVEpisode(self.path.string)
             }
         }
     }
@@ -211,12 +211,12 @@ final class Video: BaseMedia {
 
         try super.init(json: json)
 
-        if downpour.type == .tv {
-            guard let _ = downpour.season else {
-                throw MediaError.Downpour.missingTVSeason(path.string)
+        if self.downpour.type == .tv {
+            guard let _ = self.downpour.season else {
+                throw MediaError.Downpour.missingTVSeason(p.string)
             }
-            guard let _ = downpour.episode else {
-                throw MediaError.Downpour.missingTVEpisode(path.string)
+            guard let _ = self.downpour.episode else {
+                throw MediaError.Downpour.missingTVEpisode(p.string)
             }
         }
     }

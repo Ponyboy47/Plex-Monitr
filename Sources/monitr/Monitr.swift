@@ -51,18 +51,18 @@ final class Monitr: DirectoryMonitorDelegate {
     ///   directories left in the downloads directory
     public func run() {
         // Set that we're modifying the media as long as we're still contained in the run function
-        isModifyingMedia = true
+        self.isModifyingMedia = true
         // Unset the isModifyingMedia as soon as the run function completes
         defer {
             // Removes all empty directories from the download directory
-            cleanup(dir: config.downloadDirectory)
-            isModifyingMedia = false
+            self.cleanup(dir: self.config.downloadDirectory)
+            self.isModifyingMedia = false
         }
         // Get all the media in the downloads directory
-        var media = getAllMedia(from: config.downloadDirectory)
+        var media = self.getAllMedia(from: self.config.downloadDirectory)
 
         guard media.count > 0 else {
-            config.log.info("No media found.")
+            self.config.log.info("No media found.")
             return
         }
 
@@ -71,46 +71,46 @@ final class Monitr: DirectoryMonitorDelegate {
         let audio = media.filter { $0 is Audio }
         let other = media.filter { $0 is Ignore }
 
-        config.log.info("Found \(media.count) files in the download directory!")
+        self.config.log.info("Found \(media.count) files in the download directory!")
         if video.count > 0 {
-            config.log.info("\t \(video.count) video files")
-            config.log.verbose(video.map { $0.path })
+            self.config.log.info("\t \(video.count) video files")
+            self.config.log.verbose(video.map { $0.path })
         }
         if subtitle.count > 0 {
-            config.log.info("\t \(subtitle.count) subtitle files")
-            config.log.verbose(subtitle.map { $0.path })
+            self.config.log.info("\t \(subtitle.count) subtitle files")
+            self.config.log.verbose(subtitle.map { $0.path })
         }
         if audio.count > 0 {
-            config.log.info("\t \(audio.count) audio files")
-            config.log.verbose(audio.map { $0.path })
+            self.config.log.info("\t \(audio.count) audio files")
+            self.config.log.verbose(audio.map { $0.path })
         }
         if other.count > 0 {
-            config.log.info("\t \(other.count) other files")
-            config.log.verbose(other.map { $0.path })
+            self.config.log.info("\t \(other.count) other files")
+            self.config.log.verbose(other.map { $0.path })
         }
 
         // If we want to convert media, lets do that before we move it to plex
         //   NOTE: If convertImmediately is false, then a queue of conversion 
         //         jobs are created to be run during the scheduled time period
-        if config.convert, let unconvertedMedia = convertMedia(&media) {
-            config.log.warning("Failed to convert media:\n\t\(unconvertedMedia)")
+        if self.config.convert, let unconvertedMedia = self.convertMedia(&media) {
+            self.config.log.warning("Failed to convert media:\n\t\(unconvertedMedia)")
         }
 
         // If we gathered any supported media files, move them to their plex location
-        if let unmovedMedia = moveMedia(&media) {
-            config.log.warning("Failed to move media to plex:\n\t\(unmovedMedia)")
+        if let unmovedMedia = self.moveMedia(&media) {
+            self.config.log.warning("Failed to move media to plex:\n\t\(unmovedMedia)")
         }
     }
 
     /// Sets the delegate for the downloads directory monitor
     public func setDelegate() {
-        config.setDelegate(self)
+        self.config.setDelegate(self)
     }
 
     /// Begin watching the downloads directory
     @discardableResult
     public func startMonitoring() -> Bool {
-        return config.startMonitoring()
+        return self.config.startMonitoring()
     }
 
     /**
@@ -119,8 +119,9 @@ final class Monitr: DirectoryMonitorDelegate {
      - Parameter now: If true, kills any active media management. Defaults to false
     */
     public func shutdown(now: Bool = false) {
-        config.log.info("Shutting down monitr.")
-        config.stopMonitoring()
+        self.config.log.info("Shutting down monitr.")
+        self.config.stopMonitoring()
+        // Go through conversions and halt them/save them
         if now {
             // Kill any other stuff going on
         }
@@ -141,16 +142,16 @@ final class Monitr: DirectoryMonitorDelegate {
             // Iterate of the children paths
             // Skips the directories and just checks for files
             for childFile in children where childFile.isFile {
-                if let m = getMedia(with: childFile) {
+                if let m = self.getMedia(with: childFile) {
                     media.append(m)
                 } else {
-                    config.log.warning("Unknown/unsupported file found: \(childFile)")
+                    self.config.log.warning("Unknown/unsupported file found: \(childFile)")
                 }
             }
             return media
         } catch {
-            config.log.warning("Failed to get recursive children from the downloads directory.")
-            config.log.error(error)
+            self.config.log.warning("Failed to get recursive children from the downloads directory.")
+            self.config.log.error(error)
         }
         return []
     }
@@ -180,8 +181,8 @@ final class Monitr: DirectoryMonitorDelegate {
                 m = try Ignore(file)
             }
         } catch {
-            config.log.warning("Error occured trying to create media object from '\(file)'.")
-            config.log.error(error)
+            self.config.log.warning("Error occured trying to create media object from '\(file)'.")
+            self.config.log.error(error)
         }
         return m
     }
@@ -197,7 +198,7 @@ final class Monitr: DirectoryMonitorDelegate {
         var failedMedia: [Media] = []
 
         for var m in media {
-            Async.utility {
+            let moveBlock = Async.utility {
                 self.statistics.measure(.move) {
                     do {
                         m = try m.move(to: self.config.plexDirectory, log: self.config.log)
@@ -208,6 +209,7 @@ final class Monitr: DirectoryMonitorDelegate {
                     }
                 }
             }
+            moveBlock.wait()
         }
 
         guard failedMedia.count > 0 else { return nil }
@@ -225,10 +227,10 @@ final class Monitr: DirectoryMonitorDelegate {
     func convertMedia(_ media: inout [Media]) -> [Media]? {
         var failedMedia: [Media] = []
 
-        if config.convertImmediately {
-            config.log.verbose("Converting media immediately")
+        if self.config.convertImmediately {
+            self.config.log.verbose("Converting media immediately")
             for var m in media {
-                Async.utility {
+                let convertBlock = Async.utility {
                     self.statistics.measure(.convert) {
                         do {
                             m = try m.convert(self.config.log)
@@ -239,21 +241,22 @@ final class Monitr: DirectoryMonitorDelegate {
                         }
                     }
                 }
+                convertBlock.wait()
             }
         } else {
-            if config.conversionQueue == nil {
-                config.log.info("Creating a conversion queue")
-                config.conversionQueue = ConversionQueue(config, statistics: statistics)
+            if self.config.conversionQueue == nil {
+                self.config.log.info("Creating a conversion queue")
+                self.config.conversionQueue = ConversionQueue(self.config, statistics: self.statistics)
             } else {
-                config.log.info("Using existing conversion queue")
+                self.config.log.info("Using existing conversion queue")
             }
 
             // Create a queue of conversion jobs for later
             for m in media {
                 if Video.isSupported(ext: m.path.`extension` ?? "") && Video.needsConversion(file: m.path) {
-                    config.conversionQueue?.push(m as! Video)
+                    self.config.conversionQueue?.push(m as! Video)
                 } else if Audio.isSupported(ext: m.path.`extension` ?? "") && Audio.needsConversion(file: m.path) {
-                    config.conversionQueue?.push(m as! Audio)
+                    self.config.conversionQueue?.push(m as! Audio)
                 }
             }
         }

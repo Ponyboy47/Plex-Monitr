@@ -74,6 +74,12 @@ struct Config {
         self.logLevel = logLevel ?? self.logLevel
         self.logFile = logFile
 
+        // Caps logLevel to the maximum/minimum level
+        if self.logLevel > 4 {
+            self.logLevel = 4
+        } else if self.logLevel < 0 {
+            self.logLevel = 0
+        }
         // Verify the plex/download directories exist and are in fact, directories
 
         guard self.plexDirectory.exists else {
@@ -234,6 +240,31 @@ extension Config: JSONRepresentable {
     */
     func serialized() throws -> String {
         return try self.encoded().serialized()
+    }
+
+    /** Creates a printable representation of self
+     - Returns: A string of serialized JSON config
+    */
+    func printable() -> String {
+        var dict: [String: JSONRepresentable] = [
+            "plexDirectory": plexDirectory.string,
+            "downloadDirectory": downloadDirectory.string,
+            "convert": convert,
+            "convertImmediately": convertImmediately,
+            "convertCronStart": convertCronStart,
+            "convertCronEnd": convertCronEnd,
+            "convertThreads": convertThreads,
+            "deleteOriginal": deleteOriginal,
+            "logLevel": logLevel
+        ]
+        if let lFile = logFile {
+            dict["logFile"] = lFile.string
+        }
+        var str: String = ""
+        for (key, value) in dict {
+            str += "\t\(key): \(value)\n"
+        }
+        return str
     }
 
     /// Writes the config to the configFile path
