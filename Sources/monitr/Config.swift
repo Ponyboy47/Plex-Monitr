@@ -197,9 +197,9 @@ extension Config: JSONInitializable {
     init(json: JSON) throws {
         log = SwiftyBeaver.self
 
-        self.plexDirectory = Path(try json.get("plexDirectory"))
-        self.downloadDirectory = Path(try json.get("downloadDirectory"))
-        self.convertTempDirectory = Path(try json.get("convertTempDirectory"))
+        self.plexDirectory = Path((try? json.get("plexDirectory")) ?? self.plexDirectory.string)
+        self.downloadDirectory = Path((try? json.get("downloadDirectory")) ?? self.downloadDirectory.string)
+        self.convertTempDirectory = Path((try? json.get("convertTempDirectory")) ?? self.convertTempDirectory.string)
 
         self.convert = (try? json.get("convert")) ?? self.convert
         self.convertImmediately = (try? json.get("convertImmediately")) ?? self.convertImmediately
