@@ -52,7 +52,7 @@ sudo add-apt-repository ppa:stebbins/handbrake-releases
 sudo add-apt-repository ppa:jonathonf/ffmpeg-3
 sudo apt-get remove handbrake ffmpeg && sudo apt autoremove
 sudo apt-get update
-sudo apt-get install -y ruby handbrake-cli ffmpeg mkvtoolnix mp5v2-utils libav-tools x264 x265
+sudo apt-get install -y ruby handbrake-cli ffmpeg mkvtoolnix mp4v2-utils libav-tools x264 x265
 
 # transcode_video installation
 sudo gem install transcode_video
