@@ -181,7 +181,7 @@ extension Bool: ArgumentType {
             return b
         }
 
-        throw ArgumentError.conversionError("Cannot convert '\(value)' to '(Bool.self)'")
+        throw ArgumentError.conversionError("Cannot convert '\(value)' to '\(Bool.self)'")
     }
 }
 
@@ -192,7 +192,21 @@ extension Int: ArgumentType {
             throw ArgumentError.emptyString
         }
         guard let val = Int(value) else {
-            throw ArgumentError.conversionError("Cannot convert '\(value)' to '\(Int.self)' ")
+            throw ArgumentError.conversionError("Cannot convert '\(value)' to '\(Int.self)'")
+        }
+
+        return val
+    }
+}
+
+/// Allows Doubles to be used as cli arguments
+extension Double: ArgumentType {
+    static func from(string value: String) throws -> Double {
+        guard value.characters.count > 0 else {
+            throw ArgumentError.emptyString
+        }
+        guard let val = Double(value) else {
+            throw ArgumentError.conversionError("Cannot convert '\(value)' to '\(Double.self)'")
         }
 
         return val
@@ -216,6 +230,71 @@ extension Path: ArgumentType {
             throw ArgumentError.emptyString
         }
         return Path(value)
+    }
+}
+
+/// Allows VideoContainers to be used as cli arguments
+extension VideoContainer: ArgumentType {
+    static func from(string value: String) throws -> VideoContainer {
+        guard value.characters.count > 0 else {
+            throw ArgumentError.emptyString
+        }
+        guard let vc = VideoContainer(rawValue: value) else {
+            throw ArgumentError.conversionError("Cannot convert '\(value)' to a valid VideoContainer")
+        }
+        return vc
+    }
+}
+
+/// Allows VideoCodecs to be used as cli arguments
+extension VideoCodec: ArgumentType {
+    static func from(string value: String) throws -> VideoCodec {
+        guard value.characters.count > 0 else {
+            throw ArgumentError.emptyString
+        }
+        guard let vc = VideoCodec(rawValue: value) else {
+            throw ArgumentError.conversionError("Cannot convert '\(value)' to a valid VideoCodec")
+        }
+        return vc
+    }
+}
+
+/// Allows AudioContainers to be used as cli arguments
+extension AudioContainer: ArgumentType {
+    static func from(string value: String) throws -> AudioContainer {
+        guard value.characters.count > 0 else {
+            throw ArgumentError.emptyString
+        }
+        guard let ac = AudioContainer(rawValue: value) else {
+            throw ArgumentError.conversionError("Cannot convert '\(value)' to a valid AudioContainer")
+        }
+        return ac
+    }
+}
+
+/// Allows AudioCodecs to be used as cli arguments
+extension AudioCodec: ArgumentType {
+    static func from(string value: String) throws -> AudioCodec {
+        guard value.characters.count > 0 else {
+            throw ArgumentError.emptyString
+        }
+        guard let ac = AudioCodec(rawValue: value) else {
+            throw ArgumentError.conversionError("Cannot convert '\(value)' to a valid AudioCodec")
+        }
+        return ac
+    }
+}
+
+/// Allows Languages to be used as cli arguments
+extension Language: ArgumentType {
+    static func from(string value: String) throws -> Language {
+        guard value.characters.count > 0 else {
+            throw ArgumentError.emptyString
+        }
+        guard let lang = Language(rawValue: value) else {
+            throw ArgumentError.conversionError("Cannot convert '\(value)' to a valid Language")
+        }
+        return lang
     }
 }
 
@@ -285,6 +364,20 @@ final class ArgumentParser {
             print("An error occured determing if the help/usage text needed to be displayed.\n\t\(error)")
         }
         return h
+    }()
+
+    static var wantsVersion: Bool = {
+        var v: Bool = false
+        do {
+            if let version = ArgumentParser.parse(longName: "version", isBool: true) {
+                v = try Bool.from(string: version)
+            } else if let version = ArgumentParser.parse(shortName: "v", isBool: true) {
+                v = try Bool.from(string: version)
+            }
+        } catch {
+            print("An error occured determing if the version needed to be displayed.\n\t\(error)")
+        }
+        return v
     }()
 
     /// Parse for a specific Argument and returns it's string value if it finds one

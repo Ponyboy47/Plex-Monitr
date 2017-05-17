@@ -2,5 +2,5 @@
 /.build
 /Packages
 /*.xcodeproj
-.*.swp
+.*.sw[po]
 Package.pins

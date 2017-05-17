@@ -34,6 +34,14 @@ let convertCronStartOption = try Option<String>("a", longName: "convert-cron-sta
 let convertCronEndOption = try Option<String>("z", longName: "convert-cron-end", description: "A Cron string describing when conversion jobs should stop running", parser: argParser)
 let convertThreadsOption = try Option<Int>("r", longName: "convert-threads", description: "The number of threads that can simultaneously be converting media", parser: argParser)
 let deleteOriginalOption = try Flag("o", longName: "delete-original", description: "Whether the original media file should be deleted upon successful conversion to a Plex DirectPlay format", parser: argParser)
+let convertVideoContainerOption = try Option<VideoContainer>("e", longName: "convert-video-container", description: "The container to use when converting video files", parser: argParser)
+let convertVideoCodecOption = try Option<VideoCodec>("g", longName: "convert-video-codec", description: "The codec to use when converting video streams. Setting to 'any' will allow Plex to just use DirectStream instead of DirectPlay and only have to transcode the video stream on the fly", parser: argParser)
+let convertAudioContainerOption = try Option<AudioContainer>("j", longName: "convert-audio-container", description: "The container to use when converting audio files", parser: argParser)
+let convertAudioCodecOption = try Option<AudioCodec>("k", longName: "convert-audio-codec", description: "The codec to use when converting audio streams. Setting to 'any' will allow Plex to just use DirectStream instead of DirectPlay and only have to transcode the audio stream on the fly", parser: argParser)
+let convertVideoSubtitleScanFlag = try Flag("n", longName: "convert-video-subtitle-scan", description: "Whether to scan media file streams and forcefully burn subtitles for foreign audio.\n\t\tNOTE: This is experimental in transcode_video and is not guarenteed to work 100% of the time. In fact, when it doesn't work, it will probably burn in the wrong language. It is recomended to never use this in conjunction with the --delete-original option", parser: argParser)
+let convertLanguageOption = try Option<Language>("l", longName: "convert-language", description: "The main language to select when converting media with multiple languages available", parser: argParser)
+let convertVideoMaxFramerateOption = try Option<Double>("m", longName: "convert-video-max-framerate", description: "The maximum framerate limit to use when converting video files", parser: argParser)
+let convertTempDirOption = try Option<Path>("u", longName: "convert-temp-dir", description: "The directory where converted media will go prior to being moved to plex", parser: argParser)
 let saveFlag = try Flag("s", longName: "save-settings", default: false, description: "Whether or not the configured settings should be saved to the config options file", required: true, parser: argParser)
 let logLevelOption = try Option<Int>("d", longName: "log-level", description: "The logging level to use. Higher numbers mean more logging. Valid number range is 0-4.", parser: argParser)
 let logFileOption = try Option<Path>("l", longName: "log-file", description: "Where to write the log file.", parser: argParser)
@@ -41,6 +49,11 @@ let logFileOption = try Option<Path>("l", longName: "log-file", description: "Wh
 // Prints the help/usage text if -h or --help was used
 guard !ArgumentParser.needsHelp else {
     argParser.printHelp()
+    exit(EXIT_SUCCESS)
+}
+
+guard !ArgumentParser.wantsVersion else {
+    print(Monitr.version)
     exit(EXIT_SUCCESS)
 }
 
@@ -66,6 +79,14 @@ let convertCronStart: String? = try convertCronStartOption.parse()
 let convertCronEnd: String? = try convertCronStartOption.parse()
 let convertThreads: Int? = try convertThreadsOption.parse()
 let deleteOriginal: Bool? = try deleteOriginalOption.parse()
+let convertVideoContainer: VideoContainer? = try convertVideoContainerOption.parse()
+let convertVideoCodec: VideoCodec? = try convertVideoCodecOption.parse()
+let convertAudioContainer: AudioContainer? = try convertAudioContainerOption.parse()
+let convertAudioCodec: AudioCodec? = try convertAudioCodecOption.parse()
+let convertVideoSubtitleScan: Bool? = try convertVideoSubtitleScanFlag.parse()
+let convertLanguage: Language? = try convertLanguageOption.parse()
+let convertVideoMaxFramerate: Double? = try convertVideoMaxFramerateOption.parse()
+let convertTempDirectory: Path? = try convertTempDirOption.parse()
 let logLevel: Int? = try logLevelOption.parse()
 let logFile: Path? = try logFileOption.parse()
 
@@ -118,6 +139,38 @@ if configPath.isFile && ext == "json" {
         log.info("Delete Original is changing from '\(config.deleteOriginal)' to '\(dO)'.")
         config.deleteOriginal = dO
     }
+    if let cVC = convertVideoContainer, config.convertVideoContainer != cVC {
+        log.info("Convert Video Container is changing from '\(config.convertVideoContainer)' to '\(cVC)'.")
+        config.convertVideoContainer = cVC
+    }
+    if let cVC = convertVideoCodec, config.convertVideoCodec != cVC {
+        log.info("Convert Video Codec is changing from '\(config.convertVideoCodec)' to '\(cVC)'.")
+        config.convertVideoCodec = cVC
+    }
+    if let cAC = convertAudioContainer, config.convertAudioContainer != cAC {
+        log.info("Convert Audio Container is changing from '\(config.convertAudioContainer)' to '\(cAC)'.")
+        config.convertAudioContainer = cAC
+    }
+    if let cAC = convertAudioCodec, config.convertAudioCodec != cAC {
+        log.info("Convert Audio Codec is changing from '\(config.convertAudioCodec)' to '\(cAC)'.")
+        config.convertAudioCodec = cAC
+    }
+    if let cVSS = convertVideoSubtitleScan, config.convertVideoSubtitleScan != cVSS {
+        log.info("Convert Video Subtitle Scan is changing from '\(config.convertVideoSubtitleScan)' to '\(cVSS)'.")
+        config.convertVideoSubtitleScan = cVSS
+    }
+    if let cL = convertLanguage, config.convertLanguage != cL {
+        log.info("Convert Language is changing from '\(config.convertLanguage)' to '\(cL)'.")
+        config.convertLanguage = cL
+    }
+    if let cVMF = convertVideoMaxFramerate, config.convertVideoMaxFramerate != cVMF {
+        log.info("Convert Video Max Framerate is changing from '\(config.convertVideoMaxFramerate)' to '\(cVMF)'.")
+        config.convertVideoMaxFramerate = cVMF
+    }
+    if let cTD = convertTempDirectory, config.convertTempDirectory != cTD {
+        log.info("Convert Temp Directory is changing from '\(config.convertTempDirectory)' to '\(cTD)'.")
+        config.convertTempDirectory = cTD
+    }
     if var lL = logLevel, config.logLevel != lL {
         // Caps logLevel to the maximum/minimum level
         if lL > 4 {
@@ -138,7 +191,7 @@ if configPath.isFile && ext == "json" {
 } else {
     // Try and create the Config from the command line args (fails if anything is not set)
     do {
-        config = try Config(configPath, plexDirectory, downloadDirectory, convert, convertImmediately, convertCronStart, convertCronEnd, convertThreads, deleteOriginal, logLevel, logFile, logger: log)
+        config = try Config(configPath, plexDirectory, downloadDirectory, convert, convertImmediately, convertCronStart, convertCronEnd, convertThreads, deleteOriginal, convertVideoContainer, convertVideoCodec, convertAudioContainer, convertAudioCodec, convertVideoSubtitleScan, convertLanguage, convertVideoMaxFramerate, convertTempDirectory, logLevel, logFile, logger: log)
     } catch {
         log.warning("Failed to initialize config.")
         log.error(error)
@@ -200,6 +253,7 @@ monitr.setDelegate()
 log.info("Monitoring '\(config.downloadDirectory)' for new files.")
 monitr.startMonitoring()
 
+// This keeps the program alive until ctrl-c is pressed or a signal is sent to the process
 let group = DispatchGroup()
 group.enter()
 group.wait()
