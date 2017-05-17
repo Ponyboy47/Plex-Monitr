@@ -233,27 +233,30 @@ if saveConfig {
 do {
     monitr = try Monitr(config)
     log.verbose("Sucessfully created the Monitr object from the config")
+
+    // Watch for signals so we can shut down properly
+    Signals.trap(signals: [.int, .term, .kill, .quit]) { _ in
+        log.info("Received signal. Stopping monitr.")
+        monitr.shutdown()
+        // Sleep before exiting or else monitr may not finish shutting down before the program is exited
+        sleep(1)
+        exit(EXIT_SUCCESS)
+    }
+    
+    // Run once and then start monitoring regularly
+    log.info("Running Monitr once for startup!")
+    monitr.run()
+    monitr.setDelegate()
+    log.info("Monitoring '\(config.downloadDirectory)' for new files.")
+    monitr.startMonitoring()
+    
+    // This keeps the program alive until ctrl-c is pressed or a signal is sent to the process
+    let group = DispatchGroup()
+    group.enter()
+    group.wait()
 } catch {
-    log.info("Failed to create the monitr. Correct the error and try again.")
-    log.error(error)
+    log.error("Failed to create the monitr with error '\(error)'. Correct the error and try again.")
+    // Sleep before exiting or else the log message is not written correctly
+    sleep(1)
     exit(EXIT_FAILURE)
 }
-
-// Watch for signals so we can shut down properly
-Signals.trap(signals: [.int, .term, .kill, .quit]) { _ in
-    log.info("Received signal. Stopping monitr.")
-    monitr.shutdown()
-    exit(EXIT_SUCCESS)
-}
-
-// Run once and then start monitoring regularly
-log.info("Running Monitr once for startup!")
-monitr.run()
-monitr.setDelegate()
-log.info("Monitoring '\(config.downloadDirectory)' for new files.")
-monitr.startMonitoring()
-
-// This keeps the program alive until ctrl-c is pressed or a signal is sent to the process
-let group = DispatchGroup()
-group.enter()
-group.wait()

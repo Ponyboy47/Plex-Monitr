@@ -100,22 +100,27 @@ final class Monitr: DirectoryMonitorDelegate {
         // Check conversion tool dependencies 
         let (rc1, _) = execute("which HandBrakeCLI") 
         guard rc1 == 0 else { 
+            self.config.log.error("Missing handbrake dependency")
             throw MonitrError.MissingDependency.handbrake 
         } 
         let (rc2, _) = execute("which mp4track") 
         guard rc2 == 0 else { 
+            self.config.log.error("Missing mp4v2 dependency")
             throw MonitrError.MissingDependency.mp4v2 
         } 
         let (rc3, _) = execute("which ffmpeg") 
         guard rc3 == 0 else { 
+            self.config.log.error("Missing ffmpeg dependency")
             throw MonitrError.MissingDependency.ffmpeg 
         } 
         let (rc4, _) = execute("which mkvpropedit") 
         guard rc4 == 0 else { 
+            self.config.log.error("Missing mkvtoolnix dependency")
             throw MonitrError.MissingDependency.mkvtoolnix 
         } 
         let (rc5, _) = execute("which transcode_video") 
         guard rc5 == 0 else { 
+            self.config.log.error("Missing transcode_video dependency")
             throw MonitrError.MissingDependency.transcode_video 
         }
     }
