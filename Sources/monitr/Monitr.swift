@@ -155,8 +155,8 @@ final class Monitr: DirectoryMonitorDelegate {
             throw MonitrError.MissingDependency.mkvtoolnix 
         } 
 
-        dependency = "transcode_video"
-        let (rc5, output5) = execute("which", "transcode_video")
+        dependency = "transcode-video"
+        let (rc5, output5) = execute("which", "transcode-video")
         guard rc5 == 0, let stdout5 = output5.stdout, !stdout5.isEmpty else { 
             var errorMessage = "Error determining if '\(dependency)' dependency is met.\nReturn Code: \(rc5)"
             if let stdout = output5.stdout {
