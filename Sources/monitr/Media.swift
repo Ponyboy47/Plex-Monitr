@@ -302,11 +302,11 @@ final class Video: BaseMedia {
         return try convert(config, log)
     }
 
-    func needToConvert(streams: (FFProbeStream, FFProbeStream), with config: VideoConversionConfig, log: SwiftyBeaver.Type) -> Bool {
+    func needToConvert(streams: (FFProbeVideoStreamProtocol, FFProbeAudioStreamProtocol), with config: VideoConversionConfig, log: SwiftyBeaver.Type) -> Bool {
         let videoStream = streams.0
         let audioStream = streams.1
 
-        log.verbose("Streams:\n\nVideo:\n\(videoStream.print())\n\nAudio:\n\(audioStream.print())")
+        log.verbose("Streams:\n\nVideo:\n\(videoStream.description)\n\nAudio:\n\(audioStream.description)")
 
         let container = VideoContainer(rawValue: self.path.extension ?? "") ?? .other
         guard container == config.container else { return true }
@@ -315,7 +315,7 @@ final class Video: BaseMedia {
 
         guard let audioCodec = audioStream.codec as? AudioCodec, config.audioCodec == .any || audioCodec == config.audioCodec else { return true }
 
-        guard let framerate = videoStream.framerate, framerate <= config.maxFramerate else { return true }
+        guard videoStream.framerate <= config.maxFramerate else { return true }
 
         return false
     }
@@ -343,8 +343,11 @@ final class Video: BaseMedia {
             throw MediaError.FFProbe.couldNotCreateFFProbe("Failed creating the FFProbe from stdout of the ffprobe command => \(error)")
         }
 
-        var mainVideoStream: FFProbeStream
-        var mainAudioStream: FFProbeStream
+        var videoStreams = ffprobe.videoStreams
+        var audioStreams = ffprobe.audioStreams
+
+        var mainVideoStream: FFProbeVideoStreamProtocol
+        var mainAudioStream: FFProbeAudioStreamProtocol
 
         // I assume that this will probably never be used since pretty much
         // everything is just gonna have one video stream, but just in case,
@@ -354,9 +357,9 @@ final class Video: BaseMedia {
         // multiple have the same dimensions, find the one with the highest bitrate.
         // If multiple have the same bitrate, see if either has the right codec. If
         // neither has the preferred codec, or they both do, then go for the lowest index
-        if ffprobe.videoStreams.count > 1 {
+        if videoStreams.count > 1 {
             log.info("Multiple video streams found, trying to identify the main one...")
-            mainVideoStream = ffprobe.videoStreams.reduce(ffprobe.videoStreams[0]) { prevStream, nextStream in
+            mainVideoStream = videoStreams.reduce(videoStreams[0]) { prevStream, nextStream in
                 if prevStream.duration != nextStream.duration {
                     if prevStream.duration > nextStream.duration {
                         return prevStream
@@ -380,8 +383,8 @@ final class Video: BaseMedia {
                 }
                 return nextStream
             }
-        } else if ffprobe.videoStreams.count == 1 {
-            mainVideoStream = ffprobe.videoStreams[0]
+        } else if videoStreams.count == 1 {
+            mainVideoStream = videoStreams[0]
         } else {
             throw MediaError.VideoError.noStreams
         }
@@ -391,18 +394,16 @@ final class Video: BaseMedia {
         // in the config, then we'll check the bit rates to see which is
         // higher, then we'll check the sample rates, next the codecs, and
         // finally their indexes
-        if ffprobe.audioStreams.count > 1 {
+        if audioStreams.count > 1 {
             log.info("Multiple audio streams found, trying to identify the main one...")
-            mainAudioStream = ffprobe.audioStreams.reduce(ffprobe.audioStreams[0]) { prevStream, nextStream in
-                func followupComparisons(_ pStream: FFProbeStream, _ nStream: FFProbeStream) -> FFProbeStream {
+            mainAudioStream = audioStreams.reduce(audioStreams[0]) { prevStream, nextStream in
+                func followupComparisons(_ pStream: FFProbeAudioStreamProtocol, _ nStream: FFProbeAudioStreamProtocol) -> FFProbeAudioStreamProtocol {
                     if pStream.bitRate != nStream.bitRate {
                         if pStream.bitRate > nStream.bitRate {
                             return pStream
                         }
                     } else if pStream.sampleRate != nStream.sampleRate {
-                        let pSR = pStream.sampleRate ?? (try! SampleRate("0 hz"))
-                        let nSR = nStream.sampleRate ?? (try! SampleRate("0 hz"))
-                        if pSR > nSR {
+                        if pStream.sampleRate > nStream.sampleRate {
                             return pStream
                         }
                     } else if pStream.codec as! AudioCodec != nStream.codec as! AudioCodec {
@@ -422,15 +423,15 @@ final class Video: BaseMedia {
                     if pLang == conversionConfig.mainLanguage {
                         return prevStream
                     } else if nLang != conversionConfig.mainLanguage {
-                        return followupComparisons(prevStream, nextStream)
+                        return followupComparisons(prevStream, nextStream) as! AudioStream
                     }
                 } else {
-                    return followupComparisons(prevStream, nextStream)
+                    return followupComparisons(prevStream, nextStream) as! AudioStream
                 }
                 return nextStream
             }
-        } else if ffprobe.audioStreams.count == 1 {
-            mainAudioStream = ffprobe.audioStreams[0]
+        } else if audioStreams.count == 1 {
+            mainAudioStream = audioStreams[0]
         } else {
             throw MediaError.AudioError.noStreams
         }

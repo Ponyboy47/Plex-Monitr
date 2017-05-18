@@ -4,6 +4,7 @@ enum FFProbeError: Error {
     enum JSONParserError: Error {
         case unknownCodecType
         case framerateIsNotDouble(String)
+        case cannotCalculateFramerate(String)
     }
     enum DurationError: Error {
         case unknownDuration(String)
@@ -15,18 +16,23 @@ enum FFProbeError: Error {
     enum SampleRateError: Error {
         case unableToConvertStringToDouble(String)
     }
+    enum IncorrectTypeError: Error {
+        case video
+        case audio
+        case other(String)
+    }
 }
 
 struct FFProbe {
-    fileprivate var streams: [FFProbeStream] = []
-    lazy var videoStreams: [FFProbeStream] = {
-        return self.streams.filter({ $0.codecType == .video })
+    fileprivate var streams: [FFProbeStreamProtocol] = []
+    lazy var videoStreams: [VideoStream] = {
+        return self.streams.filter({ $0.type == .video }) as! [VideoStream]
     }()
-    lazy var audioStreams: [FFProbeStream] = {
-        return self.streams.filter({ $0.codecType == .audio })
+    lazy var audioStreams: [AudioStream] = {
+        return self.streams.filter({ $0.type == .audio }) as! [AudioStream]
     }()
-    lazy var unknownStreams: [FFProbeStream] = {
-        return self.streams.filter({ $0.codecType == .unknown })
+    lazy var unknownStreams: [UnknownStream] = {
+        return self.streams.filter({ $0.type == .unknown }) as! [UnknownStream]
     }()
     init() {}
 }
@@ -37,41 +43,175 @@ extension FFProbe: JSONInitializable {
     }
 
     init(json: JSON) throws {
-        streams = try json.get("streams")
+        let genericStreams = try json.get(field: "streams")
+        for stream in genericStreams {
+            do {
+                let s = try UnknownStream(json: stream)
+                streams.append(s)
+            } catch FFProbeError.IncorrectTypeError.video {
+                let s = try VideoStream(json: stream)
+                streams.append(s)
+            } catch FFProbeError.IncorrectTypeError.audio {
+                let s = try AudioStream(json: stream)
+                streams.append(s)
+            }
+        }
     }
 }
 
-struct FFProbeStream: JSONInitializable {
+enum CodecType: String {
+    case video
+    case audio
+    case unknown
+}
+
+protocol Codec {}
+
+enum VideoCodec: String, Codec {
+    case h264
+    case mpeg4
+    case any
+}
+enum AudioCodec: String, Codec {
+    case aac
+    case ac3
+    case eac3
+    case mp3
+    case any
+}
+enum UnknownCodec: Codec {
+    case unknown_or_new(String)
+}
+
+protocol FFProbeStreamProtocol: JSONInitializable {
+    var index: Int { get set }
+    var rawCodec: String { get set }
+    var type: CodecType { get set }
+    var codec: Codec { get set }
+    var duration: MediaDuration { get set }
+    var bitRate: BitRate { get set }
+    var tags: Tags? { get set }
+    var language: Language? { get set }
+    var description: String { get }
+    init(stream str: String) throws
+}
+
+protocol FFProbeVideoStreamProtocol: FFProbeStreamProtocol {
+    var dimensions: (Int, Int) { get set }
+    var aspectRatio: String { get set }
+    var framerate: Double { get set }
+    var bitDepth: Int? { get set }
+}
+
+protocol FFProbeAudioStreamProtocol: FFProbeStreamProtocol {
+    var sampleRate: SampleRate { get set }
+    var channels: Int { get set }
+    var channelLayout: ChannelLayout { get set }
+}
+
+struct UnknownStream: FFProbeStreamProtocol {
     var index: Int
     var rawCodec: String
+    var type: CodecType = .unknown
     var codec: Codec
-    var codecType: CodecType
-    var dimensions: (Int, Int)
-    var aspectRatio: String
     var duration: MediaDuration
-    var framerate: Double?
     var bitRate: BitRate
-    var bitDepth: Int?
-    var sampleRate: SampleRate?
     var tags: Tags?
-    var language: Language
+    var language: Language?
 
-    init(_ streamString: String) throws {
-        try self.init(json: JSON.Parser.parse(streamString))
+    var description: String {
+        let indent = "\t\t"
+        var str = "\(indent)Index: \(index)"
+        str += "\n\(indent)Codec: \(rawCodec)"
+        var bR = bitRate
+        str += "\n\(indent)BitRate: \(bR.kbps) kb/s"
+        str += "\n\(indent)Duration: \(duration.description)"
+        if let l = language {
+            str += "\n\(indent)Language: \(l.rawValue)"
+        }
+        if let t = tags {
+            str += "\n\(indent)Tags: \(t)"
+        }
+
+        return str
+    }
+
+    init(stream str: String) throws {
+        try self.init(json: JSON.Parser.parse(str))
     }
 
     init(json: JSON) throws {
         index = try json.get("index")
         rawCodec = try json.get("codec_name")
-        codecType = CodecType(rawValue: try json.get("codec_type")) ?? .unknown
-        switch codecType {
-        case .video:
-            codec = VideoCodec(rawValue: try json.get("codec_name")) ?? VideoCodec.unknown_or_new
-        case .audio:
-            codec = AudioCodec(rawValue: try json.get("codec_name")) ?? AudioCodec.unknown_or_new
-        default:
-            throw FFProbeError.JSONParserError.unknownCodecType
+        let t: CodecType = try CodecType(rawValue: json.get("codec_type")) ?? .unknown
+        guard t == self.type else {
+            switch t {
+            case .video:
+                throw FFProbeError.IncorrectTypeError.video
+            case .audio:
+                throw FFProbeError.IncorrectTypeError.audio
+            default:
+                throw FFProbeError.IncorrectTypeError.other(rawCodec)
+            }
         }
+        codec = try UnknownCodec.unknown_or_new(json.get("codec_name"))
+
+        let durationString: String = try json.get("duration")
+        duration = try MediaDuration(durationString)
+
+        let bitRateString: String = try json.get("bit_rate")
+        bitRate = try BitRate(bitRateString)
+
+        tags = try? json.get("tags")
+
+        language = tags?.language ?? .und
+    }
+}
+
+struct VideoStream: FFProbeVideoStreamProtocol {
+    var index: Int
+    var rawCodec: String
+    var type: CodecType = .video
+    var codec: Codec
+    var duration: MediaDuration
+    var bitRate: BitRate
+    var tags: Tags?
+    var language: Language?
+    var dimensions: (Int, Int)
+    var aspectRatio: String
+    var framerate: Double
+    var bitDepth: Int?
+
+    var description: String {
+        return ""
+    }
+
+    init(stream str: String) throws {
+        try self.init(json: JSON.Parser.parse(str))
+    }
+
+    init(json: JSON) throws {
+        index = try json.get("index")
+        rawCodec = try json.get("codec_name")
+        let t: CodecType = try CodecType(rawValue: json.get("codec_type")) ?? .unknown
+        guard t == self.type else {
+            switch t {
+            case .unknown:
+                throw FFProbeError.IncorrectTypeError.other(rawCodec)
+            case .audio:
+                throw FFProbeError.IncorrectTypeError.audio
+            default:
+                throw FFProbeError.IncorrectTypeError.video
+            }
+        }
+        codec = try VideoCodec(rawValue: json.get("codec_name")) ?? UnknownCodec.unknown_or_new(json.get("codec_name"))
+
+        duration = try MediaDuration(json.get("duration"))
+
+        bitRate = try BitRate(json.get("bit_rate"))
+
+        tags = try? json.get("tags")
+        language = tags?.language
 
         let width: Int = try json.get("width")
         let height: Int = try json.get("height")
@@ -79,69 +219,81 @@ struct FFProbeStream: JSONInitializable {
 
         aspectRatio = try json.get("display_aspect_ratio")
 
-        let durationString: String = try json.get("duration")
-        duration = try MediaDuration(durationString)
-
-        let framerateString: String = (try? json.get("avg_frame_rate")) ?? ""
+        let framerateString: String = try json.get("avg_frame_rate")
         if framerateString.contains("/") {
             let components = framerateString.components(separatedBy: "/")
-            if let top = Double(components[0]), let bottom = Double(components[1]) {
-                let f = top / bottom
-                if f > 0.0 {
-                    framerate = f
-                }
+            guard let top = Double(components[0]), let bottom = Double(components[1]) else {
+                throw FFProbeError.JSONParserError.cannotCalculateFramerate(framerateString)
             }
-        } else if framerateString.contains(".") {
-            guard let f = Double(framerateString) else {
+            var f = top / bottom
+            if f < 0 {
+                f = 0
+            }
+            framerate = f
+        } else {
+            guard var f = Double(framerateString) else {
                 throw FFProbeError.JSONParserError.framerateIsNotDouble(framerateString)
             }
-            if f > 0.0 {
-                framerate = f
+            if f < 0 {
+                f = 0
             }
+            framerate = f
         }
 
-        let bitRateString: String = try json.get("bit_rate")
-        bitRate = try BitRate(bitRateString)
-
         bitDepth = try? json.get("bits_per_raw_sample")
+    }
+}
 
-        let sampleRateString: String = try json.get("sample_rate")
-        sampleRate = try? SampleRate(sampleRateString)
+struct AudioStream: FFProbeAudioStreamProtocol {
+    var index: Int
+    var rawCodec: String
+    var type: CodecType = .audio
+    var codec: Codec
+    var duration: MediaDuration
+    var bitRate: BitRate
+    var tags: Tags?
+    var language: Language?
+    var sampleRate: SampleRate
+    var channels: Int
+    var channelLayout: ChannelLayout
+
+    var description: String {
+        return ""
+    }
+
+    init(stream str: String) throws {
+        try self.init(json: JSON.Parser.parse(str))
+    }
+
+    init(json: JSON) throws {
+        index = try json.get("index")
+        rawCodec = try json.get("codec_name")
+        let t: CodecType = try CodecType(rawValue: json.get("codec_type")) ?? .unknown
+        guard t == self.type else {
+            switch t {
+            case .unknown:
+                throw FFProbeError.IncorrectTypeError.other(rawCodec)
+            case .video:
+                throw FFProbeError.IncorrectTypeError.video
+            default:
+                throw FFProbeError.IncorrectTypeError.audio
+            }
+        }
+        codec = try AudioCodec(rawValue: json.get("codec_name")) ?? UnknownCodec.unknown_or_new(json.get("codec_name"))
+
+        duration = try MediaDuration(json.get("duration"))
+
+        bitRate = try BitRate(json.get("bit_rate"))
 
         tags = try? json.get("tags")
 
         language = tags?.language ?? .und
-    }
 
-    func print() -> String {
-        let indent = "\t\t"
-        var str = "\(indent)Index: \(index)"
-        str += "\n\(indent)Codec: "
-        if codecType == .video {
-            if codec as! VideoCodec == .unknown_or_new {
-                str += rawCodec
-            } else {
-                str += (codec as! VideoCodec).rawValue
-            }
-            str += "\n\(indent)Dimensions: \(dimensions.0)x\(dimensions.1)"
-            str += "\n\(indent)Aspect Ratio: \(aspectRatio)"
-            str += "\n\(indent)Framerate: \(framerate!) fps"
-            str += "\n\(indent)Bit Depth: \(bitDepth!)"
-        } else if codecType == .audio {
-            if codec as! AudioCodec == .unknown_or_new {
-                str += rawCodec
-            } else {
-                str += (codec as! AudioCodec).rawValue
-            }
-            var sR = sampleRate!
-            str += "\n\(indent)Sample Rate: \(sR.khz) Khz"
-        }
-        var bR = bitRate
-        str += "\n\(indent)BitRate: \(bR.kbps) kb/s"
-        str += "\n\(indent)Duration: \(duration.description)"
-        str += "\n\(indent)Language: \(language)"
+        sampleRate = try SampleRate(json.get("sample_rate"))
 
-        return str
+        channels = try json.get("channels")
+
+        channelLayout = ChannelLayout(rawValue: try json.get("channel_layout")) ?? .unknown_or_new
     }
 }
 
@@ -161,25 +313,9 @@ enum AudioContainer: String, Container {
     case other
 }
 
-enum CodecType: String {
-    case video
-    case audio
-    case unknown
-}
-
-protocol Codec {}
-
-enum VideoCodec: String, Codec {
-    case h264
-    case mpeg
-    case any
-    case unknown_or_new
-}
-enum AudioCodec: String, Codec {
-    case aac
-    case ac3
-    case eac3
-    case any
+enum ChannelLayout: String {
+    case mono
+    case stereo
     case unknown_or_new
 }
 

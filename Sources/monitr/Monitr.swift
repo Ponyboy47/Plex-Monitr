@@ -102,70 +102,70 @@ final class Monitr: DirectoryMonitorDelegate {
         var dependency = "handbrake"
         let (rc1, output1) = execute("which", "HandBrakeCLI")
         guard rc1 == 0, let stdout1 = output1.stdout, !stdout1.isEmpty else {
-            var errorMessage = "Error determining if '\(dependency)' dependency is met.\nReturn Code: \(rc1)"
+            var debugMessage = "Error determining if '\(dependency)' dependency is met.\n\tReturn Code: \(rc1)"
             if let stdout = output1.stdout {
-                errorMessage += "\nStandard Output: '\(stdout)'"
+                debugMessage += "\n\tStandard Output: '\(stdout)'"
             }
             if let stderr = output1.stderr {
-                errorMessage += "\nStandard Error: '\(stderr)'"
+                debugMessage += "\n\tStandard Error: '\(stderr)'"
             }
-            self.config.log.error(errorMessage)
+            self.config.log.debug(debugMessage)
             throw MonitrError.MissingDependency.handbrake 
         } 
 
         dependency = "mp4v2"
         let (rc2, output2) = execute("which", "mp4track")
         guard rc2 == 0, let stdout2 = output2.stdout, !stdout2.isEmpty else { 
-            var errorMessage = "Error determining if '\(dependency)' dependency is met.\nReturn Code: \(rc2)"
+            var debugMessage = "Error determining if '\(dependency)' dependency is met.\n\tReturn Code: \(rc2)"
             if let stdout = output2.stdout {
-                errorMessage += "\nStandard Output: '\(stdout)'"
+                debugMessage += "\n\tStandard Output: '\(stdout)'"
             }
             if let stderr = output2.stderr {
-                errorMessage += "\nStandard Error: '\(stderr)'"
+                debugMessage += "\n\tStandard Error: '\(stderr)'"
             }
-            self.config.log.error(errorMessage)
+            self.config.log.debug(debugMessage)
             throw MonitrError.MissingDependency.mp4v2 
         } 
 
         dependency = "ffmpeg"
         let (rc3, output3) = execute("which", "ffmpeg")
         guard rc3 == 0, let stdout3 = output3.stdout, !stdout3.isEmpty else { 
-            var errorMessage = "Error determining if '\(dependency)' dependency is met.\nReturn Code: \(rc3)"
+            var debugMessage = "Error determining if '\(dependency)' dependency is met.\n\tReturn Code: \(rc3)"
             if let stdout = output3.stdout {
-                errorMessage += "\nStandard Output: '\(stdout)'"
+                debugMessage += "\n\tStandard Output: '\(stdout)'"
             }
             if let stderr = output3.stderr {
-                errorMessage += "\nStandard Error: '\(stderr)'"
+                debugMessage += "\n\tStandard Error: '\(stderr)'"
             }
-            self.config.log.error(errorMessage)
+            self.config.log.debug(debugMessage)
             throw MonitrError.MissingDependency.ffmpeg 
         } 
 
         dependency = "mkvtoolnix"
         let (rc4, output4) = execute("which", "mkvpropedit")
         guard rc4 == 0, let stdout4 = output4.stdout, !stdout4.isEmpty else { 
-            var errorMessage = "Error determining if '\(dependency)' dependency is met.\nReturn Code: \(rc4)"
+            var debugMessage = "Error determining if '\(dependency)' dependency is met.\n\tReturn Code: \(rc4)"
             if let stdout = output4.stdout {
-                errorMessage += "\nStandard Output: '\(stdout)'"
+                debugMessage += "\n\tStandard Output: '\(stdout)'"
             }
             if let stderr = output4.stderr {
-                errorMessage += "\nStandard Error: '\(stderr)'"
+                debugMessage += "\n\tStandard Error: '\(stderr)'"
             }
-            self.config.log.error(errorMessage)
+            self.config.log.debug(debugMessage)
             throw MonitrError.MissingDependency.mkvtoolnix 
         } 
 
         dependency = "transcode-video"
         let (rc5, output5) = execute("which", "transcode-video")
         guard rc5 == 0, let stdout5 = output5.stdout, !stdout5.isEmpty else { 
-            var errorMessage = "Error determining if '\(dependency)' dependency is met.\nReturn Code: \(rc5)"
+            var debugMessage = "Error determining if '\(dependency)' dependency is met.\n\tReturn Code: \(rc5)"
             if let stdout = output5.stdout {
-                errorMessage += "\nStandard Output: '\(stdout)'"
+                debugMessage += "\n\tStandard Output: '\(stdout)'"
             }
             if let stderr = output5.stderr {
-                errorMessage += "\nStandard Error: '\(stderr)'"
+                debugMessage += "\n\tStandard Error: '\(stderr)'"
             }
-            self.config.log.error(errorMessage)
+            self.config.log.debug(debugMessage)
             throw MonitrError.MissingDependency.transcode_video 
         }
     }

@@ -246,14 +246,14 @@ extension VideoContainer: ArgumentType {
     }
 }
 
-/// Allows VideoCodecs to be used as cli arguments
+/// Allows VideoCodec namess to be used as cli arguments
 extension VideoCodec: ArgumentType {
     static func from(string value: String) throws -> VideoCodec {
         guard value.characters.count > 0 else {
             throw ArgumentError.emptyString
         }
         guard let vc = VideoCodec(rawValue: value) else {
-            throw ArgumentError.conversionError("Cannot convert '\(value)' to a valid VideoCodec")
+            throw ArgumentError.conversionError("Cannot convert '\(value)' to a valid VideoCodec.CodecName")
         }
         return vc
     }
@@ -272,14 +272,14 @@ extension AudioContainer: ArgumentType {
     }
 }
 
-/// Allows AudioCodecs to be used as cli arguments
+/// Allows AudioCodec names to be used as cli arguments
 extension AudioCodec: ArgumentType {
     static func from(string value: String) throws -> AudioCodec {
         guard value.characters.count > 0 else {
             throw ArgumentError.emptyString
         }
         guard let ac = AudioCodec(rawValue: value) else {
-            throw ArgumentError.conversionError("Cannot convert '\(value)' to a valid AudioCodec")
+            throw ArgumentError.conversionError("Cannot convert '\(value)' to a valid AudioCodec.CodecName")
         }
         return ac
     }
