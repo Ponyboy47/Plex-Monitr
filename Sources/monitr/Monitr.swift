@@ -130,7 +130,6 @@ final class Monitr: DirectoryMonitorDelegate {
         dependency = "ffmpeg"
         let (rc3, output3) = execute("which", "ffmpeg")
         guard rc3 == 0, let stdout3 = output3.stdout, !stdout3.isEmpty else { 
-            throw MonitrError.MissingDependency.ffmpeg 
             var errorMessage = "Error determining if '\(dependency)' dependency is met.\nReturn Code: \(rc3)"
             if let stdout = output3.stdout {
                 errorMessage += "\nStandard Output: '\(stdout)'"
@@ -139,12 +138,12 @@ final class Monitr: DirectoryMonitorDelegate {
                 errorMessage += "\nStandard Error: '\(stderr)'"
             }
             self.config.log.error(errorMessage)
+            throw MonitrError.MissingDependency.ffmpeg 
         } 
 
         dependency = "mkvtoolnix"
         let (rc4, output4) = execute("which", "mkvpropedit")
         guard rc4 == 0, let stdout4 = output4.stdout, !stdout4.isEmpty else { 
-            throw MonitrError.MissingDependency.mkvtoolnix 
             var errorMessage = "Error determining if '\(dependency)' dependency is met.\nReturn Code: \(rc4)"
             if let stdout = output4.stdout {
                 errorMessage += "\nStandard Output: '\(stdout)'"
@@ -153,12 +152,12 @@ final class Monitr: DirectoryMonitorDelegate {
                 errorMessage += "\nStandard Error: '\(stderr)'"
             }
             self.config.log.error(errorMessage)
+            throw MonitrError.MissingDependency.mkvtoolnix 
         } 
 
         dependency = "transcode_video"
         let (rc5, output5) = execute("which", "transcode_video")
         guard rc5 == 0, let stdout5 = output5.stdout, !stdout5.isEmpty else { 
-            throw MonitrError.MissingDependency.transcode_video 
             var errorMessage = "Error determining if '\(dependency)' dependency is met.\nReturn Code: \(rc5)"
             if let stdout = output5.stdout {
                 errorMessage += "\nStandard Output: '\(stdout)'"
@@ -167,6 +166,7 @@ final class Monitr: DirectoryMonitorDelegate {
                 errorMessage += "\nStandard Error: '\(stderr)'"
             }
             self.config.log.error(errorMessage)
+            throw MonitrError.MissingDependency.transcode_video 
         }
     }
 
