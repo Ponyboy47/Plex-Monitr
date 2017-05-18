@@ -155,10 +155,18 @@ class BaseMedia: Media {
         }
     }
 
-    fileprivate func execute(_ command: String...) -> (Int32, Output) {
+    fileprivate func execute(_ comArgs: String...) -> (Int32, Output) {
+        guard let command = comArgs.first else {
+            return (-1, Output(nil, "Empty command/arguments string"))
+        }
+        let args = Array(comArgs[1...comArgs.count])
+        return execute(command, args)
+    }
+
+    fileprivate func execute(_ command: String, _ arguments: [String]) -> (Int32, Output) {
         let task = Process()
         task.launchPath = "/usr/bin/env"
-        task.arguments = command
+        task.arguments = [command] + arguments
 
         let stdoutPipe = Pipe()
         let stderrPipe = Pipe()
@@ -316,7 +324,7 @@ final class Video: BaseMedia {
         log.info("Getting audio/video stream data for '\(self.path.absolute)'")
 
         // Get video file metadata using ffprobe
-        let (ffprobeRC, ffprobeOutput) = execute("ffprobe -hide_banner -of json -show_streams \(path.absolute)")
+        let (ffprobeRC, ffprobeOutput) = execute("ffprobe", "-hide_banner", "-of json", "-show_streams", "\(path.absolute)")
         guard ffprobeRC == 0 else {
             var err: String = ""
             if let stderr = ffprobeOutput.stderr {
@@ -478,7 +486,7 @@ final class Video: BaseMedia {
         // Add the input filepath to the args
         args.append(path.absolute.string)
 
-        let (rc, output) = execute("transcode_video \(args.joined(separator: " "))")
+        let (rc, output) = execute("transcode_video", args)
 
         guard rc == 0 else {
             if let stderr = output.stderr {

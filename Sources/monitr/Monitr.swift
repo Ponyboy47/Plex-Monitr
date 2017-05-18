@@ -100,7 +100,7 @@ final class Monitr: DirectoryMonitorDelegate {
 
         // Check conversion tool dependencies 
         var dependency = "handbrake"
-        let (rc1, output1) = execute("which HandBrakeCLI") 
+        let (rc1, output1) = execute("which", "HandBrakeCLI")
         guard rc1 == 0, let stdout1 = output1.stdout, !stdout1.isEmpty else {
             var errorMessage = "Error determining if '\(dependency)' dependency is met.\nReturn Code: \(rc1)"
             if let stdout = output1.stdout {
@@ -114,7 +114,7 @@ final class Monitr: DirectoryMonitorDelegate {
         } 
 
         dependency = "mp4v2"
-        let (rc2, output2) = execute("which mp4track") 
+        let (rc2, output2) = execute("which", "mp4track")
         guard rc2 == 0, let stdout2 = output2.stdout, !stdout2.isEmpty else { 
             var errorMessage = "Error determining if '\(dependency)' dependency is met.\nReturn Code: \(rc2)"
             if let stdout = output2.stdout {
@@ -128,7 +128,7 @@ final class Monitr: DirectoryMonitorDelegate {
         } 
 
         dependency = "ffmpeg"
-        let (rc3, output3) = execute("which ffmpeg") 
+        let (rc3, output3) = execute("which", "ffmpeg")
         guard rc3 == 0, let stdout3 = output3.stdout, !stdout3.isEmpty else { 
             throw MonitrError.MissingDependency.ffmpeg 
             var errorMessage = "Error determining if '\(dependency)' dependency is met.\nReturn Code: \(rc3)"
@@ -142,7 +142,7 @@ final class Monitr: DirectoryMonitorDelegate {
         } 
 
         dependency = "mkvtoolnix"
-        let (rc4, output4) = execute("which mkvpropedit") 
+        let (rc4, output4) = execute("which", "mkvpropedit")
         guard rc4 == 0, let stdout4 = output4.stdout, !stdout4.isEmpty else { 
             throw MonitrError.MissingDependency.mkvtoolnix 
             var errorMessage = "Error determining if '\(dependency)' dependency is met.\nReturn Code: \(rc4)"
@@ -156,7 +156,7 @@ final class Monitr: DirectoryMonitorDelegate {
         } 
 
         dependency = "transcode_video"
-        let (rc5, output5) = execute("which transcode_video") 
+        let (rc5, output5) = execute("which", "transcode_video")
         guard rc5 == 0, let stdout5 = output5.stdout, !stdout5.isEmpty else { 
             throw MonitrError.MissingDependency.transcode_video 
             var errorMessage = "Error determining if '\(dependency)' dependency is met.\nReturn Code: \(rc5)"
