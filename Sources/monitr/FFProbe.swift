@@ -9,6 +9,7 @@ enum FFProbeError: Error {
     enum DurationError: Error {
         case unknownDuration(String)
         case cannotConvertStringToUInt(type: String, string: String)
+        case cannotConvertStringToDouble(type: String, string: String)
     }
     enum BitRateError: Error {
         case unableToConvertStringToDouble(String)
@@ -429,10 +430,10 @@ struct MediaDuration {
             }
             seconds = s
         } else if parts.count == 1 {
-            guard let s = UInt(durationString) else {
-                throw FFProbeError.DurationError.cannotConvertStringToUInt(type: "seconds", string: durationString)
+            guard let d = Double(durationString) else {
+                throw FFProbeError.DurationError.cannotConvertStringToDouble(type: "seconds", string: durationString)
             }
-            seconds = s
+            seconds = UInt(d)
             minutes = 0
             hours = 0
             while seconds >= 60 {
