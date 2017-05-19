@@ -159,7 +159,10 @@ class BaseMedia: Media {
         guard let command = comArgs.first else {
             return (-1, Output(nil, "Empty command/arguments string"))
         }
-        let args = Array(comArgs[1...comArgs.count])
+        var args: [String] = []
+        if comArgs.count > 1 {
+            args = Array(comArgs[1..<comArgs.count])
+        }
         return execute(command, args)
     }
 
@@ -324,7 +327,7 @@ final class Video: BaseMedia {
         log.info("Getting audio/video stream data for '\(self.path.absolute)'")
 
         // Get video file metadata using ffprobe
-        let (ffprobeRC, ffprobeOutput) = execute("ffprobe", "-hide_banner", "-of json", "-show_streams", "\(path.absolute)")
+        let (ffprobeRC, ffprobeOutput) = execute("ffprobe", "-hide_banner", "-of", "json", "-show_streams", "\(path.absolute)")
         guard ffprobeRC == 0 else {
             var err: String = ""
             if let stderr = ffprobeOutput.stderr {
@@ -335,6 +338,7 @@ final class Video: BaseMedia {
         guard let ffprobeStdout = ffprobeOutput.stdout else {
             throw MediaError.FFProbe.couldNotGetMetadata("File does not contain any metadata")
         }
+        log.verbose("Got audio/video stream data for '\(self.path.absolute)' => '\(ffprobeStdout)'")
 
         var ffprobe: FFProbe
         do {
@@ -445,7 +449,7 @@ final class Video: BaseMedia {
         log.info("We must convert media file '\(path.absolute)' for Plex Direct Play/Stream!")
 
         // Build the arguments for the transcode_video command
-        var args: [String] = ["--title \(mainVideoStream.index)", "--target big", "--quick", "--preset fast", "--no-log"]
+        var args: [String] = ["--title", "\(mainVideoStream.index)", "--target", "big", "--quick", "--preset", "fast", "--no-log"]
 
         var outputExtension = "mkv"
         if conversionConfig.container == .mp4 {
@@ -463,7 +467,7 @@ final class Video: BaseMedia {
         // This is only set when deleteOriginal is false
         if let tempDir = conversionConfig.tempDir {
             outputPath = tempDir
-            args.append("--output \(tempDir.absolute)")
+            args += ["--output", "\(tempDir.absolute)"]
             // If the current container is the same as the output container,
             // rename the original file
             if ext == conversionConfig.container.rawValue {
@@ -476,7 +480,7 @@ final class Video: BaseMedia {
             if ext != conversionConfig.container.rawValue {
                 manuallyDeleteOriginal = true
             }
-            args.append("--output \(path.parent)")
+            args += ["--output", "\(path.parent)"]
             outputPath = path.parent
         }
         // We need the full outputPath of the transcoded file so that we can
