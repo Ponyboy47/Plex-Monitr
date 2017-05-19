@@ -491,7 +491,7 @@ final class Video: BaseMedia {
         // Add the input filepath to the args
         args.append(path.absolute.string)
 
-        let (rc, output) = execute("transcode_video", args)
+        let (rc, output) = execute("transcode-video", args)
 
         guard rc == 0 else {
             if let stderr = output.stderr {
