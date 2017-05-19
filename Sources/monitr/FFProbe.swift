@@ -19,6 +19,7 @@ enum FFProbeError: Error {
     enum IncorrectTypeError: Error {
         case video
         case audio
+        case data
         case other(String)
     }
 }
@@ -30,6 +31,9 @@ struct FFProbe {
     }()
     lazy var audioStreams: [AudioStream] = {
         return self.streams.filter({ $0.type == .audio }) as! [AudioStream]
+    }()
+    lazy var dataStreams: [DataStream] = {
+        return self.streams.filter({ $0.type == .data }) as! [DataStream]
     }()
     lazy var unknownStreams: [UnknownStream] = {
         return self.streams.filter({ $0.type == .unknown }) as! [UnknownStream]
@@ -48,6 +52,9 @@ extension FFProbe: JSONInitializable {
             do {
                 let s = try UnknownStream(json: stream)
                 streams.append(s)
+            } catch FFProbeError.IncorrectTypeError.data {
+                let s = try DataStream(json: stream)
+                streams.append(s)
             } catch FFProbeError.IncorrectTypeError.video {
                 let s = try VideoStream(json: stream)
                 streams.append(s)
@@ -62,6 +69,7 @@ extension FFProbe: JSONInitializable {
 enum CodecType: String {
     case video
     case audio
+    case data
     case unknown
 }
 
@@ -85,9 +93,7 @@ enum UnknownCodec: Codec {
 
 protocol FFProbeStreamProtocol: JSONInitializable {
     var index: Int { get set }
-    var rawCodec: String { get set }
     var type: CodecType { get set }
-    var codec: Codec { get set }
     var duration: MediaDuration { get set }
     var bitRate: BitRate { get set }
     var tags: Tags? { get set }
@@ -96,14 +102,19 @@ protocol FFProbeStreamProtocol: JSONInitializable {
     init(stream str: String) throws
 }
 
-protocol FFProbeVideoStreamProtocol: FFProbeStreamProtocol {
+protocol FFProbeCodecStreamProtocol: FFProbeStreamProtocol {
+    var rawCodec: String { get set }
+    var codec: Codec { get set }
+}
+
+protocol FFProbeVideoStreamProtocol: FFProbeCodecStreamProtocol {
     var dimensions: (Int, Int) { get set }
     var aspectRatio: String { get set }
     var framerate: Double { get set }
     var bitDepth: Int? { get set }
 }
 
-protocol FFProbeAudioStreamProtocol: FFProbeStreamProtocol {
+protocol FFProbeAudioStreamProtocol: FFProbeCodecStreamProtocol {
     var sampleRate: SampleRate { get set }
     var channels: Int { get set }
     var channelLayout: ChannelLayout { get set }
@@ -111,9 +122,7 @@ protocol FFProbeAudioStreamProtocol: FFProbeStreamProtocol {
 
 struct UnknownStream: FFProbeStreamProtocol {
     var index: Int
-    var rawCodec: String
     var type: CodecType = .unknown
-    var codec: Codec
     var duration: MediaDuration
     var bitRate: BitRate
     var tags: Tags?
@@ -122,7 +131,6 @@ struct UnknownStream: FFProbeStreamProtocol {
     var description: String {
         let indent = "\t\t"
         var str = "\(indent)Index: \(index)"
-        str += "\n\(indent)Codec: \(rawCodec)"
         var bR = bitRate
         str += "\n\(indent)BitRate: \(bR.kbps) kb/s"
         str += "\n\(indent)Duration: \(duration.description)"
@@ -142,7 +150,6 @@ struct UnknownStream: FFProbeStreamProtocol {
 
     init(json: JSON) throws {
         index = try json.get("index")
-        rawCodec = try json.get("codec_name")
         let t: CodecType = try CodecType(rawValue: json.get("codec_type")) ?? .unknown
         guard t == self.type else {
             switch t {
@@ -150,11 +157,68 @@ struct UnknownStream: FFProbeStreamProtocol {
                 throw FFProbeError.IncorrectTypeError.video
             case .audio:
                 throw FFProbeError.IncorrectTypeError.audio
+            case .data:
+                throw FFProbeError.IncorrectTypeError.data
             default:
-                throw FFProbeError.IncorrectTypeError.other(rawCodec)
+                throw FFProbeError.IncorrectTypeError.other(try json.get("codec_type"))
             }
         }
-        codec = try UnknownCodec.unknown_or_new(json.get("codec_name"))
+
+        let durationString: String = try json.get("duration")
+        duration = try MediaDuration(durationString)
+
+        let bitRateString: String = try json.get("bit_rate")
+        bitRate = try BitRate(bitRateString)
+
+        tags = try? json.get("tags")
+
+        language = tags?.language ?? .und
+    }
+}
+
+struct DataStream: FFProbeStreamProtocol {
+    var index: Int
+    var type: CodecType = .data
+    var duration: MediaDuration
+    var bitRate: BitRate
+    var tags: Tags?
+    var language: Language?
+
+    var description: String {
+        let indent = "\t\t"
+        var str = "\(indent)Index: \(index)"
+        var bR = bitRate
+        str += "\n\(indent)BitRate: \(bR.kbps) kb/s"
+        str += "\n\(indent)Duration: \(duration.description)"
+        if let l = language {
+            str += "\n\(indent)Language: \(l.rawValue)"
+        }
+        if let t = tags {
+            str += "\n\(indent)Tags: \(t)"
+        }
+
+        return str
+    }
+
+    init(stream str: String) throws {
+        try self.init(json: JSON.Parser.parse(str))
+    }
+
+    init(json: JSON) throws {
+        index = try json.get("index")
+        let t: CodecType = try CodecType(rawValue: json.get("codec_type")) ?? .unknown
+        guard t == self.type else {
+            switch t {
+            case .video:
+                throw FFProbeError.IncorrectTypeError.video
+            case .audio:
+                throw FFProbeError.IncorrectTypeError.audio
+            case .unknown:
+                throw FFProbeError.IncorrectTypeError.other(try json.get("codec_type"))
+            default:
+                throw FFProbeError.IncorrectTypeError.data
+            }
+        }
 
         let durationString: String = try json.get("duration")
         duration = try MediaDuration(durationString)
@@ -197,7 +261,9 @@ struct VideoStream: FFProbeVideoStreamProtocol {
         guard t == self.type else {
             switch t {
             case .unknown:
-                throw FFProbeError.IncorrectTypeError.other(rawCodec)
+                throw FFProbeError.IncorrectTypeError.other(try json.get("codec_type"))
+            case .data:
+                throw FFProbeError.IncorrectTypeError.data
             case .audio:
                 throw FFProbeError.IncorrectTypeError.audio
             default:
@@ -275,6 +341,8 @@ struct AudioStream: FFProbeAudioStreamProtocol {
                 throw FFProbeError.IncorrectTypeError.other(rawCodec)
             case .video:
                 throw FFProbeError.IncorrectTypeError.video
+            case .data:
+                throw FFProbeError.IncorrectTypeError.data
             default:
                 throw FFProbeError.IncorrectTypeError.audio
             }
