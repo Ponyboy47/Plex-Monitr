@@ -21,13 +21,14 @@ enum MediaError: Error {
     case sampleMedia
     case alreadyExists(Path)
     case conversionError(String)
-    enum Downpour: Error {
+    enum DownpourError: Error {
         case missingTVSeason(String)
         case missingTVEpisode(String)
     }
-    enum FFProbe: Error {
+    enum FFProbeError: Error {
         case couldNotGetMetadata(String)
         case couldNotCreateFFProbe(String)
+        case streamNotConvertible(to: CodecType, stream: FFProbeStreamProtocol)
     }
     enum VideoError: Error {
         case invalidConfig
@@ -257,10 +258,10 @@ final class Video: BaseMedia {
 
         if self.downpour.type == .tv {
             guard let _ = self.downpour.season else {
-                throw MediaError.Downpour.missingTVSeason(self.path.string)
+                throw MediaError.DownpourError.missingTVSeason(self.path.string)
             }
             guard let _ = self.downpour.episode else {
-                throw MediaError.Downpour.missingTVEpisode(self.path.string)
+                throw MediaError.DownpourError.missingTVEpisode(self.path.string)
             }
         }
     }
@@ -286,10 +287,10 @@ final class Video: BaseMedia {
 
         if self.downpour.type == .tv {
             guard let _ = self.downpour.season else {
-                throw MediaError.Downpour.missingTVSeason(p.string)
+                throw MediaError.DownpourError.missingTVSeason(p.string)
             }
             guard let _ = self.downpour.episode else {
-                throw MediaError.Downpour.missingTVEpisode(p.string)
+                throw MediaError.DownpourError.missingTVEpisode(p.string)
             }
         }
     }
@@ -305,9 +306,13 @@ final class Video: BaseMedia {
         return try convert(config, log)
     }
 
-    func needToConvert(streams: (FFProbeVideoStreamProtocol, FFProbeAudioStreamProtocol), with config: VideoConversionConfig, log: SwiftyBeaver.Type) -> Bool {
-        let videoStream = streams.0
-        let audioStream = streams.1
+    func needToConvert(streams: (FFProbeVideoStreamProtocol, FFProbeAudioStreamProtocol), with config: VideoConversionConfig, log: SwiftyBeaver.Type) throws -> Bool {
+        guard let videoStream = streams.0 as? VideoStream else {
+            throw MediaError.FFProbeError.streamNotConvertible(to: .video, stream: streams.0)
+        }
+        guard let audioStream = streams.1 as? AudioStream else {
+            throw MediaError.FFProbeError.streamNotConvertible(to: .audio, stream: streams.1)
+        }
 
         log.verbose("Streams:\n\nVideo:\n\(videoStream.description)\n\nAudio:\n\(audioStream.description)")
 
@@ -333,10 +338,10 @@ final class Video: BaseMedia {
             if let stderr = ffprobeOutput.stderr {
                 err = stderr
             }
-            throw MediaError.FFProbe.couldNotGetMetadata(err)
+            throw MediaError.FFProbeError.couldNotGetMetadata(err)
         }
         guard let ffprobeStdout = ffprobeOutput.stdout else {
-            throw MediaError.FFProbe.couldNotGetMetadata("File does not contain any metadata")
+            throw MediaError.FFProbeError.couldNotGetMetadata("File does not contain any metadata")
         }
         log.verbose("Got audio/video stream data for '\(self.path.absolute)' => '\(ffprobeStdout)'")
 
@@ -344,7 +349,7 @@ final class Video: BaseMedia {
         do {
             ffprobe = try FFProbe(ffprobeStdout)
         } catch {
-            throw MediaError.FFProbe.couldNotCreateFFProbe("Failed creating the FFProbe from stdout of the ffprobe command => \(error)")
+            throw MediaError.FFProbeError.couldNotCreateFFProbe("Failed creating the FFProbe from stdout of the ffprobe command => \(error)")
         }
 
         var videoStreams = ffprobe.videoStreams
@@ -441,8 +446,13 @@ final class Video: BaseMedia {
         }
 
         log.info("Got main audio/video streams. Checking if we need to convert file")
-        // Check to see if the main stream needs to be converted
-        if !needToConvert(streams: (mainVideoStream, mainAudioStream), with: conversionConfig, log: log) {
+        do {
+            // Check to see if the main stream needs to be converted
+            if try !needToConvert(streams: (mainVideoStream, mainAudioStream), with: conversionConfig, log: log) {
+                return self
+            }
+        } catch {
+            log.error("Unable to determine if we need to convert media file! Error occurred => \(error)")
             return self
         }
 
@@ -695,10 +705,10 @@ final class Subtitle: BaseMedia {
 
         if downpour.type == .tv {
             guard let _ = downpour.season else {
-                throw MediaError.Downpour.missingTVSeason(path.string)
+                throw MediaError.DownpourError.missingTVSeason(path.string)
             }
             guard let _ = downpour.episode else {
-                throw MediaError.Downpour.missingTVEpisode(path.string)
+                throw MediaError.DownpourError.missingTVEpisode(path.string)
             }
         }
     }
@@ -714,10 +724,10 @@ final class Subtitle: BaseMedia {
 
         if downpour.type == .tv {
             guard let _ = downpour.season else {
-                throw MediaError.Downpour.missingTVSeason(p.string)
+                throw MediaError.DownpourError.missingTVSeason(p.string)
             }
             guard let _ = downpour.episode else {
-                throw MediaError.Downpour.missingTVEpisode(p.string)
+                throw MediaError.DownpourError.missingTVEpisode(p.string)
             }
         }
     }
