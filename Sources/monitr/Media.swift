@@ -169,8 +169,61 @@ class BaseMedia: Media {
 
     fileprivate func execute(_ command: String, _ arguments: [String]) -> (Int32, Output) {
         let task = Process()
-        task.launchPath = "/usr/bin/env"
-        task.arguments = [command] + arguments
+        if !command.ends(with: "which") {
+            let (whichRC, whichOutput) = execute("which", [command])
+            if whichRC == 0, let whichStdout = whichOutput.stdout, !whichStdout.isEmpty {
+                var processPaths = whichStdout.components(separatedBy: "\n")
+                task.launchPath = processPaths.reduce("") { whichPathPrev, whichPathNext in
+                    func checkBinLevel(_ path: String) -> Int {
+                        let bin: String = "/bin"
+                        let usr: String = "/usr/bin"
+                        let local: String = "/usr/local/bin"
+                        let Level: Int
+                        if path.starts(with: local) {
+                            return 1
+                        } else if path.starts(with: usr) {
+                            return 2
+                        } else if path.starts(with: bin) {
+                            return 3
+                        }
+                        return 0
+                    }
+                    if let prevPath: Path = Path(whichPathPrev), let nextPath: Path = Path(whichPathNext) {
+                        if let environ = task.environment, let paths = environ["PATH"]?.components(separatedBy: ":") {
+                            if paths.contains(prevPath.parent.string) && !paths.contains(nextPath.parent.string) {
+                                return whichPathPrev
+                            } else if !paths.contains(prevPath.parent.string) && paths.contains(nextPath.parent.string) {
+                                return whichPathNext
+                            } else {
+                                let prevLevel = checkBinLevel(prevPath.string)
+                                let nextLevel = checkBinLevel(nextPath.string)
+                                if prevLevel < nextLevel {
+                                    return whichPathPrev
+                                } else {
+                                    return whichPathNext
+                                }
+                            }
+                        } else {
+                            let prevLevel = checkBinLevel(prevPath.string)
+                            let nextLevel = checkBinLevel(nextPath.string)
+                            if prevLevel < nextLevel {
+                                return whichPathPrev
+                            } else {
+                                return whichPathNext
+                            }
+                        }
+                    }
+                    return whichPathPrev ?? whichPathNext ?? "/usr/bin/env"
+                }
+            }
+        }
+        let args: [String]
+        if task.launchPath == "/usr/bin/env" {
+            args = [command] + arguments
+        } else {
+            args = arguments
+        }
+        task.arguments = args
 
         let stdoutPipe = Pipe()
         let stderrPipe = Pipe()
