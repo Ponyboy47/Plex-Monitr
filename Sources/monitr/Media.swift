@@ -173,12 +173,11 @@ class BaseMedia: Media {
             let (whichRC, whichOutput) = execute("which", [command])
             if whichRC == 0, let whichStdout = whichOutput.stdout, !whichStdout.isEmpty {
                 var processPaths = whichStdout.components(separatedBy: "\n")
-                task.launchPath = processPaths.reduce("") { whichPathPrev, whichPathNext in
+                task.launchPath = processPaths.reduce(processPaths[0]) { whichPathPrev, whichPathNext in
                     func checkBinLevel(_ path: String) -> Int {
                         let bin: String = "/bin"
                         let usr: String = "/usr/bin"
                         let local: String = "/usr/local/bin"
-                        let Level: Int
                         if path.starts(with: local) {
                             return 1
                         } else if path.starts(with: usr) {
@@ -188,32 +187,32 @@ class BaseMedia: Media {
                         }
                         return 0
                     }
-                    if let prevPath: Path = Path(whichPathPrev), let nextPath: Path = Path(whichPathNext) {
-                        if let environ = task.environment, let paths = environ["PATH"]?.components(separatedBy: ":") {
-                            if paths.contains(prevPath.parent.string) && !paths.contains(nextPath.parent.string) {
-                                return whichPathPrev
-                            } else if !paths.contains(prevPath.parent.string) && paths.contains(nextPath.parent.string) {
-                                return whichPathNext
-                            } else {
-                                let prevLevel = checkBinLevel(prevPath.string)
-                                let nextLevel = checkBinLevel(nextPath.string)
-                                if prevLevel < nextLevel {
-                                    return whichPathPrev
-                                } else {
-                                    return whichPathNext
-                                }
-                            }
+                    let prevPath: Path = Path(whichPathPrev)
+                    let nextPath: Path = Path(whichPathNext)
+                    if let environ = task.environment, let paths = environ["PATH"]?.components(separatedBy: ":") {
+                        if paths.contains(prevPath.parent.string) && !paths.contains(nextPath.parent.string) {
+                            return whichPathPrev
+                        } else if !paths.contains(prevPath.parent.string) && paths.contains(nextPath.parent.string) {
+                            return whichPathNext
                         } else {
                             let prevLevel = checkBinLevel(prevPath.string)
                             let nextLevel = checkBinLevel(nextPath.string)
-                            if prevLevel < nextLevel {
+                            if prevLevel > nextLevel {
                                 return whichPathPrev
-                            } else {
+                            } else if prevLevel < nextLevel {
                                 return whichPathNext
                             }
                         }
+                    } else {
+                        let prevLevel = checkBinLevel(prevPath.string)
+                        let nextLevel = checkBinLevel(nextPath.string)
+                        if prevLevel > nextLevel {
+                            return whichPathPrev
+                        } else if prevLevel < nextLevel {
+                            return whichPathNext
+                        }
                     }
-                    return whichPathPrev ?? whichPathNext ?? "/usr/bin/env"
+                    return "/usr/bin/env"
                 }
             }
         }
