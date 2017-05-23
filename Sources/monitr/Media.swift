@@ -216,13 +216,7 @@ class BaseMedia: Media {
                 }
             }
         }
-        let args: [String]
-        if task.launchPath == "/usr/bin/env" {
-            args = [command] + arguments
-        } else {
-            args = arguments
-        }
-        task.arguments = args
+        task.arguments = [command] + arguments
 
         let stdoutPipe = Pipe()
         let stderrPipe = Pipe()
