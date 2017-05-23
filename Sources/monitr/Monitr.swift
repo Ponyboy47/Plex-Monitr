@@ -373,7 +373,7 @@ final class Monitr: DirectoryMonitorDelegate {
                                 m = try m.convert(nil, self.config.log)
                             }
                         } catch {
-                            self.config.log.warning("Failed to convert media: \(m)")
+                            self.config.log.warning("Failed to convert media: \(m.path)")
                             self.config.log.error(error)
                             failedMedia.append(m)
                         }

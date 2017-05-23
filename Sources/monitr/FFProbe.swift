@@ -1,8 +1,10 @@
 import JSON
 
+let indent = "\t\t"
+
 enum FFProbeError: Error {
     enum JSONParserError: Error {
-        case unknownCodecType
+        case unknownCodec(String)
         case framerateIsNotDouble(String)
         case cannotCalculateFramerate(String)
     }
@@ -88,9 +90,6 @@ enum AudioCodec: String, Codec {
     case mp3
     case any
 }
-enum UnknownCodec: Codec {
-    case unknown_or_new(String)
-}
 
 protocol FFProbeStreamProtocol: JSONInitializable {
     var index: Int { get set }
@@ -130,13 +129,12 @@ struct UnknownStream: FFProbeStreamProtocol {
     var language: Language?
 
     var description: String {
-        let indent = "\t\t"
         var str = "\(indent)Index: \(index)"
         var bR = bitRate
         str += "\n\(indent)BitRate: \(bR.kbps) kb/s"
         str += "\n\(indent)Duration: \(duration.description)"
         if let l = language {
-            str += "\n\(indent)Language: \(l.rawValue)"
+            str += "\n\(indent)Language: \(l)"
         }
         if let t = tags {
             str += "\n\(indent)Tags: \(t)"
@@ -186,13 +184,12 @@ struct DataStream: FFProbeStreamProtocol {
     var language: Language?
 
     var description: String {
-        let indent = "\t\t"
         var str = "\(indent)Index: \(index)"
         var bR = bitRate
         str += "\n\(indent)BitRate: \(bR.kbps) kb/s"
         str += "\n\(indent)Duration: \(duration.description)"
         if let l = language {
-            str += "\n\(indent)Language: \(l.rawValue)"
+            str += "\n\(indent)Language: \(l)"
         }
         if let t = tags {
             str += "\n\(indent)Tags: \(t)"
@@ -248,7 +245,26 @@ struct VideoStream: FFProbeVideoStreamProtocol {
     var bitDepth: Int?
 
     var description: String {
-        return ""
+        var str = "\(indent)Index: \(index)"
+        str += "\n\(indent)Type: \(type)"
+        str += "\n\(indent)Codec: \(codec)"
+        var bR = bitRate
+        str += "\n\(indent)BitRate: \(bR.kbps) kb/s"
+        str += "\n\(indent)Duration: \(duration.description)"
+        str += "\n\(indent)Dimensions: \(dimensions.0)x\(dimensions.1)"
+        str += "\n\(indent)Aspect Ratio: \(aspectRatio)"
+        str += "\n\(indent)Framerate: \(framerate) fps"
+        if let b = bitDepth {
+            str += "\n\(indent)Bit Depth: \(b)"
+        }
+        if let l = language {
+            str += "\n\(indent)Language: \(l)"
+        }
+        if let t = tags {
+            str += "\n\(indent)Tags: \(t)"
+        }
+
+        return str
     }
 
     init(stream str: String) throws {
@@ -271,7 +287,10 @@ struct VideoStream: FFProbeVideoStreamProtocol {
                 throw FFProbeError.IncorrectTypeError.video
             }
         }
-        codec = try VideoCodec(rawValue: json.get("codec_name")) ?? UnknownCodec.unknown_or_new(json.get("codec_name"))
+        guard let c = try VideoCodec(rawValue: json.get("codec_name")) else {
+            throw FFProbeError.JSONParserError.unknownCodec(try json.get("codec_name"))
+        }
+        codec = c
 
         duration = try MediaDuration(json.get("duration"))
 
@@ -325,7 +344,24 @@ struct AudioStream: FFProbeAudioStreamProtocol {
     var channelLayout: ChannelLayout
 
     var description: String {
-        return ""
+        var str = "\(indent)Index: \(index)"
+        str += "\n\(indent)Type: \(type)"
+        str += "\n\(indent)Codec: \(codec)"
+        var bR = bitRate
+        str += "\n\(indent)BitRate: \(bR.kbps) kb/s"
+        str += "\n\(indent)Duration: \(duration.description)"
+        var sR = sampleRate
+        str += "\n\(indent)Sample Rate: \(sR.khz) kHz"
+        str += "\n\(indent)Channels: \(channels)"
+        str += "\n\(indent)Layout: \(channelLayout)"
+        if let l = language {
+            str += "\n\(indent)Language: \(l)"
+        }
+        if let t = tags {
+            str += "\n\(indent)Tags: \(t)"
+        }
+
+        return str
     }
 
     init(stream str: String) throws {
@@ -348,7 +384,10 @@ struct AudioStream: FFProbeAudioStreamProtocol {
                 throw FFProbeError.IncorrectTypeError.audio
             }
         }
-        codec = try AudioCodec(rawValue: json.get("codec_name")) ?? UnknownCodec.unknown_or_new(json.get("codec_name"))
+        guard let c = AudioCodec(rawValue: try json.get("codec_name")) else {
+            throw FFProbeError.JSONParserError.unknownCodec(try json.get("codec_name"))
+        }
+        codec = c
 
         duration = try MediaDuration(json.get("duration"))
 

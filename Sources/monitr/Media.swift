@@ -504,13 +504,14 @@ final class Video: BaseMedia {
         let (rc, output) = execute("transcode-video", args)
 
         guard rc == 0 else {
+            var error: String = "Error attempting to transcode: \(path)"
             if let stderr = output.stderr {
-                throw MediaError.conversionError(stderr)
-            } else if let stdout = output.stdout {
-                throw MediaError.conversionError(stdout)
-            } else {
-                throw MediaError.conversionError("An unidentifiable error occurred while converting media file '\(path)'")
+                error += "\n\tStandard Error: \(stderr)"
             }
+            if let stdout = output.stdout {
+                error += "\n\tStandard Out: \(stdout)"
+            }
+            throw MediaError.conversionError(error)
         }
         log.info("Successfully converted media file '\(path)' to '\(outputPath)'")
 
