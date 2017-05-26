@@ -360,8 +360,7 @@ extension Config: JSONRepresentable {
     }
 }
 
-protocol ConversionConfig {
-}
+protocol ConversionConfig {}
 
 struct VideoConversionConfig: ConversionConfig {
     var container: VideoContainer

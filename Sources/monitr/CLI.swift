@@ -39,8 +39,6 @@ protocol Argument {
     var `default`: ArgType? { get set }
     /// The description of the cli argument
     var description: String? { get set }
-    /// The usage string for cli argument
-    var usage: String { get }
     /// Whether or not the argument is required to be set
     var `required`: Bool { get set }
     /// The type of the argument value
@@ -57,7 +55,9 @@ protocol Argument {
      - Parameter description: The usage description for the cli argument
      - Parameter required: Whether or not the argument is required to be set
     */
-    init(_ shortName: Character, longName: String?, `default`: ArgType?, description: String?, `required`: Bool, parser: ArgumentParser?) throws
+    init(_ shortName: Character, longName: String?, `default`: ArgType?, description: String?, `required`: Bool, parser: inout ArgumentParser) throws
+    /// The usage string for cli argument
+    mutating func usage() -> String
     /// Parses the cli arguments to get the string value of the argument, or nil if it is not set
     func parse() throws -> ArgType?
     /// Returns the argument's value, it's default value if that is nil, or throws an error if it's required but the value is nil
@@ -65,7 +65,7 @@ protocol Argument {
 }
 
 /// CLI Arguments that come with a value
-final class Option<A: ArgumentType>: Argument {
+struct Option<A: ArgumentType>: Argument {
     typealias ArgType = A
     var shortName: Character
     var longName: String?
@@ -75,7 +75,38 @@ final class Option<A: ArgumentType>: Argument {
     var type: ArgType.Type {
         return ArgType.self
     }
-    var usage: String {
+    var usageDescriptionActualLength: Int = 0
+    var usageDescriptionNiceLength: Int = 0
+
+    init(_ shortName: Character, longName: String? = nil, `default`: ArgType? = nil, description: String? = nil, `required`: Bool = false, parser: inout ArgumentParser) throws {
+        guard shortName != "h" else {
+            throw ArgumentError.invalidShortName("Cannot use 'h' as the short name since it is reserved for help/usage text.")
+        }
+        if let l = longName {
+            guard l != "help" else {
+                throw ArgumentError.invalidLongName("Cannot use 'help' as the long name since it is reserved for help/usage text.")
+            }
+        }
+        let shortNames = parser.shortNames
+        guard !shortNames.contains(shortName) else {
+            throw ArgumentError.invalidShortName("Cannot use '\(shortName)' as the short name since it is already used by a different argument.")
+        }
+        let longNames = parser.longNames
+        if let lName = longName {
+            guard !longNames.contains(lName) else {
+                throw ArgumentError.invalidLongName("Cannot use '\(lName)' as the long name since it is already used by a different argument.")
+            }
+        }
+        self.shortName = shortName
+        self.longName = longName
+        self.`default` = `default`
+        self.description = description
+        self.`required` = `required`
+
+        parser.arguments.append(self)
+    }
+
+    mutating func usage() -> String {
         var u = "\t-\(shortName)"
         if let l = longName {
             u += ", --\(l)"
@@ -97,36 +128,6 @@ final class Option<A: ArgumentType>: Argument {
             u += "DEFAULT: \(d)"
         }
         return u
-    }
-    var usageDescriptionActualLength: Int = 0
-    var usageDescriptionNiceLength: Int = 0
-
-    required init(_ shortName: Character, longName: String? = nil, `default`: ArgType? = nil, description: String? = nil, `required`: Bool = false, parser: ArgumentParser? = nil) throws {
-        guard shortName != "h" else {
-            throw ArgumentError.invalidShortName("Cannot use 'h' as the short name since it is reserved for help/usage text.")
-        }
-        if let l = longName {
-            guard l != "help" else {
-                throw ArgumentError.invalidLongName("Cannot use 'help' as the long name since it is reserved for help/usage text.")
-            }
-        }
-        if let shortNames = parser?.shortNames {
-            guard !shortNames.contains(shortName) else {
-                throw ArgumentError.invalidShortName("Cannot use '\(shortName)' as the short name since it is already used by a different argument.")
-            }
-        }
-        if let longNames = parser?.longNames, let lName = longName {
-            guard !longNames.contains(lName) else {
-                throw ArgumentError.invalidLongName("Cannot use '\(lName)' as the long name since it is already used by a different argument.")
-            }
-        }
-        self.shortName = shortName
-        self.longName = longName
-        self.`default` = `default`
-        self.description = description
-        self.`required` = `required`
-
-        parser?.arguments.append(self)
     }
 
     func parse() throws -> ArgType? {
@@ -299,7 +300,7 @@ extension Language: ArgumentType {
 }
 
 /// Parses the CLI for Arguments
-final class ArgumentParser {
+struct ArgumentParser {
     var usage: String
     var arguments: [Any] = []
 
@@ -348,7 +349,7 @@ final class ArgumentParser {
         return lNames
     }
 
-    required init(_ usage: String) {
+    init(_ usage: String) {
         self.usage = usage
     }
 
@@ -381,7 +382,7 @@ final class ArgumentParser {
     }()
 
     /// Parse for a specific Argument and returns it's string value if it finds one
-    class func parse<A: Argument>(_ argument: A) -> String? {
+    static func parse<A: Argument>(_ argument: A) -> String? {
         let isBool = argument.type is Bool.Type
         // If the argument has a long name, let's look for that first
         if let longName = argument.longName {
@@ -411,7 +412,7 @@ final class ArgumentParser {
     }
 
     /// Parse for a specific longName argument
-    class func parse(longName: String, isBool: Bool = false) -> String? {
+    static func parse(longName: String, isBool: Bool = false) -> String? {
         // Drop the first argument since it's just the path to the executable
         let args = CommandLine.arguments.dropFirst()
         // Try and find the index of the long argument
@@ -430,7 +431,7 @@ final class ArgumentParser {
     }
 
     /// Parse for a specific shortName argument
-    class func parse(shortName: Character, isBool: Bool = false) -> String? {
+    static func parse(shortName: Character, isBool: Bool = false) -> String? {
         // Drop the first argument since it's just the path to the executable
         let args = CommandLine.arguments.dropFirst()
         // Go over all the flag arguments
@@ -457,35 +458,35 @@ final class ArgumentParser {
         // format everything nicely
         var longest = 0
         for arg in arguments {
-            if let flag = arg as? Flag {
-                let _ = flag.usage
+            if var flag = arg as? Flag {
+                let _ = flag.usage()
                 longest = flag.usageDescriptionActualLength > longest ? flag.usageDescriptionActualLength : longest
-            } else if let str = arg as? Option<String> {
-                let _ = str.usage
+            } else if var str = arg as? Option<String> {
+                let _ = str.usage()
                 longest = str.usageDescriptionActualLength > longest ? str.usageDescriptionActualLength : longest
-            } else if let path = arg as? Option<Path> {
-                let _ = path.usage
+            } else if var path = arg as? Option<Path> {
+                let _ = path.usage()
                 longest = path.usageDescriptionActualLength > longest ? path.usageDescriptionActualLength : longest
-            } else if let int = arg as? Option<Int> {
-                let _ = int.usage
+            } else if var int = arg as? Option<Int> {
+                let _ = int.usage()
                 longest = int.usageDescriptionActualLength > longest ? int.usageDescriptionActualLength : longest
             }
         }
 
         // Now do the actual printing of arguments' usage descriptions
         for arg in arguments {
-            if let flag = arg as? Flag {
+            if var flag = arg as? Flag {
                 flag.usageDescriptionNiceLength = longest + 4
-                print(flag.usage)
-            } else if let str = arg as? Option<String> {
+                print(flag.usage())
+            } else if var str = arg as? Option<String> {
                 str.usageDescriptionNiceLength = longest + 4
-                print(str.usage)
-            } else if let path = arg as? Option<Path> {
+                print(str.usage())
+            } else if var path = arg as? Option<Path> {
                 path.usageDescriptionNiceLength = longest + 4
-                print(path.usage)
-            } else if let int = arg as? Option<Int> {
+                print(path.usage())
+            } else if var int = arg as? Option<Int> {
                 int.usageDescriptionNiceLength = longest + 4
-                print(int.usage)
+                print(int.usage())
             } else {
                 continue
             }
