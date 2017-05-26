@@ -100,6 +100,10 @@ class BaseMedia: Media {
     }
 
     func move(to plexPath: Path, log: SwiftyBeaver.Type) throws -> Self {
+        // If it's already in the final directory then go ahead and return
+        guard !path.string.contains(finalDirectory.string) else {
+            return self
+        }
         log.verbose("Preparing to move file: \(path.string)")
         // Get the location of the finalDirectory inside the plexPath
         let mediaDirectory = plexPath + finalDirectory
@@ -172,7 +176,7 @@ class BaseMedia: Media {
         if !command.ends(with: "which") {
             let (whichRC, whichOutput) = execute("which", [command])
             if whichRC == 0, let whichStdout = whichOutput.stdout, !whichStdout.isEmpty {
-                var processPaths = whichStdout.components(separatedBy: "\n")
+                var processPaths = whichStdout.components(separatedBy: CharacterSet.newlines)
                 task.launchPath = processPaths.reduce(processPaths[0]) { whichPathPrev, whichPathNext in
                     func checkBinLevel(_ path: String) -> Int {
                         let bin: String = "/bin"
@@ -214,7 +218,11 @@ class BaseMedia: Media {
                     }
                     return "/usr/bin/env"
                 }
+            } else {
+                task.launchPath = "/usr/bin/env"
             }
+        } else {
+            task.launchPath = "/usr/bin/env"
         }
         task.arguments = [command] + arguments
 
@@ -505,7 +513,7 @@ final class Video: BaseMedia {
         log.info("We must convert media file '\(path.absolute)' for Plex Direct Play/Stream!")
 
         // Build the arguments for the transcode_video command
-        var args: [String] = ["--title", "\(mainVideoStream.index)", "--target", "big", "--quick", "--preset", "fast", "--no-log"]
+        var args: [String] = ["--target", "big", "--quick", "--preset", "fast", "--no-log"]
 
         var outputExtension = "mkv"
         if conversionConfig.container == .mp4 {
@@ -522,18 +530,23 @@ final class Video: BaseMedia {
 
         // This is only set when deleteOriginal is false
         if let tempDir = conversionConfig.tempDir {
+            log.info("Using temporary directory to convert '\(path)'")
             outputPath = tempDir
             args += ["--output", "\(tempDir.absolute)"]
             // If the current container is the same as the output container,
             // rename the original file
-            if ext == conversionConfig.container.rawValue {
+            if ext == outputExtension {
                 let filename = "\(plexName) - original.\(ext)"
-                try path.move(path.parent + filename)
+                let newPath = path.parent + filename
+                log.info("Input/output extensions are identical, renaming original file from '\(path)' to '\(newPath)'")
+                try path.move(newPath)
+                path = newPath
             }
         } else {
             // If the output extension is different than the original file's
             // extension then we will have to manually delete the file later
-            if ext != conversionConfig.container.rawValue {
+            if ext != outputExtension {
+                log.info("We will be manually deleting the original file after conversion has completed")
                 manuallyDeleteOriginal = true
             }
             args += ["--output", "\(path.parent)"]
@@ -542,19 +555,21 @@ final class Video: BaseMedia {
         // We need the full outputPath of the transcoded file so that we can
         // update the path of this media object, and move it to plex if it
         // isn't already there
-        outputPath += path.lastComponentWithoutExtension + outputExtension
+        outputPath += "\(Path.separator)\(path.lastComponentWithoutExtension).\(outputExtension)"
 
         // Add the input filepath to the args
         args.append(path.absolute.string)
 
+        log.info("Beginning conversion of media file '\(path)'")
         let (rc, output) = execute("transcode-video", args)
 
         guard rc == 0 else {
             var error: String = "Error attempting to transcode: \(path)"
-            if let stderr = output.stderr {
+            error += "\n\tCommand: transcode-video \(args.joined(separator: " "))"
+            if let stderr = output.stderr, !stderr.isEmpty {
                 error += "\n\tStandard Error: \(stderr)"
             }
-            if let stdout = output.stdout {
+            if let stdout = output.stdout, !stdout.isEmpty {
                 error += "\n\tStandard Out: \(stdout)"
             }
             throw MediaError.conversionError(error)

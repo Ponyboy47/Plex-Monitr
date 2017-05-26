@@ -216,12 +216,12 @@ final class Monitr: DirectoryMonitorDelegate {
         //   NOTE: If convertImmediately is false, then a queue of conversion 
         //         jobs are created to be run during the scheduled time period
         if self.config.convert, let unconvertedMedia = self.convertMedia(&media) {
-            self.config.log.warning("Failed to convert media:\n\t\(unconvertedMedia)")
+            self.config.log.warning("Failed to convert media:\n\t\(unconvertedMedia.map({ $0.path }))")
         }
 
         // If we gathered any supported media files, move them to their plex location
         if let unmovedMedia = self.moveMedia(&media) {
-            self.config.log.warning("Failed to move media to plex:\n\t\(unmovedMedia)")
+            self.config.log.warning("Failed to move media to plex:\n\t\(unmovedMedia.map({ $0.path }))")
         }
     }
 
@@ -328,7 +328,7 @@ final class Monitr: DirectoryMonitorDelegate {
                     do {
                         m = try m.move(to: self.config.plexDirectory, log: self.config.log)
                     } catch {
-                        self.config.log.warning("Failed to move media: \(m)")
+                        self.config.log.warning("Failed to move media: \(m.path)")
                         self.config.log.error(error)
                         failedMedia.append(m)
                     }
