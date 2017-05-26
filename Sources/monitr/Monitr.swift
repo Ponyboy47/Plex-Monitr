@@ -320,10 +320,9 @@ final class Monitr: DirectoryMonitorDelegate {
     func moveMedia(_ media: inout [Media]) -> [Media]? {
         var failedMedia: [Media] = []
 
-        let moveGroup = AsyncGroup()
         for var m in media {
             // Starts a new utility thread to move the file
-            moveGroup.utility {
+            Async.utilitySync {
                 self.statistics.measure(.move) {
                     do {
                         m = try m.move(to: self.config.plexDirectory, log: self.config.log)
@@ -335,8 +334,6 @@ final class Monitr: DirectoryMonitorDelegate {
                 }
             }
         }
-        // Blocks until all the moveGroup threads have completed
-        moveGroup.wait()
 
         guard failedMedia.count > 0 else { return nil }
 
