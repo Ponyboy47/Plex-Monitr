@@ -322,7 +322,7 @@ final class Monitr: DirectoryMonitorDelegate {
 
         for var m in media {
             // Starts a new utility thread to move the file
-            Async.utilitySync {
+            Sync.utility {
                 self.statistics.measure(.move) {
                     do {
                         m = try m.move(to: self.config.plexDirectory, log: self.config.log)
