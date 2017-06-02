@@ -27,6 +27,7 @@ enum FFProbeError: Error {
     }
 }
 
+/// Struct for all of the streams returned by the `ffprobe` command
 struct FFProbe {
     fileprivate var streams: [FFProbeStreamProtocol] = []
     lazy var videoStreams: [VideoStream] = {
