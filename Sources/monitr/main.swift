@@ -23,7 +23,8 @@ import Dispatch
 let log = SwiftyBeaver.self
 
 var monitr: Monitr
-var argParser = ArgumentParser("\(CommandLine.arguments.first!) [Options]")
+var arguments = CommandLine.arguments
+var argParser = ArgumentParser("\(arguments.remove(at: 0)) [Options]", cliArguments: arguments)
 
 // Args/Flags to configure this program from the CLI
 let configOption = try Option<Path>("f", alternateNames: ["config"], default: Path("~/.config/monitr/settings.json"), description: "The file from which to read configuration options", required: true, parser: &argParser)
@@ -48,12 +49,12 @@ let logLevelOption = try Option<Int>("d", alternateNames: ["log-level"], descrip
 let logFileOption = try Option<Path>("l", alternateNames: ["log-file"], description: "Where to write the log file.", parser: &argParser)
 
 // Prints the help/usage text if -h or --help was used
-guard !ArgumentParser.needsHelp else {
+guard !argParser.needsHelp else {
     argParser.printHelp()
     exit(EXIT_SUCCESS)
 }
 
-guard !ArgumentParser.wantsVersion else {
+guard !argParser.wantsVersion else {
     print(Monitr.version)
     exit(EXIT_SUCCESS)
 }

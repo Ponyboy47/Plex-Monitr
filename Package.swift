@@ -25,8 +25,9 @@ targets.append(Target(name: "CSelect"))
 swiftDependencies.append("CSelect")
 #else
 // On osX/iOS/watchOS/tvOS ignore the C funtions in select
-dependencies.append(.Package(url: "https://github.com/vdka/JSON", majorVersion: 0))
 excludes.append("Sources/CSelect")
+// Importing this package through both Downpour and here causes issues with multiple libraries found on linux
+dependencies.append(.Package(url: "https://github.com/vdka/JSON", majorVersion: 0))
 #endif
 
 // The monitr directory is always required
