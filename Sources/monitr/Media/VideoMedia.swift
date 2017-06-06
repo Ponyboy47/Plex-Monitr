@@ -157,18 +157,18 @@ final class Video: BaseConvertibleMedia {
             // rename the original file
             if ext == outputExtension {
                 let filename = "\(plexName) - original.\(ext)"
-                let newPath = path.parent + filename
-                log.info("Input/output extensions are identical, renaming original file from '\(path)' to '\(newPath)'")
-                try path.move(newPath)
-                path = newPath
+                log.info("Input/output extensions are identical, renaming original file from '\(path.lastComponent)' to '\(filename)'")
+                try path.rename(filename)
+                path = path.parent + filename
             }
         } else {
             deleteOriginal = true
-            let filename = "\(plexName) - original.\(ext)"
-            let newPath = path.parent + filename
-            log.info("Input/output extensions are identical, renaming original file from '\(path)' to '\(newPath)'")
-            try path.move(newPath)
-            path = newPath
+            if ext == outputExtension {
+                let filename = "\(plexName) - original.\(ext)"
+                log.info("Input/output extensions are identical, renaming original file from '\(path.lastComponent)' to '\(filename)'")
+                try path.rename(filename)
+                path = path.parent + filename
+            }
             outputPath = path.parent
         }
         // We need the full outputPath of the transcoded file so that we can

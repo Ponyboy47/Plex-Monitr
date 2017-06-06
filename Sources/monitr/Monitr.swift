@@ -360,13 +360,13 @@ final class Monitr: DirectoryMonitorDelegate {
             var simultaneousConversions: Int = 0
             for var m in media.filter({ $0 is ConvertibleMedia }) {
                 convertGroup.utility {
-                    simultaneousConversions += 1
                     self.statistics.measure(.convert) {
                         if m is Video {
                             do {
                                 guard try Video.needsConversion(file: m.path, with: videoConfig, log: self.config.log) else { return }
                             } catch {}
                             log.info("We must convert video file '\(m.path.absolute)' for Plex Direct Play/Stream!")
+                            simultaneousConversions += 1
                             do {
                                 m = try (m as! ConvertibleMedia).convert(videoConfig, self.config.log)
                             } catch {
@@ -374,11 +374,13 @@ final class Monitr: DirectoryMonitorDelegate {
                                 self.config.log.error(error)
                                 failedMedia.append((m as! ConvertibleMedia))
                             }
+                            simultaneousConversions -= 1
                         } else if m is Audio {
                             do {
                                 guard try Audio.needsConversion(file: m.path, with: audioConfig, log: self.config.log) else { return }
                             } catch {}
                             log.info("We must convert audio file '\(m.path.absolute)' for Plex Direct Play/Stream!")
+                            simultaneousConversions += 1
                             do {
                                 m = try (m as! ConvertibleMedia).convert(audioConfig, self.config.log)
                             } catch {
@@ -386,10 +388,11 @@ final class Monitr: DirectoryMonitorDelegate {
                                 self.config.log.error(error)
                                 failedMedia.append((m as! ConvertibleMedia))
                             }
+                            simultaneousConversions -= 1
                         }
                     }
-                    simultaneousConversions -= 1
                 }
+                self.config.log.verbose("Currently running \(simultaneousConversions) simultaneous conversion jobs.")
                 // Blocks for as long as there are as many conversion jobs
                 // running as the configured conversion thread limit
                 //   NOTE: Does this by waiting for 60 seconds (or until all
@@ -397,7 +400,8 @@ final class Monitr: DirectoryMonitorDelegate {
                 //   simultaneous conversions (since the number should
                 //   increment when a thread starts and decrement when it
                 //   finishes)
-                while simultaneousConversions == self.config.convertThreads {
+                while simultaneousConversions >= self.config.convertThreads {
+                    self.config.log.info("Maximum number conversion threads (\(self.config.convertThreads)) reached. Waiting 60 seconds and checking to see if any have finished.")
                     convertGroup.wait(seconds: 60)
                 }
             }
