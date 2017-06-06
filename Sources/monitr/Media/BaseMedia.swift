@@ -215,7 +215,7 @@ class BaseConvertibleMedia: BaseMedia, ConvertibleMedia {
         }
 
         // Create a path to the location where the file will RIP
-        let finalRestingPlace = mediaDirectory + "\(plexName) - original.\(path.extension ?? "")"
+        let finalRestingPlace = mediaDirectory + "\(plexName) - original.\(unconvertedPath.extension ?? "")"
 
         // Ensure the finalRestingPlace doesn't already exist
         guard !finalRestingPlace.isFile else {
