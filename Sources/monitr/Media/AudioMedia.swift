@@ -15,7 +15,7 @@ import SwiftyBeaver
 import JSON
 
 /// Management for Audio files
-final class Audio: BaseMedia {
+final class Audio: BaseConvertibleMedia {
     /// The supported extensions
     enum SupportedExtension: String {
         case mp3
@@ -57,8 +57,12 @@ final class Audio: BaseMedia {
         try super.init(json: json)
     }
 
-    override func move(to: Path, log: SwiftyBeaver.Type) throws -> Audio {
-        return try super.move(to: to, log: log) as! Audio
+    override func move(to plexPath: Path, log: SwiftyBeaver.Type) throws -> Audio {
+        return try super.move(to: plexPath, log: log) as! Audio
+    }
+
+    override func moveUnconverted(to plexPath: Path, log: SwiftyBeaver.Type) throws -> Audio {
+        return try super.moveUnconverted(to: plexPath, log: log) as! Audio
     }
 
     override func convert(_ conversionConfig: ConversionConfig?, _ log: SwiftyBeaver.Type) throws -> Audio {
@@ -81,7 +85,7 @@ final class Audio: BaseMedia {
         return true
     }
 
-    override class func needsConversion(file: Path) -> Bool {
+    override class func needsConversion(file: Path, with config: ConversionConfig, log: SwiftyBeaver.Type) throws -> Bool {
         return false
     }
 }

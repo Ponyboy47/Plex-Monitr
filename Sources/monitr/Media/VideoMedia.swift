@@ -15,7 +15,7 @@ import SwiftyBeaver
 import JSON
 
 /// Management for Video files
-final class Video: BaseMedia {
+final class Video: BaseConvertibleMedia {
     /// The supported extensions
     enum SupportedExtension: String {
         case mp4
@@ -117,8 +117,12 @@ final class Video: BaseMedia {
         }
     }
 
-    override func move(to: Path, log: SwiftyBeaver.Type) throws -> Video {
-        return try super.move(to: to, log: log) as! Video
+    override func move(to plexPath: Path, log: SwiftyBeaver.Type) throws -> Video {
+        return try super.move(to: plexPath, log: log) as! Video
+    }
+
+    override func moveUnconverted(to plexPath: Path, log: SwiftyBeaver.Type) throws -> Video {
+        return try super.moveUnconverted(to: plexPath, log: log) as! Video
     }
 
     override func convert(_ conversionConfig: ConversionConfig?, _ log: SwiftyBeaver.Type) throws -> Video {
@@ -128,33 +132,102 @@ final class Video: BaseMedia {
         return try convert(config, log)
     }
 
-    func needToConvert(streams: (FFProbeVideoStreamProtocol, FFProbeAudioStreamProtocol), with config: VideoConversionConfig, log: SwiftyBeaver.Type) throws -> Bool {
-        guard let videoStream = streams.0 as? VideoStream else {
-            throw MediaError.FFProbeError.streamNotConvertible(to: .video, stream: streams.0)
+    func convert(_ conversionConfig: VideoConversionConfig, _ log: SwiftyBeaver.Type) throws -> Video {
+        // Build the arguments for the transcode_video command
+        var args: [String] = ["--target", "big", "--quick", "--preset", "fast", "--no-log"]
+
+        var outputExtension = "mkv"
+        if conversionConfig.container == .mp4 {
+            args.append("--mp4")
+            outputExtension = "mp4"
+        } else if conversionConfig.container == .m4v {
+            args.append("--m4v")
+            outputExtension = "m4v"
         }
-        guard let audioStream = streams.1 as? AudioStream else {
-            throw MediaError.FFProbeError.streamNotConvertible(to: .audio, stream: streams.1)
+
+        let ext = path.extension ?? ""
+        var deleteOriginal = false
+        var outputPath: Path
+
+        // This is only set when deleteOriginal is false
+        if let tempDir = conversionConfig.tempDir {
+            log.info("Using temporary directory to convert '\(path)'")
+            outputPath = tempDir
+            // If the current container is the same as the output container,
+            // rename the original file
+            if ext == outputExtension {
+                let filename = "\(plexName) - original.\(ext)"
+                let newPath = path.parent + filename
+                log.info("Input/output extensions are identical, renaming original file from '\(path)' to '\(newPath)'")
+                try path.move(newPath)
+                path = newPath
+            }
+        } else {
+            deleteOriginal = true
+            let filename = "\(plexName) - original.\(ext)"
+            let newPath = path.parent + filename
+            log.info("Input/output extensions are identical, renaming original file from '\(path)' to '\(newPath)'")
+            try path.move(newPath)
+            path = newPath
+            outputPath = path.parent
+        }
+        // We need the full outputPath of the transcoded file so that we can
+        // update the path of this media object, and move it to plex if it
+        // isn't already there
+        outputPath += "\(Path.separator)\(plexName).\(outputExtension)"
+
+        // Add the input filepath to the args
+        args += [path.absolute.string, "--output", outputPath.string]
+
+        log.info("Beginning conversion of media file '\(path)'")
+        let (rc, output) = Video.execute("transcode-video", args)
+
+        guard rc == 0 else {
+            var error: String = "Error attempting to transcode: \(path)"
+            error += "\n\tCommand: transcode-video \(args.joined(separator: " "))"
+            if let stderr = output.stderr, !stderr.isEmpty {
+                error += "\n\tStandard Error: \(stderr)"
+            }
+            if let stdout = output.stdout, !stdout.isEmpty {
+                error += "\n\tStandard Out: \(stdout)"
+            }
+            throw MediaError.conversionError(error)
+        }
+        log.info("Successfully converted media file '\(path)' to '\(outputPath)'")
+
+        if deleteOriginal {
+            try path.delete()
+            log.info("Successfully deleted original media file '\(path)'")
+        } else {
+            unconvertedFile = path
         }
 
-        log.verbose("Streams:\n\nVideo:\n\(videoStream.description)\n\nAudio:\n\(audioStream.description)")
+        // Update the media object's path
+        path = outputPath
 
-        let container = VideoContainer(rawValue: self.path.extension ?? "") ?? .other
-        guard container == config.container else { return true }
+        // If the converted file location is not already in the plexDirectory
+        if !path.string.contains(finalDirectory.string) {
+            return try move(to: conversionConfig.plexDir, log: log)
+        }
 
-        guard let videoCodec = videoStream.codec as? VideoCodec, config.videoCodec == .any || videoCodec == config.videoCodec else { return true }
-
-        guard let audioCodec = audioStream.codec as? AudioCodec, config.audioCodec == .any || audioCodec == config.audioCodec else { return true }
-
-        guard videoStream.framerate <= config.maxFramerate else { return true }
-
-        return false
+        return self
     }
 
-    func convert(_ conversionConfig: VideoConversionConfig, _ log: SwiftyBeaver.Type) throws -> Video {
-        log.info("Getting audio/video stream data for '\(self.path.absolute)'")
+    override class func isSupported(ext: String) -> Bool {
+        guard let _ = SupportedExtension(rawValue: ext.lowercased()) else {
+            return false
+        }
+        return true
+    }
+    
+    override class func needsConversion(file: Path, with config: ConversionConfig, log: SwiftyBeaver.Type) throws -> Bool {
+        guard let conversionConfig = config as? VideoConversionConfig else {
+            throw MediaError.VideoError.invalidConfig
+        }
+        log.info("Getting audio/video stream data for '\(file.absolute)'")
 
         // Get video file metadata using ffprobe
-        let (ffprobeRC, ffprobeOutput) = execute("ffprobe", "-hide_banner", "-of", "json", "-show_streams", "\(path.absolute)")
+        let (ffprobeRC, ffprobeOutput) = Video.execute("ffprobe", "-hide_banner", "-of", "json", "-show_streams", file.absolute.string)
         guard ffprobeRC == 0 else {
             var err: String = ""
             if let stderr = ffprobeOutput.stderr {
@@ -165,7 +238,7 @@ final class Video: BaseMedia {
         guard let ffprobeStdout = ffprobeOutput.stdout else {
             throw MediaError.FFProbeError.couldNotGetMetadata("File does not contain any metadata")
         }
-        log.verbose("Got audio/video stream data for '\(self.path.absolute)' => '\(ffprobeStdout)'")
+        log.verbose("Got audio/video stream data for '\(file.absolute)' => '\(ffprobeStdout)'")
 
         var ffprobe: FFProbe
         do {
@@ -267,108 +340,29 @@ final class Video: BaseMedia {
             throw MediaError.AudioError.noStreams
         }
 
-        log.info("Got main audio/video streams. Checking if we need to convert file")
-        do {
-            // Check to see if the main stream needs to be converted
-            if try !needToConvert(streams: (mainVideoStream, mainAudioStream), with: conversionConfig, log: log) {
-                return self
-            }
-        } catch {
-            log.error("Unable to determine if we need to convert media file! Error occurred => \(error)")
-            return self
-        }
-
-        log.info("We must convert media file '\(path.absolute)' for Plex Direct Play/Stream!")
-
-        // Build the arguments for the transcode_video command
-        var args: [String] = ["--target", "big", "--quick", "--preset", "fast", "--no-log"]
-
-        var outputExtension = "mkv"
-        if conversionConfig.container == .mp4 {
-            args.append("--mp4")
-            outputExtension = "mp4"
-        } else if conversionConfig.container == .m4v {
-            args.append("--m4v")
-            outputExtension = "m4v"
-        }
-
-        let ext = path.extension ?? ""
-        var manuallyDeleteOriginal = false
-        var outputPath: Path
-
-        // This is only set when deleteOriginal is false
-        if let tempDir = conversionConfig.tempDir {
-            log.info("Using temporary directory to convert '\(path)'")
-            outputPath = tempDir
-            args += ["--output", "\(tempDir.absolute)"]
-            // If the current container is the same as the output container,
-            // rename the original file
-            if ext == outputExtension {
-                let filename = "\(plexName) - original.\(ext)"
-                let newPath = path.parent + filename
-                log.info("Input/output extensions are identical, renaming original file from '\(path)' to '\(newPath)'")
-                try path.move(newPath)
-                path = newPath
-            }
-        } else {
-            // If the output extension is different than the original file's
-            // extension then we will have to manually delete the file later
-            if ext != outputExtension {
-                log.info("We will be manually deleting the original file after conversion has completed")
-                manuallyDeleteOriginal = true
-            }
-            args += ["--output", "\(path.parent)"]
-            outputPath = path.parent
-        }
-        // We need the full outputPath of the transcoded file so that we can
-        // update the path of this media object, and move it to plex if it
-        // isn't already there
-        outputPath += "\(Path.separator)\(path.lastComponentWithoutExtension).\(outputExtension)"
-
-        // Add the input filepath to the args
-        args.append(path.absolute.string)
-
-        log.info("Beginning conversion of media file '\(path)'")
-        let (rc, output) = execute("transcode-video", args)
-
-        guard rc == 0 else {
-            var error: String = "Error attempting to transcode: \(path)"
-            error += "\n\tCommand: transcode-video \(args.joined(separator: " "))"
-            if let stderr = output.stderr, !stderr.isEmpty {
-                error += "\n\tStandard Error: \(stderr)"
-            }
-            if let stdout = output.stdout, !stdout.isEmpty {
-                error += "\n\tStandard Out: \(stdout)"
-            }
-            throw MediaError.conversionError(error)
-        }
-        log.info("Successfully converted media file '\(path)' to '\(outputPath)'")
-
-        if manuallyDeleteOriginal {
-            try path.delete()
-            log.info("Successfully deleted original media file '\(path)'")
-        } else {
-            originalPath = path
-        }
-        // Update the media object's path
-        path = outputPath
-
-        // If the converted file location is not already in the plexDirectory
-        if !path.string.contains(finalDirectory.string) {
-            return try move(to: conversionConfig.plexDir, log: log)
-        }
-
-        return self
+        log.info("Got main audio/video streams. Checking if we need to convert them")
+        return try needToConvert(file: file, streams: (mainVideoStream, mainAudioStream), with: conversionConfig, log: log)
     }
 
-    override class func isSupported(ext: String) -> Bool {
-        guard let _ = SupportedExtension(rawValue: ext.lowercased()) else {
-            return false
+    private class func needToConvert(file: Path, streams: (FFProbeVideoStreamProtocol, FFProbeAudioStreamProtocol), with config: VideoConversionConfig, log: SwiftyBeaver.Type) throws -> Bool {
+        guard let videoStream = streams.0 as? VideoStream else {
+            throw MediaError.FFProbeError.streamNotConvertible(to: .video, stream: streams.0)
         }
-        return true
-    }
-    
-    override class func needsConversion(file: Path) -> Bool {
+        guard let audioStream = streams.1 as? AudioStream else {
+            throw MediaError.FFProbeError.streamNotConvertible(to: .audio, stream: streams.1)
+        }
+
+        log.verbose("Streams:\n\nVideo:\n\(videoStream.description)\n\nAudio:\n\(audioStream.description)")
+
+        let container = VideoContainer(rawValue: file.extension ?? "") ?? .other
+        guard container == config.container else { return true }
+
+        guard let videoCodec = videoStream.codec as? VideoCodec, config.videoCodec == .any || videoCodec == config.videoCodec else { return true }
+
+        guard let audioCodec = audioStream.codec as? AudioCodec, config.audioCodec == .any || audioCodec == config.audioCodec else { return true }
+
+        guard videoStream.framerate <= config.maxFramerate else { return true }
+        
         return false
     }
 }

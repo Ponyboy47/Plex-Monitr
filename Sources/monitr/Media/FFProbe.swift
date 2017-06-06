@@ -82,6 +82,7 @@ protocol Codec {}
 enum VideoCodec: String, Codec {
     case h264
     case mpeg4
+    case mjpeg
     case any
 }
 enum AudioCodec: String, Codec {

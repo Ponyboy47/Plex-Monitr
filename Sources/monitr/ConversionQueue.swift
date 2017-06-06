@@ -24,8 +24,8 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
     fileprivate var videoConversionConfig: VideoConversionConfig
     fileprivate var audioConversionConfig: AudioConversionConfig
 
-    fileprivate var jobs: [BaseMedia] = []
-    fileprivate var activeJobs: [BaseMedia] = []
+    fileprivate var jobs: [BaseConvertibleMedia] = []
+    fileprivate var activeJobs: [BaseConvertibleMedia] = []
 
     var active: Int {
         return activeJobs.count
@@ -56,26 +56,26 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
     }
 
     /// Adds a new Media object to the list of media items to convert
-    func push(_ job: BaseMedia) {
+    func push(_ job: BaseConvertibleMedia) {
         if !jobs.contains(job) {
             jobs.append(job)
         }
     }
 
     @discardableResult
-    fileprivate func pop() -> BaseMedia? {
+    fileprivate func pop() -> BaseConvertibleMedia? {
         self.activeJobs.append(self.jobs.removeFirst())
         return self.activeJobs.last
     }
 
-    fileprivate func finish(_ job: BaseMedia) throws {
+    fileprivate func finish(_ job: BaseConvertibleMedia) throws {
         guard let index = self.activeJobs.index(of: job) else {
             throw ConversionError.noJobIndex
         }
         self.activeJobs.remove(at: index)
     }
 
-    fileprivate func requeue(_ job: BaseMedia) {
+    fileprivate func requeue(_ job: BaseConvertibleMedia) {
         let index = self.activeJobs.index(of: job)!
         self.jobs.append(self.activeJobs.remove(at: index))
     }
@@ -162,17 +162,13 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
         }
     }
 
-    private static func setupJobs(_ jobs: [BaseMedia]) -> [BaseMedia] {
-        var conversions: [BaseMedia] = []
+    private static func setupJobs(_ jobs: [BaseConvertibleMedia]) -> [BaseConvertibleMedia] {
+        var conversions: [BaseConvertibleMedia] = []
         for job in jobs {
             if job is Video {
                 conversions.append((job as! Video))
             } else if job is Audio {
                 conversions.append((job as! Audio))
-            } else if job is Subtitle {
-                conversions.append((job as! Subtitle))
-            } else {
-                conversions.append((job as! Ignore))
             }
         }
         return conversions

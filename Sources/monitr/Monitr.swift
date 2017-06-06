@@ -347,32 +347,45 @@ final class Monitr: DirectoryMonitorDelegate {
 
      - Returns: An array of Media objects that failed to be converted
     */
-    func convertMedia(_ media: inout [Media]) -> [Media]? {
-        var failedMedia: [Media] = []
+    func convertMedia(_ media: inout [Media]) -> [ConvertibleMedia]? {
+        var failedMedia: [ConvertibleMedia] = []
+
+        let videoConfig = VideoConversionConfig(container: self.config.convertVideoContainer, videoCodec: self.config.convertVideoCodec, audioCodec: self.config.convertAudioCodec, subtitleScan: self.config.convertVideoSubtitleScan, mainLanguage: self.config.convertLanguage, maxFramerate: self.config.convertVideoMaxFramerate, plexDir: self.config.plexDirectory, tempDir: self.config.deleteOriginal ? nil : self.config.convertTempDirectory)
+        let audioConfig = AudioConversionConfig(container: self.config.convertAudioContainer, codec: self.config.convertAudioCodec, plexDir: self.config.plexDirectory, tempDir: self.config.deleteOriginal ? nil : self.config.convertTempDirectory)
 
         if self.config.convertImmediately {
             self.config.log.verbose("Converting media immediately")
-            let videoConfig = VideoConversionConfig(container: self.config.convertVideoContainer, videoCodec: self.config.convertVideoCodec, audioCodec: self.config.convertAudioCodec, subtitleScan: self.config.convertVideoSubtitleScan, mainLanguage: self.config.convertLanguage, maxFramerate: self.config.convertVideoMaxFramerate, plexDir: self.config.plexDirectory, tempDir: self.config.deleteOriginal ? nil : self.config.convertTempDirectory)
-            let audioConfig = AudioConversionConfig(container: self.config.convertAudioContainer, codec: self.config.convertAudioCodec, plexDir: self.config.plexDirectory, tempDir: self.config.deleteOriginal ? nil : self.config.convertTempDirectory)
 
             let convertGroup = AsyncGroup()
             var simultaneousConversions: Int = 0
-            for var m in media {
+            for var m in media.filter({ $0 is ConvertibleMedia }) {
                 convertGroup.utility {
                     simultaneousConversions += 1
                     self.statistics.measure(.convert) {
-                        do {
-                            if m is Video {
-                                m = try m.convert(videoConfig, self.config.log)
-                            } else if m is Audio {
-                                m = try m.convert(audioConfig, self.config.log)
-                            } else {
-                                m = try m.convert(nil, self.config.log)
+                        if m is Video {
+                            do {
+                                guard try Video.needsConversion(file: m.path, with: videoConfig, log: self.config.log) else { return }
+                            } catch {}
+                            log.info("We must convert video file '\(m.path.absolute)' for Plex Direct Play/Stream!")
+                            do {
+                                m = try (m as! ConvertibleMedia).convert(videoConfig, self.config.log)
+                            } catch {
+                                self.config.log.warning("Failed to convert media: \(m.path)")
+                                self.config.log.error(error)
+                                failedMedia.append((m as! ConvertibleMedia))
                             }
-                        } catch {
-                            self.config.log.warning("Failed to convert media: \(m.path)")
-                            self.config.log.error(error)
-                            failedMedia.append(m)
+                        } else if m is Audio {
+                            do {
+                                guard try Audio.needsConversion(file: m.path, with: audioConfig, log: self.config.log) else { return }
+                            } catch {}
+                            log.info("We must convert audio file '\(m.path.absolute)' for Plex Direct Play/Stream!")
+                            do {
+                                m = try (m as! ConvertibleMedia).convert(audioConfig, self.config.log)
+                            } catch {
+                                self.config.log.warning("Failed to convert media: \(m.path)")
+                                self.config.log.error(error)
+                                failedMedia.append((m as! ConvertibleMedia))
+                            }
                         }
                     }
                     simultaneousConversions -= 1
@@ -400,9 +413,16 @@ final class Monitr: DirectoryMonitorDelegate {
 
             // Create a queue of conversion jobs for later
             for m in media {
+                // If errors occur checking if we need to convert files here, ignore them and just add them to the conversion queue anyways
                 if m is Video {
+                    do {
+                        guard try Video.needsConversion(file: m.path, with: videoConfig, log: self.config.log) else { continue }
+                    } catch {}
                     self.config.conversionQueue!.push(m as! Video)
                 } else if m is Audio {
+                    do {
+                        guard try Audio.needsConversion(file: m.path, with: audioConfig, log: self.config.log) else { continue }
+                    } catch {}
                     self.config.conversionQueue!.push(m as! Audio)
                 }
             }

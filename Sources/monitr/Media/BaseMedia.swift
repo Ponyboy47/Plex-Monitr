@@ -44,6 +44,7 @@ class BaseMedia: Media {
         downpour = Downpour(fullPath: path)
     }
 
+    @discardableResult
     func move(to plexPath: Path, log: SwiftyBeaver.Type) throws -> Self {
         // If it's already in the final directory then go ahead and return
         guard !path.string.contains(finalDirectory.string) else {
@@ -75,17 +76,8 @@ class BaseMedia: Media {
         return self
     }
 
-    func convert(_ conversionConfig: ConversionConfig?, _ log: SwiftyBeaver.Type) throws -> Self {
-        throw MediaError.notImplemented
-    }
-
     class func isSupported(ext: String) -> Bool {
         print("isSupported(ext: String) is not implemented!")
-        return false
-    }
-
-    class func needsConversion(file: Path) -> Bool {
-        print("needsConversion(file: Path) is not implemented!")
         return false
     }
 
@@ -105,7 +97,7 @@ class BaseMedia: Media {
         }
     }
 
-    internal func execute(_ comArgs: String...) -> (Int32, Output) {
+    internal class func execute(_ comArgs: String...) -> (Int32, Output) {
         guard let command = comArgs.first else {
             return (-1, Output(nil, "Empty command/arguments string"))
         }
@@ -116,7 +108,7 @@ class BaseMedia: Media {
         return execute(command, args)
     }
 
-    internal func execute(_ command: String, _ arguments: [String]) -> (Int32, Output) {
+    internal class func execute(_ command: String, _ arguments: [String]) -> (Int32, Output) {
         let task = Process()
         if !command.ends(with: "which") {
             let (whichRC, whichOutput) = execute("which", [command])
@@ -188,5 +180,58 @@ class BaseMedia: Media {
 extension BaseMedia: Equatable {
     static func ==(lhs: BaseMedia, rhs: BaseMedia) -> Bool {
         return lhs.path == rhs.path || lhs.plexName == rhs.plexName && lhs.finalDirectory == rhs.finalDirectory
+    }
+}
+
+class BaseConvertibleMedia: BaseMedia, ConvertibleMedia {
+    var unconvertedFile: Path?
+
+    func convert(_ conversionConfig: ConversionConfig?, _ log: SwiftyBeaver.Type) throws -> Self {
+        throw MediaError.notImplemented
+    }
+
+    override func move(to plexPath: Path, log: SwiftyBeaver.Type) throws -> Self {
+        try super.move(to: plexPath, log: log)
+        if let _ = unconvertedFile {
+            return try moveUnconverted(to: plexPath, log: log)
+        }
+        return self
+    }
+
+    @discardableResult
+    func moveUnconverted(to plexPath: Path, log: SwiftyBeaver.Type) throws -> Self {
+        guard let unconvertedPath = unconvertedFile else { return self }
+        // If it's already in the final directory then go ahead and return
+        guard !unconvertedPath.string.contains(finalDirectory.string) else {
+            return self
+        }
+        log.verbose("Preparing to move file: \(unconvertedPath.string)")
+        // Get the location of the finalDirectory inside the plexPath
+        let mediaDirectory = plexPath + finalDirectory
+        // Create the directory
+        if !mediaDirectory.isDirectory {
+            log.verbose("Creating the media file's directory: \(mediaDirectory.string)")
+            try mediaDirectory.mkpath()
+        }
+
+        // Create a path to the location where the file will RIP
+        let finalRestingPlace = mediaDirectory + plexName + " - original." + (path.extension ?? "")
+
+        // Ensure the finalRestingPlace doesn't already exist
+        guard !finalRestingPlace.isFile else {
+            throw MediaError.alreadyExists(finalRestingPlace)
+        }
+
+        log.verbose("Moving media file '\(unconvertedPath.string)' => '\(finalRestingPlace.string)'")
+        // Move the file to the correct plex location
+        try unconvertedPath.move(finalRestingPlace)
+        log.verbose("Successfully moved file to '\(finalRestingPlace.string)'")
+        // Change the path now to match
+        unconvertedFile = finalRestingPlace
+        return self
+    }
+
+    class func needsConversion(file: Path, with config: ConversionConfig, log: SwiftyBeaver.Type) throws -> Bool {
+        throw MediaError.notImplemented
     }
 }

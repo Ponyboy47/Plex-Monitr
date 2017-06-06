@@ -131,13 +131,8 @@ final class Subtitle: BaseMedia {
         }
     }
 
-    override func move(to: Path, log: SwiftyBeaver.Type) throws -> Subtitle {
-        return try super.move(to: to, log: log) as! Subtitle
-    }
-
-    override func convert(_ conversionConfig: ConversionConfig?, _ log: SwiftyBeaver.Type) throws -> Subtitle {
-        // Subtitles don't need to be converted
-        return self
+    override func move(to plexPath: Path, log: SwiftyBeaver.Type) throws -> Subtitle {
+        return try super.move(to: plexPath, log: log) as! Subtitle
     }
 
     override class func isSupported(ext: String) -> Bool {
