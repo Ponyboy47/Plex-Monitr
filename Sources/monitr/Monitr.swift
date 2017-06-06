@@ -359,14 +359,14 @@ final class Monitr: DirectoryMonitorDelegate {
             let convertGroup = AsyncGroup()
             var simultaneousConversions: Int = 0
             for var m in media.filter({ $0 is ConvertibleMedia }) {
-                convertGroup.utility {
-                    self.statistics.measure(.convert) {
-                        if m is Video {
-                            do {
-                                guard try Video.needsConversion(file: m.path, with: videoConfig, log: self.config.log) else { return }
-                            } catch {}
-                            log.info("We must convert video file '\(m.path.absolute)' for Plex Direct Play/Stream!")
-                            simultaneousConversions += 1
+                if m is Video {
+                    do {
+                        guard try Video.needsConversion(file: m.path, with: videoConfig, log: self.config.log) else { continue }
+                    } catch {}
+                    log.info("We must convert video file '\(m.path.absolute)' for Plex Direct Play/Stream!")
+                    simultaneousConversions += 1
+                    convertGroup.utility {
+                        self.statistics.measure(.convert) {
                             do {
                                 m = try (m as! ConvertibleMedia).convert(videoConfig, self.config.log)
                             } catch {
@@ -374,13 +374,17 @@ final class Monitr: DirectoryMonitorDelegate {
                                 self.config.log.error(error)
                                 failedMedia.append((m as! ConvertibleMedia))
                             }
-                            simultaneousConversions -= 1
-                        } else if m is Audio {
-                            do {
-                                guard try Audio.needsConversion(file: m.path, with: audioConfig, log: self.config.log) else { return }
-                            } catch {}
-                            log.info("We must convert audio file '\(m.path.absolute)' for Plex Direct Play/Stream!")
-                            simultaneousConversions += 1
+                        }
+                        simultaneousConversions -= 1
+                    }
+                } else if m is Audio {
+                    do {
+                        guard try Audio.needsConversion(file: m.path, with: audioConfig, log: self.config.log) else { continue }
+                    } catch {}
+                    log.info("We must convert audio file '\(m.path.absolute)' for Plex Direct Play/Stream!")
+                    simultaneousConversions += 1
+                    convertGroup.utility {
+                        self.statistics.measure(.convert) {
                             do {
                                 m = try (m as! ConvertibleMedia).convert(audioConfig, self.config.log)
                             } catch {
@@ -388,8 +392,8 @@ final class Monitr: DirectoryMonitorDelegate {
                                 self.config.log.error(error)
                                 failedMedia.append((m as! ConvertibleMedia))
                             }
-                            simultaneousConversions -= 1
                         }
+                        simultaneousConversions -= 1
                     }
                 }
                 self.config.log.verbose("Currently running \(simultaneousConversions) simultaneous conversion jobs.")
