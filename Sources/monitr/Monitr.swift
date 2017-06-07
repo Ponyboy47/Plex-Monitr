@@ -356,57 +356,80 @@ final class Monitr: DirectoryMonitorDelegate {
         if self.config.convertImmediately {
             self.config.log.verbose("Converting media immediately")
 
+            self.config.log.info("Getting the array of media that needs to be converted.")
+            let mediaToConvert: [ConvertibleMedia] = media.filter {
+                guard $0 is ConvertibleMedia else { return false }
+                if $0 is Video {
+                    do {
+                        guard try Video.needsConversion(file: $0.path, with: videoConfig, log: self.config.log) else { return false }
+                    } catch {}
+                    log.info("We must convert video file '\($0.path.absolute)' for Plex Direct Play/Stream.")
+                    return true
+                } else if  $0 is Audio {
+                    do {
+                        guard try Audio.needsConversion(file: $0.path, with: audioConfig, log: self.config.log) else { return false }
+                    } catch {}
+                    log.info("We must convert audio file '\($0.path.absolute)' for Plex Direct Play/Stream.")
+                    return true
+                }
+                return false
+            } as! [ConvertibleMedia]
+
             let convertGroup = AsyncGroup()
             var simultaneousConversions: Int = 0
-            for var m in media.filter({ $0 is ConvertibleMedia }) {
+            for var m in mediaToConvert {
                 if m is Video {
-                    do {
-                        guard try Video.needsConversion(file: m.path, with: videoConfig, log: self.config.log) else { continue }
-                    } catch {}
-                    log.info("We must convert video file '\(m.path.absolute)' for Plex Direct Play/Stream!")
                     simultaneousConversions += 1
                     convertGroup.utility {
                         self.statistics.measure(.convert) {
                             do {
-                                m = try (m as! ConvertibleMedia).convert(videoConfig, self.config.log)
+                                m = try m.convert(videoConfig, self.config.log)
                             } catch {
                                 self.config.log.warning("Failed to convert video file: \(m.path)")
                                 self.config.log.error(error)
-                                failedMedia.append((m as! ConvertibleMedia))
+                                failedMedia.append(m)
                             }
                         }
                         simultaneousConversions -= 1
                     }
                 } else if m is Audio {
-                    do {
-                        guard try Audio.needsConversion(file: m.path, with: audioConfig, log: self.config.log) else { continue }
-                    } catch {}
-                    log.info("We must convert audio file '\(m.path.absolute)' for Plex Direct Play/Stream!")
                     simultaneousConversions += 1
                     convertGroup.utility {
                         self.statistics.measure(.convert) {
                             do {
-                                m = try (m as! ConvertibleMedia).convert(audioConfig, self.config.log)
+                                m = try m.convert(audioConfig, self.config.log)
                             } catch {
                                 self.config.log.warning("Failed to convert audio file: \(m.path)")
                                 self.config.log.error(error)
-                                failedMedia.append((m as! ConvertibleMedia))
+                                failedMedia.append(m)
                             }
                         }
                         simultaneousConversions -= 1
                     }
                 }
                 self.config.log.verbose("Currently running \(simultaneousConversions) simultaneous conversion jobs.")
-                // Blocks for as long as there are as many conversion jobs
-                // running as the configured conversion thread limit
-                //   NOTE: Does this by waiting for 60 seconds (or until all
-                //   threads have completed) and then rechecking the number of
-                //   simultaneous conversions (since the number should
-                //   increment when a thread starts and decrement when it
-                //   finishes)
-                while simultaneousConversions >= self.config.convertThreads {
-                    self.config.log.info("Maximum number conversion threads (\(self.config.convertThreads)) reached. Waiting 60 seconds and checking to see if any have finished.")
-                    convertGroup.wait(seconds: 60)
+
+                // Check to see if we've started all the conversion jobs now
+                var isLast = false
+
+                // If the current media object is the same as the last one, then we can compare them. If they're different then we know they're not a match anyways
+                if m is Video && mediaToConvert.last is Video {
+                    isLast = (m as! Video) == (mediaToConvert.last as! Video)
+                } else if m is Audio && mediaToConvert.last is Audio {
+                    isLast = (m as! Audio) == (mediaToConvert.last as! Audio)
+                }
+                if !isLast {
+                    // Blocks for as long as there are as many conversion jobs
+                    // running as the configured conversion thread limit
+                    //   NOTE: Does this by waiting for 60 seconds (or until all
+                    //   threads have completed) and then rechecking the number of
+                    //   simultaneous conversions (since the number should
+                    //   increment when a thread starts and decrement when it
+                    //   finishes)
+                    while simultaneousConversions >= self.config.convertThreads {
+                        self.config.log.info("Maximum number conversion threads (\(self.config.convertThreads)) reached. Waiting 60 seconds and checking to see if any have finished.")
+                        convertGroup.wait(seconds: 60)
+                    }
                 }
             }
             // Now that we've started all the conversion processes, wait indefinitely for them all to finish
