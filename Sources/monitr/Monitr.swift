@@ -370,7 +370,7 @@ final class Monitr: DirectoryMonitorDelegate {
                             do {
                                 m = try (m as! ConvertibleMedia).convert(videoConfig, self.config.log)
                             } catch {
-                                self.config.log.warning("Failed to convert media: \(m.path)")
+                                self.config.log.warning("Failed to convert video file: \(m.path)")
                                 self.config.log.error(error)
                                 failedMedia.append((m as! ConvertibleMedia))
                             }
@@ -388,7 +388,7 @@ final class Monitr: DirectoryMonitorDelegate {
                             do {
                                 m = try (m as! ConvertibleMedia).convert(audioConfig, self.config.log)
                             } catch {
-                                self.config.log.warning("Failed to convert media: \(m.path)")
+                                self.config.log.warning("Failed to convert audio file: \(m.path)")
                                 self.config.log.error(error)
                                 failedMedia.append((m as! ConvertibleMedia))
                             }
