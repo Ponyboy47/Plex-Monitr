@@ -66,9 +66,6 @@ struct Config {
     /// The directory to place converted media before moving it to Plex
     var convertTempDirectory: Path = "/tmp"
 
-    /// The queue of conversion jobs
-    var conversionQueue: ConversionQueue?
-
     var logFile: Path?
     var logLevel: Int = 0
     var log: SwiftyBeaver.Type
@@ -151,11 +148,6 @@ struct Config {
             }
             guard let _ = try? Cron.parseExpression(self.convertCronEnd) else {
                 throw ConfigError.invalidCronString(self.convertCronEnd)
-            }
-
-            let conversionQueueFile = self.configFile.parent + ConversionQueue.filename
-            if conversionQueueFile.exists && conversionQueueFile.isFile {
-                self.conversionQueue = try ConversionQueue(conversionQueueFile)
             }
         }
     }
@@ -279,11 +271,6 @@ extension Config: JSONInitializable {
             }
             guard let _ = try? Cron.parseExpression(self.convertCronEnd) else {
                 throw ConfigError.invalidCronString(self.convertCronEnd)
-            }
-
-            let conversionQueueFile = self.configFile.parent + ConversionQueue.filename
-            if conversionQueueFile.exists && conversionQueueFile.isFile {
-                self.conversionQueue = try ConversionQueue(conversionQueueFile)
             }
         }
     }

@@ -147,10 +147,8 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
     }
 
     required init(json: JSON) throws {
-        let configFile = Path(try json.get("configPath"))
-        let configString: String = try configFile.read()
-        config = try Config(configString)
-        configPath = config.configFile
+        configPath = Path(try json.get("configPath"))
+        config = try Config(configPath.read())
         // Ignore errors here, if the cron string were invalid then the config
         // object would have already thrown an error
         cronStart = try! CronJob(pattern: config.convertCronStart) {}
@@ -186,14 +184,8 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
         return try self.encoded().serialized()
     }
 
-    public func save(to: Path) throws {
-        var file: Path
-        if to.isDirectory {
-            file = to
-        } else {
-            file = to.parent
-        }
-        file += ConversionQueue.filename
+    public func save() throws {
+        let file: Path = configPath.parent + ConversionQueue.filename
         try file.write(self.serialized(), force: true)
     }
 }

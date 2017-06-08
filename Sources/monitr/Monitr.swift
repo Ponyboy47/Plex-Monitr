@@ -38,6 +38,9 @@ final class Monitr: DirectoryMonitorDelegate {
     /// The statistics object to track useage data for the monitor
     private var statistics: Statistic = Statistic()
 
+    /// The queue of conversion jobs
+    var conversionQueue: ConversionQueue?
+
     /// The timer that kicks off the conversionQueue
     private var conversionJob: CronJob?
 
@@ -61,6 +64,11 @@ final class Monitr: DirectoryMonitorDelegate {
         let statFile = config.configFile.parent + Statistic.filename
         if statFile.exists && statFile.isFile {
             self.statistics = try Statistic(statFile)
+        }
+
+        let conversionQueueFile = config.configFile.parent + ConversionQueue.filename
+        if conversionQueueFile.exists && conversionQueueFile.isFile {
+            self.conversionQueue = try ConversionQueue(conversionQueueFile)
         }
 
         if self.config.convert {
@@ -244,6 +252,7 @@ final class Monitr: DirectoryMonitorDelegate {
     public func shutdown(now: Bool = false) {
         self.config.log.info("Shutting down monitr.")
         self.config.stopMonitoring()
+        try? self.conversionQueue?.save()
         // Go through conversions and halt them/save them
         if now {
             // Kill any other stuff going on
@@ -376,7 +385,7 @@ final class Monitr: DirectoryMonitorDelegate {
 
             let convertGroup = AsyncGroup()
             var simultaneousConversions: Int = 0
-            for var m in mediaToConvert {
+            for m in mediaToConvert {
                 if m is Video {
                     simultaneousConversions += 1
                     convertGroup.utility {
@@ -434,16 +443,16 @@ final class Monitr: DirectoryMonitorDelegate {
             // Now that we've started all the conversion processes, wait indefinitely for them all to finish
             convertGroup.wait()
         } else {
-            if self.config.conversionQueue == nil {
+            if self.conversionQueue == nil {
                 self.config.log.info("Creating a conversion queue")
-                self.config.conversionQueue = ConversionQueue(self.config, statistics: self.statistics)
+                self.conversionQueue = ConversionQueue(self.config, statistics: self.statistics)
             } else {
                 self.config.log.info("Using existing conversion queue")
             }
 
             // Create a queue of conversion jobs for later
             for m in mediaToConvert {
-                self.config.conversionQueue!.push(m)
+                self.conversionQueue!.push(m)
             }
         }
 
