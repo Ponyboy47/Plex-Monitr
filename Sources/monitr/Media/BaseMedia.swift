@@ -16,7 +16,6 @@ import JSON
 
 class BaseMedia: Media {
     var path: Path
-    var originalPath: Path?
     var downpour: Downpour
     var plexName: String {
         return downpour.title.wordCased
@@ -44,12 +43,9 @@ class BaseMedia: Media {
         downpour = Downpour(fullPath: path)
     }
 
-    @discardableResult
-    func move(to plexPath: Path, log: SwiftyBeaver.Type) throws -> Self {
+    func move(to plexPath: Path, log: SwiftyBeaver.Type) throws {
         // If it's already in the final directory then go ahead and return
-        guard !path.string.contains(finalDirectory.string) else {
-            return self
-        }
+        guard !path.string.contains(finalDirectory.string) else { return }
         log.verbose("Preparing to move file: \(path.string)")
         // Get the location of the finalDirectory inside the plexPath
         let mediaDirectory = plexPath + finalDirectory
@@ -73,7 +69,6 @@ class BaseMedia: Media {
         log.verbose("Successfully moved file to '\(finalRestingPlace.string)'")
         // Change the path now to match
         path = finalRestingPlace
-        return self
     }
 
     class func isSupported(ext: String) -> Bool {
@@ -177,34 +172,25 @@ class BaseMedia: Media {
     }
 }
 
-extension BaseMedia: Equatable {
-    static func ==(lhs: BaseMedia, rhs: BaseMedia) -> Bool {
-        return lhs.path == rhs.path || lhs.plexName == rhs.plexName && lhs.finalDirectory == rhs.finalDirectory
-    }
-}
-
 class BaseConvertibleMedia: BaseMedia, ConvertibleMedia {
     var unconvertedFile: Path?
 
-    func convert(_ conversionConfig: ConversionConfig?, _ log: SwiftyBeaver.Type) throws -> Self {
+    func convert(_ conversionConfig: ConversionConfig?, _ log: SwiftyBeaver.Type) throws {
         throw MediaError.notImplemented
     }
 
-    override func move(to plexPath: Path, log: SwiftyBeaver.Type) throws -> Self {
+    override func move(to plexPath: Path, log: SwiftyBeaver.Type) throws {
         try super.move(to: plexPath, log: log)
         if let _ = unconvertedFile {
-            return try moveUnconverted(to: plexPath, log: log)
+            try moveUnconverted(to: plexPath, log: log)
         }
-        return self
     }
 
-    @discardableResult
-    func moveUnconverted(to plexPath: Path, log: SwiftyBeaver.Type) throws -> Self {
-        guard let unconvertedPath = unconvertedFile else { return self }
+    func moveUnconverted(to plexPath: Path, log: SwiftyBeaver.Type) throws {
+        guard let unconvertedPath = unconvertedFile else { return }
         // If it's already in the final directory then go ahead and return
-        guard !unconvertedPath.string.contains(finalDirectory.string) else {
-            return self
-        }
+        guard !unconvertedPath.string.contains(finalDirectory.string) else { return }
+
         log.verbose("Preparing to move file: \(unconvertedPath.string)")
         // Get the location of the finalDirectory inside the plexPath
         let mediaDirectory = plexPath + finalDirectory
@@ -228,7 +214,6 @@ class BaseConvertibleMedia: BaseMedia, ConvertibleMedia {
         log.verbose("Successfully moved file to '\(finalRestingPlace.string)'")
         // Change the path now to match
         unconvertedFile = finalRestingPlace
-        return self
     }
 
     class func needsConversion(file: Path, with config: ConversionConfig, log: SwiftyBeaver.Type) throws -> Bool {

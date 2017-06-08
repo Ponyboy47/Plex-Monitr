@@ -57,25 +57,25 @@ final class Audio: BaseConvertibleMedia {
         try super.init(json: json)
     }
 
-    override func move(to plexPath: Path, log: SwiftyBeaver.Type) throws -> Audio {
-        return try super.move(to: plexPath, log: log) as! Audio
+    override func move(to plexPath: Path, log: SwiftyBeaver.Type) throws {
+        try super.move(to: plexPath, log: log)
     }
 
-    override func moveUnconverted(to plexPath: Path, log: SwiftyBeaver.Type) throws -> Audio {
-        return try super.moveUnconverted(to: plexPath, log: log) as! Audio
+    override func moveUnconverted(to plexPath: Path, log: SwiftyBeaver.Type) throws {
+        try super.moveUnconverted(to: plexPath, log: log)
     }
 
-    override func convert(_ conversionConfig: ConversionConfig?, _ log: SwiftyBeaver.Type) throws -> Audio {
+    override func convert(_ conversionConfig: ConversionConfig?, _ log: SwiftyBeaver.Type) throws {
         // Use the Handbrake CLI to convert to Plex DirectPlay capable audio (if necessary)
         guard let config = conversionConfig as? AudioConversionConfig else {
             throw MediaError.AudioError.invalidConfig
         }
-        return try convert(config, log)
+        try convert(config, log)
     }
 
-    func convert(_ conversionConfig: AudioConversionConfig, _ log: SwiftyBeaver.Type) throws -> Audio {
+    func convert(_ conversionConfig: AudioConversionConfig, _ log: SwiftyBeaver.Type) throws {
         // Use the Handbrake CLI to convert to Plex DirectPlay capable audio (if necessary)
-        return self
+        return
     }
 
     override class func isSupported(ext: String) -> Bool {

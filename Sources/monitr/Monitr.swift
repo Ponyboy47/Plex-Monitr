@@ -287,27 +287,26 @@ final class Monitr: DirectoryMonitorDelegate {
      - Returns: A Media object, or nil if the file is not supported
     */
     private func getMedia(with file: Path) -> Media? {
-        var m: Media?
 		let ext = file.extension ?? ""
         do {
             if Video.isSupported(ext: ext) {
                 do {
-                    m = try Video(file)
+                    return try Video(file)
                 } catch MediaError.sampleMedia {
-                    m = try Ignore(file)
+                    return try Ignore(file)
                 }
             } else if Audio.isSupported(ext: ext) {
-                m = try Audio(file)
+                return try Audio(file)
             } else if Subtitle.isSupported(ext: ext) {
-                m = try Subtitle(file)
+                return try Subtitle(file)
             } else if Ignore.isSupported(ext: ext) || file.string.lowercased().ends(with: ".ds_store") {
-                m = try Ignore(file)
+                return try Ignore(file)
             }
         } catch {
             self.config.log.warning("Error occured trying to create media object from '\(file)'.")
             self.config.log.error(error)
         }
-        return m
+        return nil
     }
 
     /**
@@ -320,12 +319,12 @@ final class Monitr: DirectoryMonitorDelegate {
     func moveMedia(_ media: inout [Media]) -> [Media]? {
         var failedMedia: [Media] = []
 
-        for var m in media {
+        for m in media {
             // Starts a new utility thread to move the file
             Sync.utility {
                 self.statistics.measure(.move) {
                     do {
-                        m = try m.move(to: self.config.plexDirectory, log: self.config.log)
+                        try m.move(to: self.config.plexDirectory, log: self.config.log)
                     } catch {
                         self.config.log.warning("Failed to move media: \(m.path)")
                         self.config.log.error(error)
@@ -353,27 +352,27 @@ final class Monitr: DirectoryMonitorDelegate {
         let videoConfig = VideoConversionConfig(container: self.config.convertVideoContainer, videoCodec: self.config.convertVideoCodec, audioCodec: self.config.convertAudioCodec, subtitleScan: self.config.convertVideoSubtitleScan, mainLanguage: self.config.convertLanguage, maxFramerate: self.config.convertVideoMaxFramerate, plexDir: self.config.plexDirectory, tempDir: self.config.deleteOriginal ? nil : self.config.convertTempDirectory)
         let audioConfig = AudioConversionConfig(container: self.config.convertAudioContainer, codec: self.config.convertAudioCodec, plexDir: self.config.plexDirectory, tempDir: self.config.deleteOriginal ? nil : self.config.convertTempDirectory)
 
+        self.config.log.info("Getting the array of media that needs to be converted.")
+        let mediaToConvert: [ConvertibleMedia] = media.filter {
+            guard $0 is ConvertibleMedia else { return false }
+            if $0 is Video {
+                do {
+                    guard try Video.needsConversion(file: $0.path, with: videoConfig, log: self.config.log) else { return false }
+                } catch {}
+                log.info("We must convert video file '\($0.path.absolute)' for Plex Direct Play/Stream.")
+                return true
+            } else if  $0 is Audio {
+                do {
+                    guard try Audio.needsConversion(file: $0.path, with: audioConfig, log: self.config.log) else { return false }
+                } catch {}
+                log.info("We must convert audio file '\($0.path.absolute)' for Plex Direct Play/Stream.")
+                return true
+            }
+            return false
+            } as! [ConvertibleMedia]
+
         if self.config.convertImmediately {
             self.config.log.verbose("Converting media immediately")
-
-            self.config.log.info("Getting the array of media that needs to be converted.")
-            let mediaToConvert: [ConvertibleMedia] = media.filter {
-                guard $0 is ConvertibleMedia else { return false }
-                if $0 is Video {
-                    do {
-                        guard try Video.needsConversion(file: $0.path, with: videoConfig, log: self.config.log) else { return false }
-                    } catch {}
-                    log.info("We must convert video file '\($0.path.absolute)' for Plex Direct Play/Stream.")
-                    return true
-                } else if  $0 is Audio {
-                    do {
-                        guard try Audio.needsConversion(file: $0.path, with: audioConfig, log: self.config.log) else { return false }
-                    } catch {}
-                    log.info("We must convert audio file '\($0.path.absolute)' for Plex Direct Play/Stream.")
-                    return true
-                }
-                return false
-            } as! [ConvertibleMedia]
 
             let convertGroup = AsyncGroup()
             var simultaneousConversions: Int = 0
@@ -383,7 +382,7 @@ final class Monitr: DirectoryMonitorDelegate {
                     convertGroup.utility {
                         self.statistics.measure(.convert) {
                             do {
-                                m = try m.convert(videoConfig, self.config.log)
+                                try m.convert(videoConfig, self.config.log)
                             } catch {
                                 self.config.log.warning("Failed to convert video file: \(m.path)")
                                 self.config.log.error(error)
@@ -397,7 +396,7 @@ final class Monitr: DirectoryMonitorDelegate {
                     convertGroup.utility {
                         self.statistics.measure(.convert) {
                             do {
-                                m = try m.convert(audioConfig, self.config.log)
+                                try m.convert(audioConfig, self.config.log)
                             } catch {
                                 self.config.log.warning("Failed to convert audio file: \(m.path)")
                                 self.config.log.error(error)
@@ -414,9 +413,9 @@ final class Monitr: DirectoryMonitorDelegate {
 
                 // If the current media object is the same as the last one, then we can compare them. If they're different then we know they're not a match anyways
                 if m is Video && mediaToConvert.last is Video {
-                    isLast = (m as! Video) == (mediaToConvert.last as! Video)
+                    isLast = m.path == mediaToConvert.last!.path
                 } else if m is Audio && mediaToConvert.last is Audio {
-                    isLast = (m as! Audio) == (mediaToConvert.last as! Audio)
+                    isLast = m.path == mediaToConvert.last!.path
                 }
                 if !isLast {
                     // Blocks for as long as there are as many conversion jobs
@@ -443,19 +442,8 @@ final class Monitr: DirectoryMonitorDelegate {
             }
 
             // Create a queue of conversion jobs for later
-            for m in media {
-                // If errors occur checking if we need to convert files here, ignore them and just add them to the conversion queue anyways
-                if m is Video {
-                    do {
-                        guard try Video.needsConversion(file: m.path, with: videoConfig, log: self.config.log) else { continue }
-                    } catch {}
-                    self.config.conversionQueue!.push(m as! Video)
-                } else if m is Audio {
-                    do {
-                        guard try Audio.needsConversion(file: m.path, with: audioConfig, log: self.config.log) else { continue }
-                    } catch {}
-                    self.config.conversionQueue!.push(m as! Audio)
-                }
+            for m in mediaToConvert {
+                self.config.conversionQueue!.push(m)
             }
         }
 

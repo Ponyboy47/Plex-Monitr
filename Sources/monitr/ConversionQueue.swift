@@ -24,8 +24,8 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
     fileprivate var videoConversionConfig: VideoConversionConfig
     fileprivate var audioConversionConfig: AudioConversionConfig
 
-    fileprivate var jobs: [BaseConvertibleMedia] = []
-    fileprivate var activeJobs: [BaseConvertibleMedia] = []
+    fileprivate var jobs: [ConvertibleMedia] = []
+    fileprivate var activeJobs: [ConvertibleMedia] = []
 
     var active: Int {
         return activeJobs.count
@@ -53,31 +53,31 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
         cronStart = try! CronJob(pattern: config.convertCronStart) {
             self.start()
         }
-        log.info("Set up conversion cron job! It will begin at \(cronStart.pattern.next(Date()))")
+        log.info("Set up conversion cron job! It will begin at \(cronStart.pattern.next(Date())!)")
     }
 
     /// Adds a new Media object to the list of media items to convert
-    func push(_ job: BaseConvertibleMedia) {
-        if !jobs.contains(job) {
+    func push(_ job: ConvertibleMedia) {
+        if !jobs.contains(where: { $0.path == job.path }) {
             jobs.append(job)
         }
     }
 
     @discardableResult
-    fileprivate func pop() -> BaseConvertibleMedia? {
+    fileprivate func pop() -> ConvertibleMedia? {
         self.activeJobs.append(self.jobs.removeFirst())
         return self.activeJobs.last
     }
 
-    fileprivate func finish(_ job: BaseConvertibleMedia) throws {
-        guard let index = self.activeJobs.index(of: job) else {
+    fileprivate func finish(_ job: ConvertibleMedia) throws {
+        guard let index = self.activeJobs.index(where: { $0.path == job.path }) else {
             throw ConversionError.noJobIndex
         }
         self.activeJobs.remove(at: index)
     }
 
-    fileprivate func requeue(_ job: BaseConvertibleMedia) {
-        let index = self.activeJobs.index(of: job)!
+    fileprivate func requeue(_ job: ConvertibleMedia) {
+        let index = self.activeJobs.index(where: { $0.path == job.path })!
         self.jobs.append(self.activeJobs.remove(at: index))
     }
 
@@ -85,22 +85,22 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
         guard self.active < self.maxThreads else {
             throw ConversionError.maxThreadsReached
         }
-        guard var next = self.pop() else {
+        guard let next = self.pop() else {
             throw ConversionError.noJobsLeft
         }
         group.utility {
             self.statistics.measure(.convert) {
                 do {
                     if next is Video {
-                        next = try (next as! Video).convert(self.videoConversionConfig, self.log)
+                        try next.convert(self.videoConversionConfig, self.log)
                     } else if next is Audio {
-                        next = try (next as! Audio).convert(self.audioConversionConfig, self.log)
+                        try next.convert(self.audioConversionConfig, self.log)
                     } else {
                         // We shouldn't be able to convert anything else, and we
                         // shouldn't have even put anything else in the queue.
                         // Calling convert on a BaseMedia object should throw an
                         // Unimplemented Error
-                        next = try next.convert(nil, self.log)
+                        try next.convert(nil, self.log)
                     }
                     try self.finish(next)
                 } catch MediaError.notImplemented {
@@ -168,25 +168,17 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
         cronStart = try! CronJob(pattern: config.convertCronStart) {
             self.start()
         }
-        log.info("Set up conversion cron job! It will begin at \(cronStart.pattern.next(Date()))")
+        log.info("Set up conversion cron job! It will begin at \(cronStart.pattern.next(Date())!)")
     }
 
-    private static func setupJobs(_ jobs: [BaseConvertibleMedia]) -> [BaseConvertibleMedia] {
-        var conversions: [BaseConvertibleMedia] = []
-        for job in jobs {
-            if job is Video {
-                conversions.append((job as! Video))
-            } else if job is Audio {
-                conversions.append((job as! Audio))
-            }
-        }
-        return conversions
+    private static func setupJobs(_ jobs: [BaseConvertibleMedia]) -> [ConvertibleMedia] {
+        return jobs
     }
 
     public func encoded() -> JSON {
         return [
             "configPath": configPath.string,
-            "jobs": jobs.encoded()
+            "jobs": (jobs as! BaseConvertibleMedia).encoded()
         ]
     }
 

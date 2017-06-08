@@ -131,8 +131,8 @@ final class Subtitle: BaseMedia {
         }
     }
 
-    override func move(to plexPath: Path, log: SwiftyBeaver.Type) throws -> Subtitle {
-        return try super.move(to: plexPath, log: log) as! Subtitle
+    override func move(to plexPath: Path, log: SwiftyBeaver.Type) throws {
+        try super.move(to: plexPath, log: log)
     }
 
     override class func isSupported(ext: String) -> Bool {
