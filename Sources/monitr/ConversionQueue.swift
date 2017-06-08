@@ -17,7 +17,6 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
     fileprivate var cronStart: CronJob
     fileprivate var cronEnd: CronJob
     fileprivate var statistics: Statistic
-    fileprivate var conversionGroup: AsyncGroup = AsyncGroup()
     fileprivate var maxThreads: Int
     fileprivate var deleteOriginal: Bool
     fileprivate var log: SwiftyBeaver.Type
@@ -27,8 +26,14 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
     fileprivate var jobs: [ConvertibleMedia] = []
     fileprivate var activeJobs: [ConvertibleMedia] = []
 
+    var conversionGroup: AsyncGroup = AsyncGroup()
+    var stop: Bool = false
+
     var active: Int {
         return activeJobs.count
+    }
+    var waiting: Int {
+        return jobs.count
     }
 
     init(_ config: Config, statistics stats: Statistic? = nil) {
@@ -81,14 +86,14 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
         self.jobs.append(self.activeJobs.remove(at: index))
     }
 
-    func startNextConversion(with group: inout AsyncGroup) throws {
+    func startNextConversion() throws {
         guard self.active < self.maxThreads else {
             throw ConversionError.maxThreadsReached
         }
         guard var next = self.pop() else {
             throw ConversionError.noJobsLeft
         }
-        group.utility {
+        conversionGroup.utility {
             self.statistics.measure(.convert) {
                 do {
                     if next is Video {
@@ -119,10 +124,9 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
     func start() {
         var now = Date()
         let end = self.cronEnd.pattern.next(now)?.date
-        var convertGroup = AsyncGroup()
-        while now.date! < end! {
+        while now.date! < end! && !stop {
             do {
-                try self.startNextConversion(with: &convertGroup)
+                try self.startNextConversion()
             } catch ConversionError.maxThreadsReached {
                 self.log.info("Reached the concurrent conversion thread limit. Waiting for a thread to be freed")
             } catch ConversionError.noJobsLeft {
@@ -132,10 +136,11 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
                 self.log.error("Uncaught expection occurred while converting media => '\(error)'")
             }
             while active == maxThreads {
-                convertGroup.wait(seconds: 60)
+                conversionGroup.wait(seconds: 60)
             }
             now = Date()
         }
+        conversionGroup.wait()
     }
 
     convenience init(_ path: Path) throws {

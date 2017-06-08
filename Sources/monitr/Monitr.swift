@@ -252,10 +252,22 @@ final class Monitr: DirectoryMonitorDelegate {
     public func shutdown(now: Bool = false) {
         self.config.log.info("Shutting down monitr.")
         self.config.stopMonitoring()
-        try? self.conversionQueue?.save()
+        if (self.conversionQueue?.waiting ?? 0) > 0 {
+            self.config.log.info("Saving conversion queue")
+            try? self.conversionQueue?.save()
+        }
         // Go through conversions and halt them/save them
         if now {
             // Kill any other stuff going on
+            if (self.conversionQueue?.active ?? 0) > 0 {
+                // TODO: Kill and cleanup current conversion jobs
+            }
+        } else {
+            if (self.conversionQueue?.active ?? 0) > 0 {
+                self.conversionQueue?.stop = true
+                self.config.log.info("Waiting for current conversion jobs to finish before shutting down")
+                self.conversionQueue?.conversionGroup.wait()
+            }
         }
     }
 
@@ -362,7 +374,7 @@ final class Monitr: DirectoryMonitorDelegate {
         let audioConfig = AudioConversionConfig(container: self.config.convertAudioContainer, codec: self.config.convertAudioCodec, plexDir: self.config.plexDirectory, tempDir: self.config.deleteOriginal ? nil : self.config.convertTempDirectory)
 
         self.config.log.info("Getting the array of media that needs to be converted.")
-        var mediaToConvert: [ConvertibleMedia] = media.filter {
+        let mediaToConvert: [ConvertibleMedia] = media.filter {
             guard $0 is ConvertibleMedia else { return false }
             if $0 is Video {
                 do {
