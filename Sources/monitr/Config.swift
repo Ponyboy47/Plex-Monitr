@@ -42,9 +42,9 @@ struct Config {
     /// Whether media should be converted immediately, or during a configurable time when the server is less likely to be busy
     var convertImmediately: Bool = true
     /// The Cron string describing when scheduled media conversions may begin
-    var convertCronStart: String = "0 0 0 * * * *"
+    var convertCronStart: String = "0 0 * * *"
     /// The Cron string describing when scheduled media conversions should be finished
-    var convertCronEnd: String = "0 0 8 * * * *"
+    var convertCronEnd: String = "0 8 * * *"
     /// The number of simultaneous threads to convert media on
     var convertThreads: Int = 2
     /// Whether the original media file should be deleted after a successful conversion

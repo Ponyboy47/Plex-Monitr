@@ -179,9 +179,19 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
     }
 
     public func encoded() -> JSON {
+        var js: [BaseConvertibleMedia] = []
+        for j in jobs {
+            if j is Video {
+                js.append(j as! Video)
+            } else if j is Audio {
+                js.append(j as! Audio)
+            } else {
+                js.append(j as! BaseConvertibleMedia)
+            }
+        }
         return [
             "configPath": configPath.string,
-            "jobs": (jobs as! BaseConvertibleMedia).encoded()
+            "jobs": js.encoded()
         ]
     }
 

@@ -129,16 +129,16 @@ When true, files are converted before they are moved to their corresponding Plex
 #### Set when scheduled media file conversion tasks should begin:
 `-a` or `--convert-cron-start`
 ```bash
-.build/debug/monitr -a "0 0 0 * * * * *"
+.build/debug/monitr -a "0 0 * * *"
 ```
-default is "0 0 0 * * * * *" (midnight every day)
+default is "0 0 * * *" (midnight every day)
 
 #### Set when scheduled media file conversion tasks should be finished:
 `-z` `--convert-cron-end`
 ```bash
-.build/debug/monitr -z "0 0 8 * * * * *"
+.build/debug/monitr -z "0 8 * * *"
 ```
-default is "0 0 8 * * * * *" (8am every day)
+default is "0 8 * * *" (8am every day)
 
 #### Set the number of simultaneous conversion threads we can have running at one time:
 `-r` or `--convert-threads`
