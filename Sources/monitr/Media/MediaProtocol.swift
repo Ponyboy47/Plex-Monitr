@@ -55,19 +55,22 @@ protocol Media: class, JSONInitializable, JSONRepresentable {
 
     /// Initializer
     init(_ path: Path) throws
-    /// Moves the media file to the finalDirectory
-    func move(to plexPath: Path, log: SwiftyBeaver.Type) throws
     /// Returns whether or not the Media type supports the given format
     static func isSupported(ext: String) -> Bool
 }
 
-protocol ConvertibleMedia: Media {
+protocol MovableMedia: Media {
+    /// Moves the media file to the finalDirectory
+    func move(to plexPath: Path, log: SwiftyBeaver.Type) throws -> Self
+}
+
+protocol ConvertibleMedia: MovableMedia {
     /// The path to the original media file (before it was converted). Only set when the original file is not to be deleted
     var unconvertedFile: Path? { get set }
     /// Moves the original media file to the finalDirectory
-    func moveUnconverted(to plexPath: Path, log: SwiftyBeaver.Type) throws
+    func moveUnconverted(to plexPath: Path, log: SwiftyBeaver.Type) throws -> Self
     /// Converts the media file to a Plex DirectPlay supported format
-    func convert(_ conversionConfig: ConversionConfig?, _ log: SwiftyBeaver.Type) throws
+    func convert(_ conversionConfig: ConversionConfig?, _ log: SwiftyBeaver.Type) throws -> Self
     /// Returns whether or not the Media type needs to be converted for Plex
     ///   DirectPlay capabilities to be enabled
     static func needsConversion(file: Path, with config: ConversionConfig, log: SwiftyBeaver.Type) throws -> Bool

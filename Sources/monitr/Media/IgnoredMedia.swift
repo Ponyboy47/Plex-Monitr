@@ -52,10 +52,11 @@ final class Ignore: BaseMedia {
         try super.init(json: json)
     }
 
-    override func move(to plexPath: Path, log: SwiftyBeaver.Type) throws {
+    override func move(to plexPath: Path, log: SwiftyBeaver.Type) throws -> Ignore {
         log.verbose("Deleting ignorable file: \(path.string)")
         try path.delete()
         path = ""
+        return self
     }
 
     override class func isSupported(ext: String) -> Bool {

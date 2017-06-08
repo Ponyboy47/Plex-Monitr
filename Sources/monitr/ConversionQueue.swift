@@ -57,7 +57,7 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
     }
 
     /// Adds a new Media object to the list of media items to convert
-    func push(_ job: ConvertibleMedia) {
+    func push(_ job: inout ConvertibleMedia) {
         if !jobs.contains(where: { $0.path == job.path }) {
             jobs.append(job)
         }
@@ -85,22 +85,22 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
         guard self.active < self.maxThreads else {
             throw ConversionError.maxThreadsReached
         }
-        guard let next = self.pop() else {
+        guard var next = self.pop() else {
             throw ConversionError.noJobsLeft
         }
         group.utility {
             self.statistics.measure(.convert) {
                 do {
                     if next is Video {
-                        try next.convert(self.videoConversionConfig, self.log)
+                        next = try next.convert(self.videoConversionConfig, self.log)
                     } else if next is Audio {
-                        try next.convert(self.audioConversionConfig, self.log)
+                        next = try next.convert(self.audioConversionConfig, self.log)
                     } else {
                         // We shouldn't be able to convert anything else, and we
                         // shouldn't have even put anything else in the queue.
                         // Calling convert on a BaseMedia object should throw an
                         // Unimplemented Error
-                        try next.convert(nil, self.log)
+                        next = try next.convert(nil, self.log)
                     }
                     try self.finish(next)
                 } catch MediaError.notImplemented {

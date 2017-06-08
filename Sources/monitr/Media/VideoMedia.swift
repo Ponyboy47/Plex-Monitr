@@ -117,22 +117,22 @@ final class Video: BaseConvertibleMedia {
         }
     }
 
-    override func move(to plexPath: Path, log: SwiftyBeaver.Type) throws {
-        try super.move(to: plexPath, log: log)
+    override func move(to plexPath: Path, log: SwiftyBeaver.Type) throws -> Video {
+        return try super.move(to: plexPath, log: log) as! Video
     }
 
-    override func moveUnconverted(to plexPath: Path, log: SwiftyBeaver.Type) throws {
-        try super.moveUnconverted(to: plexPath, log: log)
+    override func moveUnconverted(to plexPath: Path, log: SwiftyBeaver.Type) throws -> Video {
+        return try super.moveUnconverted(to: plexPath, log: log) as! Video
     }
 
-    override func convert(_ conversionConfig: ConversionConfig?, _ log: SwiftyBeaver.Type) throws {
+    override func convert(_ conversionConfig: ConversionConfig?, _ log: SwiftyBeaver.Type) throws -> Video {
         guard let config = conversionConfig as? VideoConversionConfig else {
             throw MediaError.VideoError.invalidConfig
         }
-        try convert(config, log)
+        return try convert(config, log)
     }
 
-    func convert(_ conversionConfig: VideoConversionConfig, _ log: SwiftyBeaver.Type) throws {
+    func convert(_ conversionConfig: VideoConversionConfig, _ log: SwiftyBeaver.Type) throws -> Video {
         // Build the arguments for the transcode_video command
         var args: [String] = ["--target", "big", "--quick", "--preset", "fast", "--no-log"]
 
@@ -207,8 +207,10 @@ final class Video: BaseConvertibleMedia {
 
         // If the converted file location is not already in the plexDirectory
         if !path.string.contains(finalDirectory.string) {
-            try move(to: conversionConfig.plexDir, log: log)
+            return try move(to: conversionConfig.plexDir, log: log)
         }
+
+        return self
     }
 
     override class func isSupported(ext: String) -> Bool {

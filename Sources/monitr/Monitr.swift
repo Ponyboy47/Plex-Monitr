@@ -328,12 +328,12 @@ final class Monitr: DirectoryMonitorDelegate {
     func moveMedia(_ media: inout [Media]) -> [Media]? {
         var failedMedia: [Media] = []
 
-        for m in media {
+        for var m in media where m is MovableMedia {
             // Starts a new utility thread to move the file
             Sync.utility {
                 self.statistics.measure(.move) {
                     do {
-                        try m.move(to: self.config.plexDirectory, log: self.config.log)
+                        m = try (m as! MovableMedia).move(to: self.config.plexDirectory, log: self.config.log)
                     } catch {
                         self.config.log.warning("Failed to move media: \(m.path)")
                         self.config.log.error(error)
@@ -362,7 +362,7 @@ final class Monitr: DirectoryMonitorDelegate {
         let audioConfig = AudioConversionConfig(container: self.config.convertAudioContainer, codec: self.config.convertAudioCodec, plexDir: self.config.plexDirectory, tempDir: self.config.deleteOriginal ? nil : self.config.convertTempDirectory)
 
         self.config.log.info("Getting the array of media that needs to be converted.")
-        let mediaToConvert: [ConvertibleMedia] = media.filter {
+        var mediaToConvert: [ConvertibleMedia] = media.filter {
             guard $0 is ConvertibleMedia else { return false }
             if $0 is Video {
                 do {
@@ -385,13 +385,13 @@ final class Monitr: DirectoryMonitorDelegate {
 
             let convertGroup = AsyncGroup()
             var simultaneousConversions: Int = 0
-            for m in mediaToConvert {
+            for var m in mediaToConvert {
                 if m is Video {
                     simultaneousConversions += 1
                     convertGroup.utility {
                         self.statistics.measure(.convert) {
                             do {
-                                try m.convert(videoConfig, self.config.log)
+                                m = try m.convert(videoConfig, self.config.log)
                             } catch {
                                 self.config.log.warning("Failed to convert video file: \(m.path)")
                                 self.config.log.error(error)
@@ -405,7 +405,7 @@ final class Monitr: DirectoryMonitorDelegate {
                     convertGroup.utility {
                         self.statistics.measure(.convert) {
                             do {
-                                try m.convert(audioConfig, self.config.log)
+                                m = try m.convert(audioConfig, self.config.log)
                             } catch {
                                 self.config.log.warning("Failed to convert audio file: \(m.path)")
                                 self.config.log.error(error)
@@ -451,8 +451,8 @@ final class Monitr: DirectoryMonitorDelegate {
             }
 
             // Create a queue of conversion jobs for later
-            for m in mediaToConvert {
-                self.conversionQueue!.push(m)
+            for var m in mediaToConvert {
+                self.conversionQueue!.push(&m)
             }
         }
 
