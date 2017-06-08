@@ -58,6 +58,9 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
         cronStart = try! CronJob(pattern: config.convertCronStart) {
             self.start()
         }
+        cronEnd = try! CronJob(pattern: config.convertCronEnd) {
+            self.stop = true
+        }
         log.info("Set up conversion cron job! It will begin at \(cronStart.pattern.next(Date())!)")
     }
 
@@ -122,6 +125,7 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
     }
 
     func start() {
+        self.log.info("Beginning conversion cron job")
         var now = Date()
         let end = self.cronEnd.pattern.next(now)?.date
         while now.date! < end! && !stop {
@@ -135,12 +139,14 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
             } catch {
                 self.log.error("Uncaught expection occurred while converting media => '\(error)'")
             }
-            while active == maxThreads {
+            while active == maxThreads && !stop {
                 conversionGroup.wait(seconds: 60)
             }
             now = Date()
         }
+        self.log.info("Conversion cron job will stop as soon as the current conversion jobs have finished")
         conversionGroup.wait()
+        self.log.info("The conversion cron job is officially done running (for now)")
     }
 
     convenience init(_ path: Path) throws {
@@ -170,6 +176,9 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
         // about using self in an enclosure before self is fully initialized
         cronStart = try! CronJob(pattern: config.convertCronStart) {
             self.start()
+        }
+        cronEnd = try! CronJob(pattern: config.convertCronEnd) {
+            self.stop = true
         }
         log.info("Set up conversion cron job! It will begin at \(cronStart.pattern.next(Date())!)")
     }
