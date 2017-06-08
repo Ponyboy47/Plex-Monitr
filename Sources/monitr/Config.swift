@@ -144,14 +144,19 @@ struct Config {
             guard self.convertTempDirectory.isDirectory else {
                 throw ConfigError.pathIsNotDirectory(self.convertTempDirectory)
             }
-        }
 
-        // Validate the Cron strings
-        guard let _ = try? Cron.parseExpression(self.convertCronStart) else {
-            throw ConfigError.invalidCronString(self.convertCronStart)
-        }
-        guard let _ = try? Cron.parseExpression(self.convertCronEnd) else {
-            throw ConfigError.invalidCronString(self.convertCronEnd)
+            // Validate the Cron strings
+            guard let _ = try? Cron.parseExpression(self.convertCronStart) else {
+                throw ConfigError.invalidCronString(self.convertCronStart)
+            }
+            guard let _ = try? Cron.parseExpression(self.convertCronEnd) else {
+                throw ConfigError.invalidCronString(self.convertCronEnd)
+            }
+
+            let conversionQueueFile = self.configFile.parent + ConversionQueue.filename
+            if conversionQueueFile.exists && conversionQueueFile.isFile {
+                self.conversionQueue = try ConversionQueue(conversionQueueFile)
+            }
         }
     }
 
@@ -267,14 +272,19 @@ extension Config: JSONInitializable {
             guard self.convertTempDirectory.isDirectory else {
                 throw ConfigError.pathIsNotDirectory(self.convertTempDirectory)
             }
-        }
 
-        // Validate the Cron strings
-        guard let _ = try? Cron.parseExpression(self.convertCronStart) else {
-            throw ConfigError.invalidCronString(self.convertCronStart)
-        }
-        guard let _ = try? Cron.parseExpression(self.convertCronEnd) else {
-            throw ConfigError.invalidCronString(self.convertCronEnd)
+            // Validate the Cron strings
+            guard let _ = try? Cron.parseExpression(self.convertCronStart) else {
+                throw ConfigError.invalidCronString(self.convertCronStart)
+            }
+            guard let _ = try? Cron.parseExpression(self.convertCronEnd) else {
+                throw ConfigError.invalidCronString(self.convertCronEnd)
+            }
+
+            let conversionQueueFile = self.configFile.parent + ConversionQueue.filename
+            if conversionQueueFile.exists && conversionQueueFile.isFile {
+                self.conversionQueue = try ConversionQueue(conversionQueueFile)
+            }
         }
     }
 }

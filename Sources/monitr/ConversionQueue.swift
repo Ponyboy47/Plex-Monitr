@@ -53,6 +53,7 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
         cronStart = try! CronJob(pattern: config.convertCronStart) {
             self.start()
         }
+        log.info("Set up conversion cron job! It will begin at \(cronStart.pattern.next(Date()))")
     }
 
     /// Adds a new Media object to the list of media items to convert
@@ -137,11 +138,18 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
         }
     }
 
+    convenience init(_ path: Path) throws {
+        try self.init(path.read())
+    }
+
+    convenience init(_ str: String) throws {
+        try self.init(json: JSON.Parser.parse(str))
+    }
+
     required init(json: JSON) throws {
         let configFile = Path(try json.get("configPath"))
         let configString: String = try configFile.read()
-        let configJSON: JSON = try JSON.Parser.parse(configString)
-        config = try Config(json: configJSON)
+        config = try Config(configString)
         configPath = config.configFile
         // Ignore errors here, if the cron string were invalid then the config
         // object would have already thrown an error
@@ -160,6 +168,7 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
         cronStart = try! CronJob(pattern: config.convertCronStart) {
             self.start()
         }
+        log.info("Set up conversion cron job! It will begin at \(cronStart.pattern.next(Date()))")
     }
 
     private static func setupJobs(_ jobs: [BaseConvertibleMedia]) -> [BaseConvertibleMedia] {
@@ -179,5 +188,20 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
             "configPath": configPath.string,
             "jobs": jobs.encoded()
         ]
+    }
+
+    private func serialized() throws -> String {
+        return try self.encoded().serialized()
+    }
+
+    public func save(to: Path) throws {
+        var file: Path
+        if to.isDirectory {
+            file = to
+        } else {
+            file = to.parent
+        }
+        file += ConversionQueue.filename
+        try file.write(self.serialized(), force: true)
     }
 }
