@@ -35,7 +35,7 @@ It supports either Linux or macOS operating systems using Apple's Swift language
 brew install handbrake ffmpeg mkvtoolnix mp4v2 kylef/formulae/swiftenv
 
 # transcode_video installation
-gem install transcode_video
+gem install video_transcoding
 
 # Plex-Monitr and swift installation
 git clone https://github.com/Ponyboy47/Plex-Monitr.git
@@ -55,7 +55,7 @@ sudo apt-get update
 sudo apt-get install -y ruby handbrake-cli ffmpeg mkvtoolnix mp4v2-utils libav-tools x264 x265
 
 # transcode_video installation
-sudo gem install transcode_video
+sudo gem install video_transcoding
 
 # Swiftenv installation (makes installing and updating swift way easier)
 git clone https://github.com/kylef/swiftenv.git ~/.swiftenv
