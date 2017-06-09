@@ -134,7 +134,11 @@ final class Video: BaseConvertibleMedia {
 
     func convert(_ conversionConfig: VideoConversionConfig, _ log: SwiftyBeaver.Type) throws -> Video {
         // Build the arguments for the transcode_video command
-        var args: [String] = ["--target", "big", "--quick", "--preset", "fast", "--no-log"]
+        var args: [String] = ["--target", "big", "--quick", "--preset", "fast", "--verbose", "--main-audio", conversionConfig.mainLanguage.rawValue, "--limit-rate", "\(conversionConfig.maxFramerate)"]
+
+        if conversionConfig.subtitleScan {
+            args += ["--burn-subtitle", "scan"]
+        }
 
         var outputExtension = "mkv"
         if conversionConfig.container == .mp4 {
@@ -193,6 +197,10 @@ final class Video: BaseConvertibleMedia {
             }
             throw MediaError.conversionError(error)
         }
+        if let stdout = output.stdout, !stdout.isEmpty {
+            log.verbose("transcode-video output:\n\n\(stdout)\n\n")
+        }
+
         log.info("Successfully converted media file '\(path)' to '\(outputPath)'")
 
         if deleteOriginal {
