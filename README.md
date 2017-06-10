@@ -8,6 +8,8 @@ Downloading movies or tv shows or ripping cds/dvds/blu-rays is now the hardest p
 
 It works by watching a designated "Downloads" directory and whenever a new video, audio, or subtitle file is added to that directory, Monitr will automatically move it right to where it should be, then Plex takes care of the rest!
 
+You can also configure Monitr to automatically transcode media into Plex Direct Play/Stream capable formats. This means that Plex won't have to transcode media on-the-go and can help keep your CPU load lower when watching movies or TV shows.
+
 It supports either Linux or macOS operating systems using Apple's Swift language (and a tiny bit of C for some of the stuff on Linux). It also has some dependencies, like ruby (if you're enabling the conversion capabilities).
 
 ---
@@ -22,6 +24,9 @@ It supports either Linux or macOS operating systems using Apple's Swift language
     * Including subtitles
   * Music
   * Home videos would be placed in either the Movies or TV Shows directories (depends on the file name)
+* Automatically converts media to Plex Direct Play/Stream capable formats
+  * It uses the most common Direct Play/Stream formats by default, but you can configure the conversion settings however you'd like
+  * Automatic media transcoding can be ran immediately when new media is added, or later as a scheduled task when the server will most likely not be in use
 
 ---
 
@@ -31,11 +36,11 @@ It supports either Linux or macOS operating systems using Apple's Swift language
 # Homebrew installation (To install swiftenv and also the transcode_video dependencies)
 /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
 
-# transcode_video dependencies installation
-brew install handbrake ffmpeg mkvtoolnix mp4v2 kylef/formulae/swiftenv
+# transcode_video dependencies and installation (only needed if you're going to enable automatic media conversion)
+brew install handbrake ffmpeg mkvtoolnix mp4v2 && gem install video_transcoding
 
-# transcode_video installation
-gem install video_transcoding
+# Makes installing and updating swift super easy
+brew install kylef/formulae/swiftenv
 
 # Plex-Monitr and swift installation
 git clone https://github.com/Ponyboy47/Plex-Monitr.git
@@ -47,21 +52,22 @@ swift build
 
 ### Linux (Ubuntu 16.04)
 ```bash
-# transcode_video dependency installation
+# transcode_video dependency installation (only needed if you're going to enable automatic media conversion)
 sudo add-apt-repository ppa:stebbins/handbrake-releases
 sudo add-apt-repository ppa:jonathonf/ffmpeg-3
-sudo apt-get remove handbrake ffmpeg && sudo apt autoremove
+sudo apt-get remove handbrake* ffmpeg && sudo apt autoremove
 sudo apt-get update
 sudo apt-get install -y ruby handbrake-cli ffmpeg mkvtoolnix mp4v2-utils libav-tools x264 x265
 
-# transcode_video installation
+# transcode_video installation (only needed if you're going to enable automatic media conversion)
 sudo gem install video_transcoding
 
-# Swiftenv installation (makes installing and updating swift way easier)
+# Swiftenv installation (makes installing and updating swift super easy)
 git clone https://github.com/kylef/swiftenv.git ~/.swiftenv
 echo 'export SWIFTENV_ROOT="$HOME/.swiftenv"' >> ~/.bash_profile
 echo 'export PATH="$SWIFTENV_ROOT/bin:$PATH"' >> ~/.bash_profile
 echo 'eval "$(swiftenv init -)"' >> ~/.bash_profile
+source ~/.bash_profile
 
 # Plex-Monitr and swift installation
 git clone https://github.com/Ponyboy47/Plex-Monitr.git
