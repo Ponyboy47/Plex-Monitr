@@ -42,9 +42,9 @@ struct Config {
     /// Whether media should be converted immediately, or during a configurable time when the server is less likely to be busy
     var convertImmediately: Bool = true
     /// The Cron string describing when scheduled media conversions may begin
-    var convertCronStart: String = "0 0 * * *"
+    var convertCronStart: DatePattern = try! DatePattern("0 0 * * *")
     /// The Cron string describing when scheduled media conversions should be finished
-    var convertCronEnd: String = "0 8 * * *"
+    var convertCronEnd: DatePattern = try! DatePattern("0 8 * * *")
     /// The number of simultaneous threads to convert media on
     var convertThreads: Int = 2
     /// Whether the original media file should be deleted after a successful conversion
@@ -74,8 +74,8 @@ struct Config {
     private var downloadWatcher: DirectoryMonitor?
 
     init(_ configFile: Path? = nil, _ plexDirectory: Path? = nil, _ downloadDirectory: Path? = nil,
-         _ convert: Bool? = nil, _ convertImmediately: Bool? = nil, _ convertCronStart: String? = nil,
-         _ convertCronEnd: String? = nil, _ convertThreads: Int? = nil, _ deleteOriginal: Bool? = nil,
+         _ convert: Bool? = nil, _ convertImmediately: Bool? = nil, _ convertCronStart: DatePattern? = nil,
+         _ convertCronEnd: DatePattern? = nil, _ convertThreads: Int? = nil, _ deleteOriginal: Bool? = nil,
          _ convertVideoContainer: VideoContainer? = nil, _ convertVideoCodec: VideoCodec? = nil,
          _ convertAudioContainer: AudioContainer? = nil, _ convertAudioCodec: AudioCodec? = nil,
          _ convertVideoSubtitleScan: Bool? = nil, _ convertLanguage: Language? = nil,
@@ -141,14 +141,6 @@ struct Config {
             guard self.convertTempDirectory.isDirectory else {
                 throw ConfigError.pathIsNotDirectory(self.convertTempDirectory)
             }
-
-            // Validate the Cron strings
-            guard let _ = try? Cron.parseExpression(self.convertCronStart) else {
-                throw ConfigError.invalidCronString(self.convertCronStart)
-            }
-            guard let _ = try? Cron.parseExpression(self.convertCronEnd) else {
-                throw ConfigError.invalidCronString(self.convertCronEnd)
-            }
         }
     }
 
@@ -177,7 +169,7 @@ struct Config {
 }
 
 /// Allows the config to be initialized from a json file
-extension Config: JSONInitializable {
+extension Config: JSONConvertible {
     /// Initializes by reading the file at the path as a JSON string
     init(_ path: Path, logger: SwiftyBeaver.Type) throws {
         try self.init(path.read())
@@ -200,18 +192,8 @@ extension Config: JSONInitializable {
 
         self.convert = (try? json.get("convert")) ?? self.convert
         self.convertImmediately = (try? json.get("convertImmediately")) ?? self.convertImmediately
-        do {
-            self.convertCronStart = (try? json.get("convertCronStart")) ?? self.convertCronStart
-            let _ = try Cron.parseExpression(self.convertCronStart)
-        } catch {
-            self.convertCronStart = "0 0 0 * * * *"
-        }
-        do {
-            self.convertCronEnd = (try? json.get("convertCronEnd")) ?? self.convertCronEnd
-            let _ = try Cron.parseExpression(self.convertCronEnd)
-        } catch {
-            self.convertCronEnd = "0 0 8 * * * *"
-        }
+        self.convertCronStart = (try? DatePattern(json.get("convertCronStart"))) ?? self.convertCronStart
+        self.convertCronEnd = (try? DatePattern(json.get("convertCronEnd"))) ?? self.convertCronEnd
         self.convertThreads = (try? json.get("convertThreads")) ?? self.convertThreads
         self.deleteOriginal = (try? json.get("deleteOriginal")) ?? self.deleteOriginal
         let videoContainerString = (try? json.get("convertVideoContainer")) ?? ""
@@ -264,20 +246,9 @@ extension Config: JSONInitializable {
             guard self.convertTempDirectory.isDirectory else {
                 throw ConfigError.pathIsNotDirectory(self.convertTempDirectory)
             }
-
-            // Validate the Cron strings
-            guard let _ = try? Cron.parseExpression(self.convertCronStart) else {
-                throw ConfigError.invalidCronString(self.convertCronStart)
-            }
-            guard let _ = try? Cron.parseExpression(self.convertCronEnd) else {
-                throw ConfigError.invalidCronString(self.convertCronEnd)
-            }
         }
     }
-}
 
-/// Allows the config to output/represented as JSON
-extension Config: JSONRepresentable {
     /**
      Creates a JSON object from self
 
@@ -327,8 +298,8 @@ extension Config: JSONRepresentable {
             "downloadDirectory": downloadDirectory.string,
             "convert": convert,
             "convertImmediately": convertImmediately,
-            "convertCronStart": convertCronStart,
-            "convertCronEnd": convertCronEnd,
+            "convertCronStart": convertCronStart.string,
+            "convertCronEnd": convertCronEnd.string,
             "convertThreads": convertThreads,
             "deleteOriginal": deleteOriginal,
             "convertVideoContainer": convertVideoContainer.rawValue,

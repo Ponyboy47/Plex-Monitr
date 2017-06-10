@@ -10,7 +10,7 @@ enum ConversionError: Error {
     case noJobIndex
 }
 
-class ConversionQueue: JSONInitializable, JSONRepresentable {
+class ConversionQueue: JSONConvertible {
     static let filename: String = "conversionqueue.json"
 
     fileprivate var configPath: Path

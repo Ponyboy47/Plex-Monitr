@@ -29,8 +29,8 @@ let plexDirectoryOption = try Option<Path>("p", alternateNames: ["plex-dir"], de
 let downloadDirectoryOption = try Option<Path>("t", alternateNames: ["download-dir"], description: "The directory where media downloads reside", parser: &argParser)
 let convertFlag = try Flag("c", alternateNames: ["convert"], description: "Whether or not newly added files should be converted to a Plex DirectPlay format", parser: &argParser)
 let convertImmediatelyFlag = try Flag("i", alternateNames: ["convert-immediately"], description: "Whether to convert media before sending it to the Plex directory, or to convert it as a scheduled task when the CPU is more likely to be free", parser: &argParser)
-let convertCronStartOption = try Option<String>("a", alternateNames: ["convert-cron-start"], description: "A Cron string describing when conversion jobs should start running", parser: &argParser)
-let convertCronEndOption = try Option<String>("z", alternateNames: ["convert-cron-end"], description: "A Cron string describing when conversion jobs should stop running", parser: &argParser)
+let convertCronStartOption = try Option<DatePattern>("a", alternateNames: ["convert-cron-start"], description: "A Cron string describing when conversion jobs should start running", parser: &argParser)
+let convertCronEndOption = try Option<DatePattern>("z", alternateNames: ["convert-cron-end"], description: "A Cron string describing when conversion jobs should stop running", parser: &argParser)
 let convertThreadsOption = try Option<Int>("r", alternateNames: ["convert-threads"], description: "The number of threads that can simultaneously be converting media", parser: &argParser)
 let deleteOriginalFlag = try Flag("o", alternateNames: ["delete-original"], description: "Whether the original media file should be deleted upon successful conversion to a Plex DirectPlay format", parser: &argParser)
 let convertVideoContainerOption = try Option<VideoContainer>("e", alternateNames: ["convert-video-container"], description: "The container to use when converting video files", parser: &argParser)
@@ -217,15 +217,28 @@ do {
     monitr = try Monitr(config)
     log.verbose("Sucessfully created the Monitr object from the config")
 
+    func schedule(pattern: DatePattern, job: @escaping @convention(block) () -> ()) {
+        guard let next = pattern.next()?.date else {
+            print("No next execution date could be determined")
+            return
+        }
+
+        let interval = next.timeIntervalSinceNow
+        Async.main(after: interval) {
+            job()
+            schedule(pattern: pattern, job: job)
+        }
+    }
+
     if config.convert && !config.convertImmediately {
         log.info("Setting up the conversion queue cron jobs")
-        var cronStart: CronJob = try! CronJob(pattern: config.convertCronStart) {
+        schedule(pattern: config.convertCronStart, job: {
             monitr.conversionQueue?.start()
-        }
-        var cronEnd: CronJob = try! CronJob(pattern: config.convertCronEnd) {
+        })
+        schedule(pattern: config.convertCronEnd, job: {
             monitr.conversionQueue?.stop = true
-        }
-        let next = MediaDuration(double: cronStart.pattern.next(Date())!.date!.timeIntervalSinceNow)
+        })
+        let next = MediaDuration(double: config.convertCronStart.next(Date())!.date!.timeIntervalSinceNow)
         log.info("Set up conversion cron job! It will begin in \(next.description)")
     }
     

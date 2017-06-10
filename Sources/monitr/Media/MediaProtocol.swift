@@ -41,7 +41,7 @@ enum MediaError: Error {
 }
 
 /// Protocol for the common implementation of Media types
-protocol Media: class, JSONInitializable, JSONRepresentable {
+protocol Media: class, JSONConvertible {
     /// The path to the media file
     var path: Path { get set }
     /// Used to retrieve basic data from the file

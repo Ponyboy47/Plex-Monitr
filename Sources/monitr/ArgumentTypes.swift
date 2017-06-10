@@ -8,6 +8,8 @@
 
 import CLI
 import PathKit
+import Cron
+import JSON
 
 extension Path: ArgumentType {
     public static func from(string value: String) throws -> Path {
@@ -15,6 +17,43 @@ extension Path: ArgumentType {
             throw ArgumentError.emptyString
         }
         return Path(value)
+    }
+}
+
+extension DatePattern: ArgumentType, JSONConvertible, Equatable {
+    public static func from(string value: String) throws -> DatePattern {
+        guard value.characters.count > 0 else {
+            throw ArgumentError.emptyString
+        }
+        guard let pattern = try? DatePattern(value) else {
+            throw ConfigError.invalidCronString(value)
+        }
+        return pattern
+    }
+
+    public init(json: JSON) throws {
+        let p = try DatePattern(json.get("pattern"))
+
+        self.second     = p.second
+        self.minute     = p.minute
+        self.hour       = p.hour
+        self.dayOfMonth = p.dayOfMonth
+        self.month      = p.month
+        self.dayOfWeek  = p.dayOfWeek
+        self.year       = p.year
+        self.hash       = try json.get("hash")
+        self.string     = p.string
+    }
+
+    public func encoded() -> JSON {
+        return [
+            "pattern": self.string,
+            "hash": self.hash
+        ]
+    }
+
+    public static func ==(lhs: DatePattern, rhs: DatePattern) -> Bool {
+        return lhs.string == rhs.string
     }
 }
 
