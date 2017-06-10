@@ -56,9 +56,11 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
         // I hate doing this assignment twice, but the first one complains
         // about using self in an enclosure before self is fully initialized
         cronStart = try! CronJob(pattern: config.convertCronStart) {
+            self.log.info("Starting conversion cron job")
             self.start()
         }
         cronEnd = try! CronJob(pattern: config.convertCronEnd) {
+            self.log.info("Stopping conversion cron job")
             self.stop = true
         }
         log.info("Set up conversion cron job! It will begin at \(cronStart.pattern.next(Date())!)")
@@ -175,9 +177,11 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
         // I hate doing this assignment twice, but the first one complains
         // about using self in an enclosure before self is fully initialized
         cronStart = try! CronJob(pattern: config.convertCronStart) {
+            self.log.info("Starting conversion cron job")
             self.start()
         }
         cronEnd = try! CronJob(pattern: config.convertCronEnd) {
+            self.log.info("Stopping conversion cron job")
             self.stop = true
         }
         log.info("Set up conversion cron job! It will begin at \(cronStart.pattern.next(Date())!)")
