@@ -63,7 +63,7 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
             self.log.info("Stopping conversion cron job")
             self.stop = true
         }
-        log.info("Set up conversion cron job! It will begin at \(cronStart.pattern.next(Date())!)")
+        log.info("Set up conversion cron job! It will begin in \(cronStart.pattern.next(Date())!.date!.timeIntervalSinceNow) seconds")
     }
 
     /// Adds a new Media object to the list of media items to convert
@@ -184,7 +184,7 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
             self.log.info("Stopping conversion cron job")
             self.stop = true
         }
-        log.info("Set up conversion cron job! It will begin at \(cronStart.pattern.next(Date())!)")
+        log.info("Set up conversion cron job! It will begin in \(cronStart.pattern.next(Date())!.date!.timeIntervalSinceNow) seconds")
     }
 
     private static func setupJobs(_ jobs: [BaseConvertibleMedia]) -> [ConvertibleMedia] {
