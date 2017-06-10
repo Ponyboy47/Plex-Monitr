@@ -16,9 +16,6 @@ import Signals
 import Cron
 import CLI
 import Async
-#if os(Linux)
-import Dispatch
-#endif
 
 let log = SwiftyBeaver.self
 
@@ -219,6 +216,18 @@ if saveConfig {
 do {
     monitr = try Monitr(config)
     log.verbose("Sucessfully created the Monitr object from the config")
+
+    if config.convert && !config.convertImmediately {
+        log.info("Setting up the conversion queue cron jobs")
+        var cronStart: CronJob = try! CronJob(pattern: config.convertCronStart) {
+            monitr.conversionQueue?.start()
+        }
+        var cronEnd: CronJob = try! CronJob(pattern: config.convertCronEnd) {
+            monitr.conversionQueue?.stop = true
+        }
+        let next = MediaDuration(double: cronStart.pattern.next(Date())!.date!.timeIntervalSinceNow)
+        log.info("Set up conversion cron job! It will begin in \(next.description)")
+    }
     
     // Run once and then start monitoring regularly
     log.info("Running Monitr once for startup!")

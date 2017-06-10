@@ -438,7 +438,12 @@ struct MediaDuration {
         if hours > 0 {
             d += "\(hours):"
         }
-        d += String(format: "%02d:%02d", minutes, seconds)
+
+        if hours > 0 || minutes > 0 {
+            d += String(format: "%02d:", minutes)
+        }
+
+        d += String(format: "%02d", seconds)
         return d
     }
 

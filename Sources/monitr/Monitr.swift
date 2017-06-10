@@ -22,9 +22,6 @@ enum MonitrError: Error {
         case mkvtoolnix
         case transcode_video
     }
-    enum CronJob: Error {
-        case noNextDate
-    }
 }
 
 /// Checks the downloads directory for new content to add to Plex
@@ -40,8 +37,6 @@ final class Monitr: DirectoryMonitorDelegate {
 
     /// The queue of conversion jobs
     var conversionQueue: ConversionQueue?
-    private var cronStart: CronJob?
-    private var cronEnd: CronJob?
 
     /// Whether or not media is currently being migrated to Plex. Automatically
     ///   runs a new again if new media has been added since the run routine began
@@ -65,21 +60,13 @@ final class Monitr: DirectoryMonitorDelegate {
             self.statistics = try Statistic(statFile)
         }
 
+        if self.config.convert {
+            try checkConversionDependencies()
+        }
+
         let conversionQueueFile = config.configFile.parent + ConversionQueue.filename
         if conversionQueueFile.exists && conversionQueueFile.isFile {
             self.conversionQueue = try ConversionQueue(conversionQueueFile)
-            self.cronStart = try! CronJob(pattern: config.convertCronStart) {
-                self.conversionQueue?.start()
-            }
-            self.cronEnd = try! CronJob(pattern: config.convertCronEnd) {
-                self.conversionQueue?.stop = true
-            }
-            let next = MediaDuration(double: cronStart!.pattern.next(Date())!.date!.timeIntervalSinceNow)
-            log.info("Set up conversion cron job! It will begin in \(next.description)")
-        }
-
-        if self.config.convert {
-            try checkConversionDependencies()
         }
     }
 
