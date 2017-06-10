@@ -40,9 +40,8 @@ final class Monitr: DirectoryMonitorDelegate {
 
     /// The queue of conversion jobs
     var conversionQueue: ConversionQueue?
-
-    /// The timer that kicks off the conversionQueue
-    private var conversionJob: CronJob?
+    private var cronStart: CronJob?
+    private var cronEnd: CronJob?
 
     /// Whether or not media is currently being migrated to Plex. Automatically
     ///   runs a new again if new media has been added since the run routine began
@@ -69,6 +68,14 @@ final class Monitr: DirectoryMonitorDelegate {
         let conversionQueueFile = config.configFile.parent + ConversionQueue.filename
         if conversionQueueFile.exists && conversionQueueFile.isFile {
             self.conversionQueue = try ConversionQueue(conversionQueueFile)
+            self.cronStart = try! CronJob(pattern: config.convertCronStart) {
+                self.conversionQueue?.start()
+            }
+            self.cronEnd = try! CronJob(pattern: config.convertCronEnd) {
+                self.conversionQueue?.stop = true
+            }
+            let next = MediaDuration(double: cronStart!.pattern.next(Date())!.date!.timeIntervalSinceNow)
+            log.info("Set up conversion cron job! It will begin in \(next.description)")
         }
 
         if self.config.convert {

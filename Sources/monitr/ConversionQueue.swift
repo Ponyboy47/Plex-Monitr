@@ -14,8 +14,6 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
     static let filename: String = "conversionqueue.json"
 
     fileprivate var configPath: Path
-    fileprivate var cronStart: CronJob
-    fileprivate var cronEnd: CronJob
     fileprivate var statistics: Statistic
     fileprivate var maxThreads: Int
     fileprivate var deleteOriginal: Bool
@@ -38,10 +36,6 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
 
     init(_ config: Config, statistics stats: Statistic? = nil) {
         configPath = config.configFile
-        // Ignore errors here, if the cron string were invalid then the config
-        // object would have already thrown an error
-        cronStart = try! CronJob(pattern: config.convertCronStart) {}
-        cronEnd = try! CronJob(pattern: config.convertCronEnd) {}
         maxThreads = config.convertThreads
         deleteOriginal = config.deleteOriginal
         if stats != nil {
@@ -52,18 +46,6 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
         log = config.log
         videoConversionConfig = VideoConversionConfig(container: config.convertVideoContainer, videoCodec: config.convertVideoCodec, audioCodec: config.convertAudioCodec, subtitleScan: config.convertVideoSubtitleScan, mainLanguage: config.convertLanguage, maxFramerate: config.convertVideoMaxFramerate, plexDir: config.plexDirectory, tempDir: config.deleteOriginal ? nil : config.convertTempDirectory)
         audioConversionConfig = AudioConversionConfig(container: config.convertAudioContainer, codec: config.convertAudioCodec, plexDir: config.plexDirectory, tempDir: config.deleteOriginal ? nil : config.convertTempDirectory)
-
-        // I hate doing this assignment twice, but the first one complains
-        // about using self in an enclosure before self is fully initialized
-        cronStart = try! CronJob(pattern: config.convertCronStart) {
-            self.log.info("Starting conversion cron job")
-            self.start()
-        }
-        cronEnd = try! CronJob(pattern: config.convertCronEnd) {
-            self.log.info("Stopping conversion cron job")
-            self.stop = true
-        }
-        log.info("Set up conversion cron job! It will begin in \(cronStart.pattern.next(Date())!.date!.timeIntervalSinceNow) seconds")
     }
 
     /// Adds a new Media object to the list of media items to convert
@@ -128,9 +110,7 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
 
     func start() {
         self.log.info("Beginning conversion cron job")
-        var now = Date()
-        let end = self.cronEnd.pattern.next(now)?.date
-        while now.date! < end! && !stop {
+        while !stop {
             do {
                 try self.startNextConversion()
             } catch ConversionError.maxThreadsReached {
@@ -144,7 +124,6 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
             while active == maxThreads && !stop {
                 conversionGroup.wait(seconds: 60)
             }
-            now = Date()
         }
         self.log.info("Conversion cron job will stop as soon as the current conversion jobs have finished")
         conversionGroup.wait()
@@ -162,10 +141,6 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
     required init(json: JSON) throws {
         configPath = Path(try json.get("configPath"))
         config = try Config(configPath.read())
-        // Ignore errors here, if the cron string were invalid then the config
-        // object would have already thrown an error
-        cronStart = try! CronJob(pattern: config.convertCronStart) {}
-        cronEnd = try! CronJob(pattern: config.convertCronEnd) {}
         maxThreads = config.convertThreads
         deleteOriginal = config.deleteOriginal
         statistics = Statistic()
@@ -173,18 +148,6 @@ class ConversionQueue: JSONInitializable, JSONRepresentable {
         videoConversionConfig = VideoConversionConfig(container: config.convertVideoContainer, videoCodec: config.convertVideoCodec, audioCodec: config.convertAudioCodec, subtitleScan: config.convertVideoSubtitleScan, mainLanguage: config.convertLanguage, maxFramerate: config.convertVideoMaxFramerate, plexDir: config.plexDirectory, tempDir: config.deleteOriginal ? nil : config.convertTempDirectory)
         audioConversionConfig = AudioConversionConfig(container: config.convertAudioContainer, codec: config.convertAudioCodec, plexDir: config.plexDirectory, tempDir: config.deleteOriginal ? nil : config.convertTempDirectory)
         jobs = ConversionQueue.setupJobs(try json.get("jobs"))
-
-        // I hate doing this assignment twice, but the first one complains
-        // about using self in an enclosure before self is fully initialized
-        cronStart = try! CronJob(pattern: config.convertCronStart) {
-            self.log.info("Starting conversion cron job")
-            self.start()
-        }
-        cronEnd = try! CronJob(pattern: config.convertCronEnd) {
-            self.log.info("Stopping conversion cron job")
-            self.stop = true
-        }
-        log.info("Set up conversion cron job! It will begin in \(cronStart.pattern.next(Date())!.date!.timeIntervalSinceNow) seconds")
     }
 
     private static func setupJobs(_ jobs: [BaseConvertibleMedia]) -> [ConvertibleMedia] {
