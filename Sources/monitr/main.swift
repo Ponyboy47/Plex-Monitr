@@ -221,34 +221,6 @@ if saveConfig {
 do {
     monitr = try Monitr(config)
     log.verbose("Sucessfully created the Monitr object from the config")
-
-    let keepalive = AsyncGroup()
-
-    func schedule(pattern: DatePattern, group: AsyncGroup = keepalive, job: @escaping @convention(block) () -> ()) {
-        guard let next = pattern.next()?.date else {
-            print("No next execution date could be determined")
-            return
-        }
-
-        let interval = next.timeIntervalSinceNow
-        group.enter()
-        sleep(UInt32(interval))
-        job()
-        group.leave()
-        schedule(pattern: pattern, group: group, job: job)
-    }
-
-    if config.convert && !config.convertImmediately {
-        log.info("Setting up the conversion queue cron jobs")
-        schedule(pattern: config.convertCronStart, job: {
-            monitr.conversionQueue?.start()
-        })
-        schedule(pattern: config.convertCronEnd, job: {
-            monitr.conversionQueue?.stop = true
-        })
-        let next = MediaDuration(double: config.convertCronStart.next(Date())!.date!.timeIntervalSinceNow)
-        log.info("Set up conversion cron job! It will begin in \(next.description)")
-    }
     
     // Run once and then start monitoring regularly
     log.info("Running Monitr once for startup!")
@@ -269,6 +241,7 @@ do {
     }
     
     // This keeps the program alive until ctrl-c is pressed or a signal is sent to the process
+    let keepalive = AsyncGroup()
     keepalive.enter()
     keepalive.wait()
 } catch {

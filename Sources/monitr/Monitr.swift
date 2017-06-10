@@ -13,6 +13,9 @@ import Foundation
 import PathKit
 import Async
 import Cron
+#if os(Linux)
+import Dispatch
+#endif
 
 enum MonitrError: Error {
     enum MissingDependency: Error {
@@ -37,6 +40,8 @@ final class Monitr: DirectoryMonitorDelegate {
 
     /// The queue of conversion jobs
     var conversionQueue: ConversionQueue?
+    private var cronStart: CronJob?
+    private var cronEnd: CronJob?
 
     /// Whether or not media is currently being migrated to Plex. Automatically
     ///   runs a new again if new media has been added since the run routine began
@@ -60,13 +65,25 @@ final class Monitr: DirectoryMonitorDelegate {
             self.statistics = try Statistic(statFile)
         }
 
-        if self.config.convert {
+        if config.convert {
             try checkConversionDependencies()
         }
 
         let conversionQueueFile = config.configFile.parent + ConversionQueue.filename
         if conversionQueueFile.exists && conversionQueueFile.isFile {
             self.conversionQueue = try ConversionQueue(conversionQueueFile)
+        }
+
+        if config.convert && !config.convertImmediately {
+            log.info("Setting up the conversion queue cron jobs")
+            self.cronStart = CronJob(pattern: config.convertCronStart, queue: .global(qos: .background)) {
+                self.conversionQueue?.start()
+            }
+            self.cronEnd = CronJob(pattern: config.convertCronEnd, queue: .global(qos: .background)) {
+                self.conversionQueue?.stop = true
+            }
+            let next = MediaDuration(double: cronStart!.pattern.next(Date())!.date!.timeIntervalSinceNow)
+            log.info("Set up conversion cron job! It will begin in \(next.description)")
         }
     }
 

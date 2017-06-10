@@ -151,9 +151,19 @@ class ConversionQueue: JSONConvertible {
     }
 
     private static func setupJobs(_ jobs: [BaseConvertibleMedia]) -> [ConvertibleMedia] {
-        return jobs
+        var js: [ConvertibleMedia] = []
+        for j in jobs {
+            let ext = j.path.extension ?? ""
+            do {
+                if Video.isSupported(ext: ext) {
+                    js.append(try Video(j.path))
+                } else if Audio.isSupported(ext: ext) {
+                    js.append(try Audio(j.path))
+                }
+            } catch {}
+        }
+        return js
     }
-
     public func encoded() -> JSON {
         var js: [BaseConvertibleMedia] = []
         for j in jobs {
