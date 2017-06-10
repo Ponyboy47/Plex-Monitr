@@ -16,6 +16,11 @@ import Signals
 import Cron
 import CLI
 import Async
+#if os(Linux)
+import Glibc
+#else
+import Darwin
+#endif
 
 let log = SwiftyBeaver.self
 
@@ -217,17 +222,20 @@ do {
     monitr = try Monitr(config)
     log.verbose("Sucessfully created the Monitr object from the config")
 
-    func schedule(pattern: DatePattern, job: @escaping @convention(block) () -> ()) {
+    let keepalive = AsyncGroup()
+
+    func schedule(pattern: DatePattern, group: AsyncGroup = keepalive, job: @escaping @convention(block) () -> ()) {
         guard let next = pattern.next()?.date else {
             print("No next execution date could be determined")
             return
         }
 
         let interval = next.timeIntervalSinceNow
-        Async.main(after: interval) {
-            job()
-            schedule(pattern: pattern, job: job)
-        }
+        group.enter()
+        sleep(UInt32(interval))
+        job()
+        group.leave()
+        schedule(pattern: pattern, group: group, job: job)
     }
 
     if config.convert && !config.convertImmediately {
@@ -261,9 +269,8 @@ do {
     }
     
     // This keeps the program alive until ctrl-c is pressed or a signal is sent to the process
-    let group = AsyncGroup()
-    group.enter()
-    group.wait()
+    keepalive.enter()
+    keepalive.wait()
 } catch {
     log.error("Failed to create the monitr with error '\(error)'. Correct the error and try again.")
     // Sleep before exiting or else the log message is not written correctly
