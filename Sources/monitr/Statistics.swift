@@ -124,7 +124,7 @@ struct Statistic {
     }
 }
 
-extension Cron.Date: JSONInitializable {
+extension Cron.Date: JSONConvertible {
     public init(json: JSON) throws {
         year = try json.get("year")
         month = try json.get("month")
@@ -133,9 +133,7 @@ extension Cron.Date: JSONInitializable {
         minute = try json.get("minute")
         second = try json.get("second")
     }
-}
 
-extension Cron.Date: JSONRepresentable {
     public func encoded() -> JSON {
         return [
             "year": year,
@@ -148,15 +146,13 @@ extension Cron.Date: JSONRepresentable {
     }
 }
 
-extension Statistic.Event: JSONInitializable {
+extension Statistic.Event: JSONConvertible {
     init(json: JSON) throws {
         start = try json.get("start")
         finish = try? json.get("finish")
         duration = (try? json.get("duration")) ?? 0.0
     }
-}
 
-extension Statistic.Event: JSONRepresentable {
     func encoded() -> JSON {
         var json: JSON = [
             "start": start,
@@ -169,7 +165,7 @@ extension Statistic.Event: JSONRepresentable {
     }
 }
 
-extension Statistic: JSONInitializable {
+extension Statistic: JSONConvertible {
     init(_ path: Path) throws {
         try self.init(path.read())
     }
@@ -184,9 +180,7 @@ extension Statistic: JSONInitializable {
         conversions = try json.get("conversions")
         lifespans = try json.get("lifespans")
     }
-}
 
-extension Statistic: JSONRepresentable {
     func encoded() -> JSON {
         return [
             "startups": startups.encoded(),

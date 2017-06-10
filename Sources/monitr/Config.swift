@@ -42,16 +42,29 @@ struct Config {
     /// Whether media should be converted immediately, or during a configurable time when the server is less likely to be busy
     var convertImmediately: Bool = true
     /// The Cron string describing when scheduled media conversions may begin
-    var convertCronStart: String = "0 0 0 * * * *"
+    var convertCronStart: DatePattern = try! DatePattern("0 0 * * *")
     /// The Cron string describing when scheduled media conversions should be finished
-    var convertCronEnd: String = "0 0 8 * * * *"
+    var convertCronEnd: DatePattern = try! DatePattern("0 8 * * *")
     /// The number of simultaneous threads to convert media on
     var convertThreads: Int = 2
     /// Whether the original media file should be deleted after a successful conversion
     var deleteOriginal: Bool = true
-
-    /// The queue of conversion jobs
-    var conversionQueue: ConversionQueue?
+    /// The container to use when converting video media files
+    var convertVideoContainer: VideoContainer = .mp4
+    /// The video encoding to use when converting media files
+    var convertVideoCodec: VideoCodec = .h264
+    /// The container to use when converting audio media files
+    var convertAudioContainer: AudioContainer = .aac
+    /// The audio encoding to use when converting media files
+    var convertAudioCodec: AudioCodec = .aac
+    /// Whether or not to try and scan media for forcfully burned in subtitle files
+    var convertVideoSubtitleScan: Bool = false
+    /// The default language to use as the main language for converted media files
+    var convertLanguage: Language = .eng
+    /// The maximum framerate allowed for video files
+    var convertVideoMaxFramerate: Double = 30.0
+    /// The directory to place converted media before moving it to Plex
+    var convertTempDirectory: Path = "/tmp"
 
     var logFile: Path?
     var logLevel: Int = 0
@@ -60,7 +73,14 @@ struct Config {
     /// Watches the download directory for new files
     private var downloadWatcher: DirectoryMonitor?
 
-    init(_ configFile: Path? = nil, _ plexDirectory: Path? = nil, _ downloadDirectory: Path? = nil, _ convert: Bool? = nil, _ convertImmediately: Bool? = nil, _ convertCronStart: String? = nil, _ convertCronEnd: String? = nil, _ convertThreads: Int? = nil, _ deleteOriginal: Bool? = nil, _ logLevel: Int? = nil, _ logFile: Path? = nil, logger: SwiftyBeaver.Type) throws {
+    init(_ configFile: Path? = nil, _ plexDirectory: Path? = nil, _ downloadDirectory: Path? = nil,
+         _ convert: Bool? = nil, _ convertImmediately: Bool? = nil, _ convertCronStart: DatePattern? = nil,
+         _ convertCronEnd: DatePattern? = nil, _ convertThreads: Int? = nil, _ deleteOriginal: Bool? = nil,
+         _ convertVideoContainer: VideoContainer? = nil, _ convertVideoCodec: VideoCodec? = nil,
+         _ convertAudioContainer: AudioContainer? = nil, _ convertAudioCodec: AudioCodec? = nil,
+         _ convertVideoSubtitleScan: Bool? = nil, _ convertLanguage: Language? = nil,
+         _ convertVideoMaxFramerate: Double? = nil, _ convertTempDirectory: Path? = nil,
+         _ logLevel: Int? = nil, _ logFile: Path? = nil, logger: SwiftyBeaver.Type) throws {
         self.log = logger
         self.configFile = configFile ?? self.configFile
         self.plexDirectory = plexDirectory ?? self.plexDirectory
@@ -71,6 +91,14 @@ struct Config {
         self.convertCronEnd = convertCronEnd ?? self.convertCronEnd
         self.convertThreads = convertThreads ?? self.convertThreads
         self.deleteOriginal = deleteOriginal ?? self.deleteOriginal
+        self.convertVideoContainer = convertVideoContainer ?? self.convertVideoContainer
+        self.convertVideoCodec = convertVideoCodec ?? self.convertVideoCodec
+        self.convertAudioContainer = convertAudioContainer ?? self.convertAudioContainer
+        self.convertAudioCodec = convertAudioCodec ?? self.convertAudioCodec
+        self.convertVideoSubtitleScan = convertVideoSubtitleScan ?? self.convertVideoSubtitleScan
+        self.convertLanguage = convertLanguage ?? self.convertLanguage
+        self.convertVideoMaxFramerate = convertVideoMaxFramerate ?? self.convertVideoMaxFramerate
+        self.convertTempDirectory = convertTempDirectory ?? self.convertTempDirectory
         self.logLevel = logLevel ?? self.logLevel
         self.logFile = logFile
 
@@ -80,8 +108,12 @@ struct Config {
         } else if self.logLevel < 0 {
             self.logLevel = 0
         }
-        // Verify the plex/download directories exist and are in fact, directories
 
+        // Verify the plex, download, and conversion temp directories exist and are in fact, directories
+
+        if !self.plexDirectory.exists {
+            try self.plexDirectory.mkpath()
+        }
         guard self.plexDirectory.exists else {
             throw ConfigError.pathDoesNotExist(self.plexDirectory)
         }
@@ -89,6 +121,9 @@ struct Config {
             throw ConfigError.pathIsNotDirectory(self.plexDirectory)
         }
 
+        if !self.downloadDirectory.exists {
+            try self.downloadDirectory.mkpath()
+        }
         guard self.downloadDirectory.exists else {
             throw ConfigError.pathDoesNotExist(self.downloadDirectory)
         }
@@ -96,12 +131,16 @@ struct Config {
             throw ConfigError.pathIsNotDirectory(self.downloadDirectory)
         }
 
-        // Validate the Cron strings
-        guard let _ = try? Cron.parseExpression(self.convertCronStart) else {
-            throw ConfigError.invalidCronString(self.convertCronStart)
-        }
-        guard let _ = try? Cron.parseExpression(self.convertCronEnd) else {
-            throw ConfigError.invalidCronString(self.convertCronEnd)
+        if self.convert {
+            if !self.convertTempDirectory.exists {
+                try self.convertTempDirectory.mkpath()
+            }
+            guard self.convertTempDirectory.exists else {
+                throw ConfigError.pathDoesNotExist(self.convertTempDirectory)
+            }
+            guard self.convertTempDirectory.isDirectory else {
+                throw ConfigError.pathIsNotDirectory(self.convertTempDirectory)
+            }
         }
     }
 
@@ -130,7 +169,7 @@ struct Config {
 }
 
 /// Allows the config to be initialized from a json file
-extension Config: JSONInitializable {
+extension Config: JSONConvertible {
     /// Initializes by reading the file at the path as a JSON string
     init(_ path: Path, logger: SwiftyBeaver.Type) throws {
         try self.init(path.read())
@@ -147,69 +186,69 @@ extension Config: JSONInitializable {
     init(json: JSON) throws {
         log = SwiftyBeaver.self
 
-        plexDirectory = Path(try json.get("plexDirectory"))
-        downloadDirectory = Path(try json.get("downloadDirectory"))
-        do {
-            convert = try json.get("convert")
-        } catch {
-            convert = false
-        }
-        do {
-            convertImmediately = try json.get("convertImmediately")
-        } catch {
-            convertImmediately = true
-        }
-        do {
-            convertCronStart = try json.get("convertCronStart")
-            try Cron.parseExpression(convertCronStart)
-        } catch {
-            convertCronStart = "0 0 0 * * * *"
-        }
-        do {
-            convertCronEnd = try json.get("convertCronEnd")
-            try Cron.parseExpression(convertCronStart)
-        } catch {
-            convertCronEnd = "0 0 8 * * * *"
-        }
-        do {
-            convertThreads = try json.get("convertThreads")
-        } catch {
-            convertThreads = 2
-        }
-        do {
-            deleteOriginal = try json.get("deleteOriginal")
-        } catch {
-            deleteOriginal = true
-        }
-        do {
-            logLevel = try json.get("logLevel")
-        } catch {
-            logLevel = 0
-        }
+        self.plexDirectory = Path((try? json.get("plexDirectory")) ?? self.plexDirectory.string)
+        self.downloadDirectory = Path((try? json.get("downloadDirectory")) ?? self.downloadDirectory.string)
+        self.convertTempDirectory = Path((try? json.get("convertTempDirectory")) ?? self.convertTempDirectory.string)
+
+        self.convert = (try? json.get("convert")) ?? self.convert
+        self.convertImmediately = (try? json.get("convertImmediately")) ?? self.convertImmediately
+        self.convertCronStart = (try? DatePattern(json.get("convertCronStart"))) ?? self.convertCronStart
+        self.convertCronEnd = (try? DatePattern(json.get("convertCronEnd"))) ?? self.convertCronEnd
+        self.convertThreads = (try? json.get("convertThreads")) ?? self.convertThreads
+        self.deleteOriginal = (try? json.get("deleteOriginal")) ?? self.deleteOriginal
+        let videoContainerString = (try? json.get("convertVideoContainer")) ?? ""
+        self.convertVideoContainer = VideoContainer(rawValue: videoContainerString) ?? self.convertVideoContainer
+        let videoCodecString = (try? json.get("convertVideoCodec")) ?? ""
+        self.convertVideoCodec = VideoCodec(rawValue: videoCodecString) ?? self.convertVideoCodec
+        let audioContainerString = (try? json.get("convertAudioContainer")) ?? ""
+        self.convertAudioContainer = AudioContainer(rawValue: audioContainerString) ?? self.convertAudioContainer
+        let audioCodecString = (try? json.get("convertAudioCodec")) ?? ""
+        self.convertAudioCodec = AudioCodec(rawValue: audioCodecString) ?? self.convertAudioCodec
+        self.convertVideoSubtitleScan = (try? json.get("convertVideoSubtitleScan")) ?? self.convertVideoSubtitleScan
+        let languageString = (try? json.get("convertLanguage")) ?? ""
+        self.convertLanguage = Language(rawValue: languageString) ?? self.convertLanguage
+        self.convertVideoMaxFramerate = (try? json.get("convertVideoMaxFramerate")) ?? self.convertVideoMaxFramerate
+
+        self.logLevel = (try? json.get("logLevel")) ?? self.logLevel
         if let lFile: String = try? json.get("logFile") {
             logFile = Path(lFile)
         } else {
             logFile = nil
         }
 
-        guard plexDirectory.exists else {
-            throw ConfigError.pathDoesNotExist(plexDirectory)
+        if !self.plexDirectory.exists {
+            try self.plexDirectory.mkpath()
         }
-        guard plexDirectory.isDirectory else {
-            throw ConfigError.pathIsNotDirectory(plexDirectory)
+        guard self.plexDirectory.exists else {
+            throw ConfigError.pathDoesNotExist(self.plexDirectory)
+        }
+        guard self.plexDirectory.isDirectory else {
+            throw ConfigError.pathIsNotDirectory(self.plexDirectory)
         }
 
-        guard downloadDirectory.exists else {
-            throw ConfigError.pathDoesNotExist(downloadDirectory)
+        if !self.downloadDirectory.exists {
+            try self.downloadDirectory.mkpath()
         }
-        guard downloadDirectory.isDirectory else {
-            throw ConfigError.pathIsNotDirectory(downloadDirectory)
+        guard self.downloadDirectory.exists else {
+            throw ConfigError.pathDoesNotExist(self.downloadDirectory)
+        }
+        guard self.downloadDirectory.isDirectory else {
+            throw ConfigError.pathIsNotDirectory(self.downloadDirectory)
+        }
+
+        if self.convert {
+            if !self.convertTempDirectory.exists {
+                try self.convertTempDirectory.mkpath()
+            }
+            guard self.convertTempDirectory.exists else {
+                throw ConfigError.pathDoesNotExist(self.convertTempDirectory)
+            }
+            guard self.convertTempDirectory.isDirectory else {
+                throw ConfigError.pathIsNotDirectory(self.convertTempDirectory)
+            }
         }
     }
-}
 
-/// Allows the config to output/represented as JSON
-extension Config: JSONRepresentable {
     /**
      Creates a JSON object from self
 
@@ -225,6 +264,14 @@ extension Config: JSONRepresentable {
             "convertCronEnd": convertCronEnd,
             "convertThreads": convertThreads,
             "deleteOriginal": deleteOriginal,
+            "convertVideoContainer": convertVideoContainer.rawValue,
+            "convertVideoCodec": convertVideoCodec.rawValue,
+            "convertAudioContainer": convertAudioContainer.rawValue,
+            "convertAudioCodec": convertAudioCodec.rawValue,
+            "convertVideoSubtitleScan": convertVideoSubtitleScan,
+            "convertLanguage": convertLanguage.rawValue,
+            "convertVideoMaxFramerate": convertVideoMaxFramerate,
+            "convertTempDirectory": convertTempDirectory.string,
             "logLevel": logLevel
         ]
         if let lFile = logFile {
@@ -251,10 +298,18 @@ extension Config: JSONRepresentable {
             "downloadDirectory": downloadDirectory.string,
             "convert": convert,
             "convertImmediately": convertImmediately,
-            "convertCronStart": convertCronStart,
-            "convertCronEnd": convertCronEnd,
+            "convertCronStart": convertCronStart.string,
+            "convertCronEnd": convertCronEnd.string,
             "convertThreads": convertThreads,
             "deleteOriginal": deleteOriginal,
+            "convertVideoContainer": convertVideoContainer.rawValue,
+            "convertVideoCodec": convertVideoCodec.rawValue,
+            "convertAudioContainer": convertAudioContainer.rawValue,
+            "convertAudioCodec": convertAudioCodec.rawValue,
+            "convertVideoSubtitleScan": convertVideoSubtitleScan,
+            "convertLanguage": convertLanguage.rawValue,
+            "convertVideoMaxFramerate": convertVideoMaxFramerate,
+            "convertTempDirectory": convertTempDirectory.string,
             "logLevel": logLevel
         ]
         if let lFile = logFile {
@@ -271,4 +326,24 @@ extension Config: JSONRepresentable {
     func save() throws {
         try configFile.write(self.serialized(), force: true)
     }
+}
+
+protocol ConversionConfig {}
+
+struct VideoConversionConfig: ConversionConfig {
+    var container: VideoContainer
+    var videoCodec: VideoCodec
+    var audioCodec: AudioCodec
+    var subtitleScan: Bool
+    var mainLanguage: Language
+    var maxFramerate: Double
+    var plexDir: Path
+    var tempDir: Path?
+}
+
+struct AudioConversionConfig: ConversionConfig {
+    var container: AudioContainer
+    var codec: AudioCodec
+    var plexDir: Path
+    var tempDir: Path?
 }

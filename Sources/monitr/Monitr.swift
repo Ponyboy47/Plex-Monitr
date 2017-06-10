@@ -12,17 +12,36 @@
 import Foundation
 import PathKit
 import Async
+import Cron
+#if os(Linux)
+import Dispatch
+#endif
 
-enum MonitrError: Swift.Error {
+enum MonitrError: Error {
+    enum MissingDependency: Error {
+        case handbrake
+        case mp4v2
+        case ffmpeg
+        case mkvtoolnix
+        case transcode_video
+    }
 }
 
 /// Checks the downloads directory for new content to add to Plex
 final class Monitr: DirectoryMonitorDelegate {
+    /// The current version of monitr
+    static var version: String = "0.4.0"
+
     /// The configuration to use for the monitor
     private var config: Config
 
     /// The statistics object to track useage data for the monitor
     private var statistics: Statistic = Statistic()
+
+    /// The queue of conversion jobs
+    var conversionQueue: ConversionQueue?
+    private var cronStart: CronJob?
+    private var cronEnd: CronJob?
 
     /// Whether or not media is currently being migrated to Plex. Automatically
     ///   runs a new again if new media has been added since the run routine began
@@ -44,6 +63,129 @@ final class Monitr: DirectoryMonitorDelegate {
         let statFile = config.configFile.parent + Statistic.filename
         if statFile.exists && statFile.isFile {
             self.statistics = try Statistic(statFile)
+        }
+
+        if config.convert {
+            try checkConversionDependencies()
+        }
+
+        let conversionQueueFile = config.configFile.parent + ConversionQueue.filename
+        if conversionQueueFile.exists && conversionQueueFile.isFile {
+            self.conversionQueue = try ConversionQueue(conversionQueueFile)
+        }
+
+        if config.convert && !config.convertImmediately {
+            log.info("Setting up the conversion queue cron jobs")
+            self.cronStart = CronJob(pattern: config.convertCronStart, queue: .global(qos: .background)) {
+                self.conversionQueue?.start()
+            }
+            self.cronEnd = CronJob(pattern: config.convertCronEnd, queue: .global(qos: .background)) {
+                self.conversionQueue?.stop = true
+            }
+            let next = MediaDuration(double: cronStart!.pattern.next(Date())!.date!.timeIntervalSinceNow)
+            log.info("Set up conversion cron job! It will begin in \(next.description)")
+        }
+    }
+
+    private func checkConversionDependencies() throws {
+		struct Output {
+        	var stdout: String?
+	        var stderr: String?
+    	    init (_ out: String?, _ err: String?) {
+        	    stdout = out
+            	stderr = err
+        	}
+	    }
+
+		func execute(_ command: String...) -> (Int32, Output) {
+            let task = Process()
+            task.launchPath = "/usr/bin/env"
+            task.arguments = command
+
+            let stdoutPipe = Pipe()
+            let stderrPipe = Pipe()
+            task.standardOutput = stdoutPipe
+            task.standardError = stderrPipe
+            task.launch()
+            let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+            let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+            let stdout = String(data: stdoutData, encoding: .utf8)
+            let stderr = String(data: stderrData, encoding: .utf8)
+            task.waitUntilExit()
+            return (task.terminationStatus, Output(stdout, stderr))
+        }
+
+		self.config.log.info("Making sure we have the required dependencies for transcoding media...") 
+
+        // Check conversion tool dependencies 
+        var dependency = "handbrake"
+        let (rc1, output1) = execute("which", "HandBrakeCLI")
+        guard rc1 == 0, let stdout1 = output1.stdout, !stdout1.isEmpty else {
+            var debugMessage = "Error determining if '\(dependency)' dependency is met.\n\tReturn Code: \(rc1)"
+            if let stdout = output1.stdout {
+                debugMessage += "\n\tStandard Output: '\(stdout)'"
+            }
+            if let stderr = output1.stderr {
+                debugMessage += "\n\tStandard Error: '\(stderr)'"
+            }
+            self.config.log.debug(debugMessage)
+            throw MonitrError.MissingDependency.handbrake 
+        } 
+
+        dependency = "mp4v2"
+        let (rc2, output2) = execute("which", "mp4track")
+        guard rc2 == 0, let stdout2 = output2.stdout, !stdout2.isEmpty else { 
+            var debugMessage = "Error determining if '\(dependency)' dependency is met.\n\tReturn Code: \(rc2)"
+            if let stdout = output2.stdout {
+                debugMessage += "\n\tStandard Output: '\(stdout)'"
+            }
+            if let stderr = output2.stderr {
+                debugMessage += "\n\tStandard Error: '\(stderr)'"
+            }
+            self.config.log.debug(debugMessage)
+            throw MonitrError.MissingDependency.mp4v2 
+        } 
+
+        dependency = "ffmpeg"
+        let (rc3, output3) = execute("which", "ffmpeg")
+        guard rc3 == 0, let stdout3 = output3.stdout, !stdout3.isEmpty else { 
+            var debugMessage = "Error determining if '\(dependency)' dependency is met.\n\tReturn Code: \(rc3)"
+            if let stdout = output3.stdout {
+                debugMessage += "\n\tStandard Output: '\(stdout)'"
+            }
+            if let stderr = output3.stderr {
+                debugMessage += "\n\tStandard Error: '\(stderr)'"
+            }
+            self.config.log.debug(debugMessage)
+            throw MonitrError.MissingDependency.ffmpeg 
+        } 
+
+        dependency = "mkvtoolnix"
+        let (rc4, output4) = execute("which", "mkvpropedit")
+        guard rc4 == 0, let stdout4 = output4.stdout, !stdout4.isEmpty else { 
+            var debugMessage = "Error determining if '\(dependency)' dependency is met.\n\tReturn Code: \(rc4)"
+            if let stdout = output4.stdout {
+                debugMessage += "\n\tStandard Output: '\(stdout)'"
+            }
+            if let stderr = output4.stderr {
+                debugMessage += "\n\tStandard Error: '\(stderr)'"
+            }
+            self.config.log.debug(debugMessage)
+            throw MonitrError.MissingDependency.mkvtoolnix 
+        } 
+
+        dependency = "transcode-video"
+        let (rc5, output5) = execute("which", "transcode-video")
+        guard rc5 == 0, let stdout5 = output5.stdout, !stdout5.isEmpty else { 
+            var debugMessage = "Error determining if '\(dependency)' dependency is met.\n\tReturn Code: \(rc5)"
+            if let stdout = output5.stdout {
+                debugMessage += "\n\tStandard Output: '\(stdout)'"
+            }
+            if let stderr = output5.stderr {
+                debugMessage += "\n\tStandard Error: '\(stderr)'"
+            }
+            self.config.log.debug(debugMessage)
+            throw MonitrError.MissingDependency.transcode_video 
         }
     }
 
@@ -93,12 +235,12 @@ final class Monitr: DirectoryMonitorDelegate {
         //   NOTE: If convertImmediately is false, then a queue of conversion 
         //         jobs are created to be run during the scheduled time period
         if self.config.convert, let unconvertedMedia = self.convertMedia(&media) {
-            self.config.log.warning("Failed to convert media:\n\t\(unconvertedMedia)")
+            self.config.log.warning("Failed to convert media:\n\t\(unconvertedMedia.map({ $0.path }))")
         }
 
         // If we gathered any supported media files, move them to their plex location
         if let unmovedMedia = self.moveMedia(&media) {
-            self.config.log.warning("Failed to move media to plex:\n\t\(unmovedMedia)")
+            self.config.log.warning("Failed to move media to plex:\n\t\(unmovedMedia.map({ $0.path }))")
         }
     }
 
@@ -121,9 +263,22 @@ final class Monitr: DirectoryMonitorDelegate {
     public func shutdown(now: Bool = false) {
         self.config.log.info("Shutting down monitr.")
         self.config.stopMonitoring()
+        if (self.conversionQueue?.waiting ?? 0) > 0 {
+            self.config.log.info("Saving conversion queue")
+            try? self.conversionQueue?.save()
+        }
         // Go through conversions and halt them/save them
         if now {
             // Kill any other stuff going on
+            if (self.conversionQueue?.active ?? 0) > 0 {
+                // TODO: Kill and cleanup current conversion jobs
+            }
+        } else {
+            if (self.conversionQueue?.active ?? 0) > 0 {
+                self.conversionQueue?.stop = true
+                self.config.log.info("Waiting for current conversion jobs to finish before shutting down")
+                self.conversionQueue?.conversionGroup.wait()
+            }
         }
     }
 
@@ -164,27 +319,26 @@ final class Monitr: DirectoryMonitorDelegate {
      - Returns: A Media object, or nil if the file is not supported
     */
     private func getMedia(with file: Path) -> Media? {
-        var m: Media?
 		let ext = file.extension ?? ""
         do {
             if Video.isSupported(ext: ext) {
                 do {
-                    m = try Video(file)
+                    return try Video(file)
                 } catch MediaError.sampleMedia {
-                    m = try Ignore(file)
+                    return try Ignore(file)
                 }
             } else if Audio.isSupported(ext: ext) {
-                m = try Audio(file)
+                return try Audio(file)
             } else if Subtitle.isSupported(ext: ext) {
-                m = try Subtitle(file)
+                return try Subtitle(file)
             } else if Ignore.isSupported(ext: ext) || file.string.lowercased().ends(with: ".ds_store") {
-                m = try Ignore(file)
+                return try Ignore(file)
             }
         } catch {
             self.config.log.warning("Error occured trying to create media object from '\(file)'.")
             self.config.log.error(error)
         }
-        return m
+        return nil
     }
 
     /**
@@ -197,19 +351,19 @@ final class Monitr: DirectoryMonitorDelegate {
     func moveMedia(_ media: inout [Media]) -> [Media]? {
         var failedMedia: [Media] = []
 
-        for var m in media {
-            let moveBlock = Async.utility {
+        for var m in media where m is MovableMedia {
+            // Starts a new utility thread to move the file
+            Sync.utility {
                 self.statistics.measure(.move) {
                     do {
-                        m = try m.move(to: self.config.plexDirectory, log: self.config.log)
+                        m = try (m as! MovableMedia).move(to: self.config.plexDirectory, log: self.config.log)
                     } catch {
-                        self.config.log.warning("Failed to move media: \(m)")
+                        self.config.log.warning("Failed to move media: \(m.path)")
                         self.config.log.error(error)
                         failedMedia.append(m)
                     }
                 }
             }
-            moveBlock.wait()
         }
 
         guard failedMedia.count > 0 else { return nil }
@@ -224,40 +378,104 @@ final class Monitr: DirectoryMonitorDelegate {
 
      - Returns: An array of Media objects that failed to be converted
     */
-    func convertMedia(_ media: inout [Media]) -> [Media]? {
-        var failedMedia: [Media] = []
+    func convertMedia(_ media: inout [Media]) -> [ConvertibleMedia]? {
+        var failedMedia: [ConvertibleMedia] = []
+
+        let videoConfig = VideoConversionConfig(container: self.config.convertVideoContainer, videoCodec: self.config.convertVideoCodec, audioCodec: self.config.convertAudioCodec, subtitleScan: self.config.convertVideoSubtitleScan, mainLanguage: self.config.convertLanguage, maxFramerate: self.config.convertVideoMaxFramerate, plexDir: self.config.plexDirectory, tempDir: self.config.deleteOriginal ? nil : self.config.convertTempDirectory)
+        let audioConfig = AudioConversionConfig(container: self.config.convertAudioContainer, codec: self.config.convertAudioCodec, plexDir: self.config.plexDirectory, tempDir: self.config.deleteOriginal ? nil : self.config.convertTempDirectory)
+
+        self.config.log.info("Getting the array of media that needs to be converted.")
+        let mediaToConvert: [ConvertibleMedia] = media.filter {
+            guard $0 is ConvertibleMedia else { return false }
+            if $0 is Video {
+                do {
+                    guard try Video.needsConversion(file: $0.path, with: videoConfig, log: self.config.log) else { return false }
+                } catch {}
+                log.info("We must convert video file '\($0.path.absolute)' for Plex Direct Play/Stream.")
+                return true
+            } else if  $0 is Audio {
+                do {
+                    guard try Audio.needsConversion(file: $0.path, with: audioConfig, log: self.config.log) else { return false }
+                } catch {}
+                log.info("We must convert audio file '\($0.path.absolute)' for Plex Direct Play/Stream.")
+                return true
+            }
+            return false
+            } as! [ConvertibleMedia]
 
         if self.config.convertImmediately {
             self.config.log.verbose("Converting media immediately")
-            for var m in media {
-                let convertBlock = Async.utility {
-                    self.statistics.measure(.convert) {
-                        do {
-                            m = try m.convert(self.config.log)
-                        } catch {
-                            self.config.log.warning("Failed to convert media: \(m)")
-                            self.config.log.error(error)
-                            failedMedia.append(m)
+
+            let convertGroup = AsyncGroup()
+            var simultaneousConversions: Int = 0
+            for var m in mediaToConvert {
+                if m is Video {
+                    simultaneousConversions += 1
+                    convertGroup.utility {
+                        self.statistics.measure(.convert) {
+                            do {
+                                m = try m.convert(videoConfig, self.config.log)
+                            } catch {
+                                self.config.log.warning("Failed to convert video file: \(m.path)")
+                                self.config.log.error(error)
+                                failedMedia.append(m)
+                            }
                         }
+                        simultaneousConversions -= 1
+                    }
+                } else if m is Audio {
+                    simultaneousConversions += 1
+                    convertGroup.utility {
+                        self.statistics.measure(.convert) {
+                            do {
+                                m = try m.convert(audioConfig, self.config.log)
+                            } catch {
+                                self.config.log.warning("Failed to convert audio file: \(m.path)")
+                                self.config.log.error(error)
+                                failedMedia.append(m)
+                            }
+                        }
+                        simultaneousConversions -= 1
                     }
                 }
-                convertBlock.wait()
+                self.config.log.verbose("Currently running \(simultaneousConversions) simultaneous conversion jobs.")
+
+                // Check to see if we've started all the conversion jobs now
+                var isLast = false
+
+                // If the current media object is the same as the last one, then we can compare them. If they're different then we know they're not a match anyways
+                if m is Video && mediaToConvert.last is Video {
+                    isLast = m.path == mediaToConvert.last!.path
+                } else if m is Audio && mediaToConvert.last is Audio {
+                    isLast = m.path == mediaToConvert.last!.path
+                }
+                if !isLast {
+                    // Blocks for as long as there are as many conversion jobs
+                    // running as the configured conversion thread limit
+                    //   NOTE: Does this by waiting for 60 seconds (or until all
+                    //   threads have completed) and then rechecking the number of
+                    //   simultaneous conversions (since the number should
+                    //   increment when a thread starts and decrement when it
+                    //   finishes)
+                    while simultaneousConversions >= self.config.convertThreads {
+                        self.config.log.info("Maximum number conversion threads (\(self.config.convertThreads)) reached. Waiting 60 seconds and checking to see if any have finished.")
+                        convertGroup.wait(seconds: 60)
+                    }
+                }
             }
+            // Now that we've started all the conversion processes, wait indefinitely for them all to finish
+            convertGroup.wait()
         } else {
-            if self.config.conversionQueue == nil {
+            if self.conversionQueue == nil {
                 self.config.log.info("Creating a conversion queue")
-                self.config.conversionQueue = ConversionQueue(self.config, statistics: self.statistics)
+                self.conversionQueue = ConversionQueue(self.config, statistics: self.statistics)
             } else {
                 self.config.log.info("Using existing conversion queue")
             }
 
             // Create a queue of conversion jobs for later
-            for m in media {
-                if Video.isSupported(ext: m.path.`extension` ?? "") && Video.needsConversion(file: m.path) {
-                    self.config.conversionQueue?.push(m as! Video)
-                } else if Audio.isSupported(ext: m.path.`extension` ?? "") && Audio.needsConversion(file: m.path) {
-                    self.config.conversionQueue?.push(m as! Audio)
-                }
+            for var m in mediaToConvert {
+                self.conversionQueue!.push(&m)
             }
         }
 
