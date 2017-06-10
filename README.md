@@ -249,3 +249,4 @@ NOTE: If set, and logging level >= 3 (debug or verbose), logs are written both t
 - [x] Convert media to Plex Direct Play/Stream formats with Handbrake CLI or ffmpeg
 - [ ] Preserve TV show episode titles
 - [ ] Support multi-part TV show episodes
+- [ ] Create a command to display the statistics

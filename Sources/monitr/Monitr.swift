@@ -263,6 +263,8 @@ final class Monitr: DirectoryMonitorDelegate {
     public func shutdown(now: Bool = false) {
         self.config.log.info("Shutting down monitr.")
         self.config.stopMonitoring()
+        self.config.log.info("Saving the program's statistics")
+        try? self.statistics.save(self.config.configFile.parent)
         if (self.conversionQueue?.waiting ?? 0) > 0 {
             self.config.log.info("Saving conversion queue")
             try? self.conversionQueue?.save()
