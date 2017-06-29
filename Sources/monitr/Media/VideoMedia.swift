@@ -474,7 +474,9 @@ final class Video: ConvertibleMedia {
     func findSubtitles(below: Path, log: SwiftyBeaver.Type) {
         // Get the highest directory that is below the below Path
         var top = path
-        while top.parent != below {
+        // If we don't do the absolute paths, then the string comparison on the
+        // paths won't work properly
+        while top.parent.absolute != below.absolute {
             top = top.parent
         }
         // This occurs when the from Path is in the below Path and so the above

@@ -30,7 +30,7 @@ enum MonitrError: Error {
 /// Checks the downloads directory for new content to add to Plex
 final class Monitr: DirectoryMonitorDelegate {
     /// The current version of monitr
-    static var version: String = "0.5.1"
+    static var version: String = "0.5.2"
 
     /// The configuration to use for the monitor
     private var config: Config
@@ -268,7 +268,9 @@ final class Monitr: DirectoryMonitorDelegate {
             // Skips the directories and just checks for files
             for childFile in children where childFile.isFile {
                 if let m = self.getMedia(with: childFile) {
-                    media.append(m)
+                    if !(m is Video.Subtitle) {
+                        media.append(m)
+                    }
                 } else {
                     self.config.log.warning("Unknown/unsupported file found: \(childFile)")
                 }
@@ -303,6 +305,8 @@ final class Monitr: DirectoryMonitorDelegate {
                 return try Audio(file)
             } else if Ignore.isSupported(ext: ext) || file.string.lowercased().ends(with: ".ds_store") {
                 return try Ignore(file)
+            } else if Video.Subtitle.isSupported(ext: ext) {
+                return try Video.Subtitle(file)
             }
         } catch {
             self.config.log.warning("Error occured trying to create media object from '\(file)'.")
