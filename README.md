@@ -212,6 +212,13 @@ defaults to 30.0
 ```
 default is /tmp
 
+#### Set whether or not subtitle files should be deleted or preserved for video media:
+`-q` or `--delete-subtitles`
+```bash
+.build/debug/monitr --delete-subtitles
+```
+default is false
+
 #### Set whether or not to save these config settings to the config file:
 `-s` or `--save-settings`
 ```bash
@@ -250,7 +257,8 @@ NOTE: If set, and logging level >= 3 (debug or verbose), logs are written both t
 - [x] The CLI boolean flags with a default value of true cannot be set to false. Fix it.
 - [ ] Do something with files that failed to be moved
 - [x] Don't register downloads with x264 as a TV show of Season 2 Episode 64
-- [ ] Better subtitle file support
+- [x] Better subtitle file support
+- [x] Make an option for deleting subtitle files upon import
 - [ ] Get show name/season from parent directory? (Useful when there is an organized directory structure, but file names do not contain all the relevant info)
 - [x] Convert media to Plex Direct Play/Stream formats with Handbrake CLI or ffmpeg
 - [ ] Preserve TV show episode titles
