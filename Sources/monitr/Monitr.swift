@@ -183,7 +183,7 @@ final class Monitr: DirectoryMonitorDelegate {
 
         let video = media.filter { $0 is Video }
         let audio = media.filter { $0 is Audio }
-        let other = media.filter { $0 is Ignore }
+        let ignorable = media.filter { $0 is Ignore }
 
         self.config.log.info("Found \(media.count) files in the download directory!")
         if video.count > 0 {
@@ -194,9 +194,9 @@ final class Monitr: DirectoryMonitorDelegate {
             self.config.log.info("\t \(audio.count) audio files")
             self.config.log.verbose(audio.map { $0.path })
         }
-        if other.count > 0 {
-            self.config.log.info("\t \(other.count) other files")
-            self.config.log.verbose(other.map { $0.path })
+        if ignorable.count > 0 {
+            self.config.log.info("\t \(ignorable.count) ignorable files")
+            self.config.log.verbose(ignorable.map { $0.path })
         }
 
         // If we want to convert media, lets do that before we move it to plex
