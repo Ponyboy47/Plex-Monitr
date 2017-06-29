@@ -65,6 +65,8 @@ struct Config {
     var convertVideoMaxFramerate: Double = 30.0
     /// The directory to place converted media before moving it to Plex
     var convertTempDirectory: Path = "/tmp"
+    /// Whether external subtitle files should be deleted upon import with Monitr
+    var deleteSubtitles: Bool = false
 
     var logFile: Path?
     var logLevel: Int = 0
@@ -80,6 +82,7 @@ struct Config {
          _ convertAudioContainer: AudioContainer? = nil, _ convertAudioCodec: AudioCodec? = nil,
          _ convertVideoSubtitleScan: Bool? = nil, _ convertLanguage: Language? = nil,
          _ convertVideoMaxFramerate: Double? = nil, _ convertTempDirectory: Path? = nil,
+         _ deleteSubtitles: Bool? = nil,
          _ logLevel: Int? = nil, _ logFile: Path? = nil, logger: SwiftyBeaver.Type) throws {
         self.log = logger
         self.configFile = configFile ?? self.configFile
@@ -99,6 +102,7 @@ struct Config {
         self.convertLanguage = convertLanguage ?? self.convertLanguage
         self.convertVideoMaxFramerate = convertVideoMaxFramerate ?? self.convertVideoMaxFramerate
         self.convertTempDirectory = convertTempDirectory ?? self.convertTempDirectory
+        self.deleteSubtitles = deleteSubtitles ?? self.deleteSubtitles
         self.logLevel = logLevel ?? self.logLevel
         self.logFile = logFile
 
@@ -208,6 +212,7 @@ extension Config: JSONConvertible {
         let languageString = (try? json.get("convertLanguage")) ?? ""
         self.convertLanguage = Language(rawValue: languageString) ?? self.convertLanguage
         self.convertVideoMaxFramerate = (try? json.get("convertVideoMaxFramerate")) ?? self.convertVideoMaxFramerate
+        self.deleteSubtitles = (try? json.get("deleteSubtitles")) ?? self.deleteSubtitles
 
         self.logLevel = (try? json.get("logLevel")) ?? self.logLevel
         if let lFile: String = try? json.get("logFile") {
@@ -272,6 +277,7 @@ extension Config: JSONConvertible {
             "convertLanguage": convertLanguage.rawValue,
             "convertVideoMaxFramerate": convertVideoMaxFramerate,
             "convertTempDirectory": convertTempDirectory.string,
+            "deleteSubtitles": deleteSubtitles,
             "logLevel": logLevel
         ]
         if let lFile = logFile {
@@ -310,6 +316,7 @@ extension Config: JSONConvertible {
             "convertLanguage": convertLanguage.rawValue,
             "convertVideoMaxFramerate": convertVideoMaxFramerate,
             "convertTempDirectory": convertTempDirectory.string,
+            "deleteSubtitles": deleteSubtitles,
             "logLevel": logLevel
         ]
         if let lFile = logFile {

@@ -88,38 +88,11 @@ final class Monitr: DirectoryMonitorDelegate {
     }
 
     private func checkConversionDependencies() throws {
-		struct Output {
-        	var stdout: String?
-	        var stderr: String?
-    	    init (_ out: String?, _ err: String?) {
-        	    stdout = out
-            	stderr = err
-        	}
-	    }
-
-		func execute(_ command: String...) -> (Int32, Output) {
-            let task = Process()
-            task.launchPath = "/usr/bin/env"
-            task.arguments = command
-
-            let stdoutPipe = Pipe()
-            let stderrPipe = Pipe()
-            task.standardOutput = stdoutPipe
-            task.standardError = stderrPipe
-            task.launch()
-            let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-            let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-            let stdout = String(data: stdoutData, encoding: .utf8)
-            let stderr = String(data: stderrData, encoding: .utf8)
-            task.waitUntilExit()
-            return (task.terminationStatus, Output(stdout, stderr))
-        }
-
 		self.config.log.info("Making sure we have the required dependencies for transcoding media...") 
 
         // Check conversion tool dependencies 
         var dependency = "handbrake"
-        let (rc1, output1) = execute("which", "HandBrakeCLI")
+        let (rc1, output1) = Command.execute("which", "HandBrakeCLI")
         guard rc1 == 0, let stdout1 = output1.stdout, !stdout1.isEmpty else {
             var debugMessage = "Error determining if '\(dependency)' dependency is met.\n\tReturn Code: \(rc1)"
             if let stdout = output1.stdout {
@@ -133,7 +106,7 @@ final class Monitr: DirectoryMonitorDelegate {
         } 
 
         dependency = "mp4v2"
-        let (rc2, output2) = execute("which", "mp4track")
+        let (rc2, output2) = Command.execute("which", "mp4track")
         guard rc2 == 0, let stdout2 = output2.stdout, !stdout2.isEmpty else { 
             var debugMessage = "Error determining if '\(dependency)' dependency is met.\n\tReturn Code: \(rc2)"
             if let stdout = output2.stdout {
@@ -147,7 +120,7 @@ final class Monitr: DirectoryMonitorDelegate {
         } 
 
         dependency = "ffmpeg"
-        let (rc3, output3) = execute("which", "ffmpeg")
+        let (rc3, output3) = Command.execute("which", "ffmpeg")
         guard rc3 == 0, let stdout3 = output3.stdout, !stdout3.isEmpty else { 
             var debugMessage = "Error determining if '\(dependency)' dependency is met.\n\tReturn Code: \(rc3)"
             if let stdout = output3.stdout {
@@ -161,7 +134,7 @@ final class Monitr: DirectoryMonitorDelegate {
         } 
 
         dependency = "mkvtoolnix"
-        let (rc4, output4) = execute("which", "mkvpropedit")
+        let (rc4, output4) = Command.execute("which", "mkvpropedit")
         guard rc4 == 0, let stdout4 = output4.stdout, !stdout4.isEmpty else { 
             var debugMessage = "Error determining if '\(dependency)' dependency is met.\n\tReturn Code: \(rc4)"
             if let stdout = output4.stdout {
@@ -175,7 +148,7 @@ final class Monitr: DirectoryMonitorDelegate {
         } 
 
         dependency = "transcode-video"
-        let (rc5, output5) = execute("which", "transcode-video")
+        let (rc5, output5) = Command.execute("which", "transcode-video")
         guard rc5 == 0, let stdout5 = output5.stdout, !stdout5.isEmpty else { 
             var debugMessage = "Error determining if '\(dependency)' dependency is met.\n\tReturn Code: \(rc5)"
             if let stdout = output5.stdout {
@@ -209,7 +182,6 @@ final class Monitr: DirectoryMonitorDelegate {
         }
 
         let video = media.filter { $0 is Video }
-        let subtitle = media.filter { $0 is Subtitle }
         let audio = media.filter { $0 is Audio }
         let other = media.filter { $0 is Ignore }
 
@@ -217,10 +189,6 @@ final class Monitr: DirectoryMonitorDelegate {
         if video.count > 0 {
             self.config.log.info("\t \(video.count) video files")
             self.config.log.verbose(video.map { $0.path })
-        }
-        if subtitle.count > 0 {
-            self.config.log.info("\t \(subtitle.count) subtitle files")
-            self.config.log.verbose(subtitle.map { $0.path })
         }
         if audio.count > 0 {
             self.config.log.info("\t \(audio.count) audio files")
@@ -325,14 +293,14 @@ final class Monitr: DirectoryMonitorDelegate {
         do {
             if Video.isSupported(ext: ext) {
                 do {
-                    return try Video(file)
-                } catch MediaError.sampleMedia {
+                    let video = try Video(file)
+                    video.findSubtitles(below: self.config.downloadDirectory, log: self.config.log)
+                    return video
+                } catch MediaError.VideoError.sampleMedia {
                     return try Ignore(file)
                 }
             } else if Audio.isSupported(ext: ext) {
                 return try Audio(file)
-            } else if Subtitle.isSupported(ext: ext) {
-                return try Subtitle(file)
             } else if Ignore.isSupported(ext: ext) || file.string.lowercased().ends(with: ".ds_store") {
                 return try Ignore(file)
             }
@@ -353,12 +321,15 @@ final class Monitr: DirectoryMonitorDelegate {
     func moveMedia(_ media: inout [Media]) -> [Media]? {
         var failedMedia: [Media] = []
 
-        for var m in media where m is MovableMedia {
+        for var m in media {
             // Starts a new utility thread to move the file
             Sync.utility {
                 self.statistics.measure(.move) {
                     do {
-                        m = try (m as! MovableMedia).move(to: self.config.plexDirectory, log: self.config.log)
+                        m = try m.move(to: self.config.plexDirectory, log: self.config.log)
+                        if self.config.deleteSubtitles && m is Video {
+                            m = try (m as! Video).deleteSubtitles() as Media
+                        }
                     } catch {
                         self.config.log.warning("Failed to move media: \(m.path)")
                         self.config.log.error(error)

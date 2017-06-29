@@ -21,7 +21,11 @@ class ConversionQueue: JSONConvertible {
     fileprivate var videoConversionConfig: VideoConversionConfig
     fileprivate var audioConversionConfig: AudioConversionConfig
 
-    fileprivate var jobs: [ConvertibleMedia] = []
+    fileprivate var jobs: [ConvertibleMedia] {
+        return (videoJobs as [ConvertibleMedia]) + (audioJobs as [ConvertibleMedia])
+    }
+    fileprivate var videoJobs: [Video] = []
+    fileprivate var audioJobs: [Audio] = []
     fileprivate var activeJobs: [ConvertibleMedia] = []
 
     var conversionGroup: AsyncGroup = AsyncGroup()
@@ -50,27 +54,62 @@ class ConversionQueue: JSONConvertible {
 
     /// Adds a new Media object to the list of media items to convert
     func push(_ job: inout ConvertibleMedia) {
-        if !jobs.contains(where: { $0.path == job.path }) {
-            jobs.append(job)
+        if !jobs.contains(where: { e in
+            return e.path == job.path
+                    || e.plexFilename == job.plexFilename
+                    && e.finalDirectory == job.finalDirectory
+        }) {
+            if job is Video {
+                videoJobs.append(job as! Video)
+            } else if job is Audio {
+                audioJobs.append(job as! Audio)
+            } else {
+                self.log.warning("Job is neither Audio nor Video and will not be added to the array of jobs.")
+            }
         }
     }
 
     @discardableResult
     fileprivate func pop() -> ConvertibleMedia? {
-        self.activeJobs.append(self.jobs.removeFirst())
+        guard let job = self.jobs.first else { return nil }
+        if job is Video {
+            self.activeJobs.append(self.videoJobs.removeFirst())
+        } else if job is Audio {
+            self.activeJobs.append(self.audioJobs.removeFirst())
+        } else {
+            self.log.warning("First job is of an unknown type!")
+            return nil
+        }
         return self.activeJobs.last
     }
 
     fileprivate func finish(_ job: ConvertibleMedia) throws {
-        guard let index = self.activeJobs.index(where: { $0.path == job.path }) else {
+        guard let index = self.activeJobs.index(where: {  e in
+            return e.path == job.path
+                || e.plexFilename == job.plexFilename
+                && e.finalDirectory == job.finalDirectory
+        }) else {
             throw ConversionError.noJobIndex
         }
         self.activeJobs.remove(at: index)
     }
 
     fileprivate func requeue(_ job: ConvertibleMedia) {
-        let index = self.activeJobs.index(where: { $0.path == job.path })!
-        self.jobs.append(self.activeJobs.remove(at: index))
+        // This should be safe to force unwrap because active jobs will only
+        // ever get items from the jobs arrays
+        let index = self.activeJobs.index(where: { e in
+            return e.path == job.path
+                || e.plexFilename == job.plexFilename
+                && e.finalDirectory == job.finalDirectory
+        })!
+
+        if job is Video {
+            self.videoJobs.append(self.activeJobs.remove(at: index) as! Video)
+        } else if job is Audio {
+            self.audioJobs.append(self.activeJobs.remove(at: index) as! Audio)
+        } else {
+            self.log.warning("Job is of an unknow type and cannot be re-queued")
+        }
     }
 
     func startNextConversion() throws {
@@ -147,37 +186,15 @@ class ConversionQueue: JSONConvertible {
         log = config.log
         videoConversionConfig = VideoConversionConfig(container: config.convertVideoContainer, videoCodec: config.convertVideoCodec, audioCodec: config.convertAudioCodec, subtitleScan: config.convertVideoSubtitleScan, mainLanguage: config.convertLanguage, maxFramerate: config.convertVideoMaxFramerate, plexDir: config.plexDirectory, tempDir: config.deleteOriginal ? nil : config.convertTempDirectory)
         audioConversionConfig = AudioConversionConfig(container: config.convertAudioContainer, codec: config.convertAudioCodec, plexDir: config.plexDirectory, tempDir: config.deleteOriginal ? nil : config.convertTempDirectory)
-        jobs = ConversionQueue.setupJobs(try json.get("jobs"))
+        videoJobs = try json.get("videoJobs")
+        audioJobs = try json.get("audioJobs")
     }
 
-    private static func setupJobs(_ jobs: [BaseConvertibleMedia]) -> [ConvertibleMedia] {
-        var js: [ConvertibleMedia] = []
-        for j in jobs {
-            let ext = j.path.extension ?? ""
-            do {
-                if Video.isSupported(ext: ext) {
-                    js.append(try Video(j.path))
-                } else if Audio.isSupported(ext: ext) {
-                    js.append(try Audio(j.path))
-                }
-            } catch {}
-        }
-        return js
-    }
     public func encoded() -> JSON {
-        var js: [BaseConvertibleMedia] = []
-        for j in jobs {
-            if j is Video {
-                js.append(j as! Video)
-            } else if j is Audio {
-                js.append(j as! Audio)
-            } else {
-                js.append(j as! BaseConvertibleMedia)
-            }
-        }
         return [
             "configPath": configPath.string,
-            "jobs": js.encoded()
+            "videoJobs": videoJobs.encoded(),
+            "audioJobs": audioJobs.encoded()
         ]
     }
 

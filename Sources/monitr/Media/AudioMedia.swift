@@ -15,22 +15,20 @@ import SwiftyBeaver
 import JSON
 
 /// Management for Audio files
-final class Audio: BaseConvertibleMedia {
+final class Audio: ConvertibleMedia {
     /// The supported extensions
-    enum SupportedExtension: String {
-        case mp3
-        case m4a
-        case alac
-        case flac
-        case aac
-        case wav
-    }
+    static var supportedExtensions: [String] = ["mp3", "m4a", "alac", "flac",
+                                                "aac", "wav"]
 
-    override var plexName: String {
+    var path: Path
+    var downpour: Downpour
+    var unconvertedFile: Path?
+
+    var plexName: String {
         // Audio files are usually pretty simple
         return path.lastComponentWithoutExtension
     }
-    override var finalDirectory: Path {
+    var finalDirectory: Path {
         // Music goes in the Music + Artist + Album directory
         var base: Path = "Music"
         guard let artist = downpour.artist else { return base + "Unknown" }
@@ -40,32 +38,17 @@ final class Audio: BaseConvertibleMedia {
         return base
     }
 
-    required init(_ path: Path) throws {
+    init(_ path: Path) throws {
         guard Audio.isSupported(ext: path.extension ?? "") else {
             throw MediaError.unsupportedFormat(path.extension ?? "")
         }
-        try super.init(path)
+        // Set the media file's path to the absolute path
+        self.path = path.absolute
+        // Create the downpour object
+        self.downpour = Downpour(fullPath: path.absolute)
     }
 
-    /// JSONInitializable protocol requirement
-    required init(json: JSON) throws {
-        let p = Path(try json.get("path"))
-        // Check to make sure the extension of the video file matches one of the supported plex extensions
-        guard Audio.isSupported(ext: p.extension ?? "") else {
-            throw MediaError.unsupportedFormat(p.extension ?? "")
-        }
-        try super.init(json: json)
-    }
-
-    override func move(to plexPath: Path, log: SwiftyBeaver.Type) throws -> Audio {
-        return try super.move(to: plexPath, log: log) as! Audio
-    }
-
-    override func moveUnconverted(to plexPath: Path, log: SwiftyBeaver.Type) throws -> Audio {
-        return try super.moveUnconverted(to: plexPath, log: log) as! Audio
-    }
-
-    override func convert(_ conversionConfig: ConversionConfig?, _ log: SwiftyBeaver.Type) throws -> Audio {
+    func convert(_ conversionConfig: ConversionConfig?, _ log: SwiftyBeaver.Type) throws -> ConvertibleMedia {
         // Use the Handbrake CLI to convert to Plex DirectPlay capable audio (if necessary)
         guard let config = conversionConfig as? AudioConversionConfig else {
             throw MediaError.AudioError.invalidConfig
@@ -73,19 +56,12 @@ final class Audio: BaseConvertibleMedia {
         return try convert(config, log)
     }
 
-    func convert(_ conversionConfig: AudioConversionConfig, _ log: SwiftyBeaver.Type) throws -> Audio {
+    func convert(_ conversionConfig: AudioConversionConfig, _ log: SwiftyBeaver.Type) throws -> ConvertibleMedia {
         // Use the Handbrake CLI to convert to Plex DirectPlay capable audio (if necessary)
         return self
     }
 
-    override class func isSupported(ext: String) -> Bool {
-        guard let _ = SupportedExtension(rawValue: ext.lowercased()) else {
-            return false
-        }
-        return true
-    }
-
-    override class func needsConversion(file: Path, with config: ConversionConfig, log: SwiftyBeaver.Type) throws -> Bool {
+    class func needsConversion(file: Path, with config: ConversionConfig, log: SwiftyBeaver.Type) throws -> Bool {
         return false
     }
 }

@@ -46,6 +46,7 @@ let convertVideoSubtitleScanFlag = try Flag("n", alternateNames: ["convert-video
 let convertLanguageOption = try Option<Language>("l", alternateNames: ["convert-language"], description: "The main language to select when converting media with multiple languages available", parser: &argParser)
 let convertVideoMaxFramerateOption = try Option<Double>("m", alternateNames: ["convert-video-max-framerate"], description: "The maximum framerate limit to use when converting video files", parser: &argParser)
 let convertTempDirectoryOption = try Option<Path>("u", alternateNames: ["convert-temp-dir"], description: "The directory where converted media will go prior to being moved to plex", parser: &argParser)
+let deleteSubtitlesFlag = try Flag("q", alternateNames: ["delete-subtitles"], default: false, description: "Whether or not external subtitle files should be deleted upon import with Monitr", parser: &argParser)
 let saveFlag = try Flag("s", alternateNames: ["save-settings"], default: false, description: "Whether or not the configured settings should be saved to the config options file", required: true, parser: &argParser)
 let logLevelOption = try Option<Int>("d", alternateNames: ["log-level"], description: "The logging level to use. Higher numbers mean more logging. Valid number range is 0-4.", parser: &argParser)
 let logFileOption = try Option<Path>("l", alternateNames: ["log-file"], description: "Where to write the log file.", parser: &argParser)
@@ -159,6 +160,10 @@ if configPath.isFile && ext == "json" {
         log.info("Convert Temp Directory is changing from '\(config.convertTempDirectory)' to '\(cTD)'.")
         config.convertTempDirectory = cTD
     }
+    if let dS = deleteSubtitlesFlag.value, config.deleteSubtitles != dS {
+        log.info("Delete Subtitles is changing from '\(config.deleteSubtitles)' to '\(dS)'.")
+        config.deleteSubtitles = dS
+    }
     if var lL = logLevelOption.value, config.logLevel != lL {
         // Caps logLevel to the maximum/minimum level
         if lL > 4 {
@@ -179,7 +184,7 @@ if configPath.isFile && ext == "json" {
 } else {
     // Try and create the Config from the command line args (fails if anything is not set)
     do {
-        config = try Config(configPath, plexDirectoryOption.value, downloadDirectoryOption.value, convertFlag.value, convertImmediatelyFlag.value, convertCronStartOption.value, convertCronEndOption.value, convertThreadsOption.value, deleteOriginalFlag.value, convertVideoContainerOption.value, convertVideoCodecOption.value, convertAudioContainerOption.value, convertAudioCodecOption.value, convertVideoSubtitleScanFlag.value, convertLanguageOption.value, convertVideoMaxFramerateOption.value, convertTempDirectoryOption.value, logLevelOption.value, logFileOption.value, logger: log)
+        config = try Config(configPath, plexDirectoryOption.value, downloadDirectoryOption.value, convertFlag.value, convertImmediatelyFlag.value, convertCronStartOption.value, convertCronEndOption.value, convertThreadsOption.value, deleteOriginalFlag.value, convertVideoContainerOption.value, convertVideoCodecOption.value, convertAudioContainerOption.value, convertAudioCodecOption.value, convertVideoSubtitleScanFlag.value, convertLanguageOption.value, convertVideoMaxFramerateOption.value, convertTempDirectoryOption.value, deleteSubtitlesFlag.value, logLevelOption.value, logFileOption.value, logger: log)
     } catch {
         log.warning("Failed to initialize config.")
         log.error(error)
@@ -202,7 +207,7 @@ if let lF = config.logFile {
 }
 
 let minLevel = SwiftyBeaver.Level(rawValue: 4 - config.logLevel)!
-for var dest in log.destinations {
+for dest in log.destinations {
     dest.minLevel = minLevel
 }
 

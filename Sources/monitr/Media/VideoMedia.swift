@@ -15,19 +15,120 @@ import SwiftyBeaver
 import JSON
 
 /// Management for Video files
-final class Video: BaseConvertibleMedia {
-    /// The supported extensions
-    enum SupportedExtension: String {
-        case mp4
-        case mkv
-        case m4v
-        case avi
-        case wmv
+final class Video: ConvertibleMedia {
+    final class Subtitle: Media {
+        var path: Path
+        var downpour: Downpour
+        var linkedVideo: Video?
+
+        var plexName: String {
+            if let lV = linkedVideo {
+                return lV.plexName
+            }
+            var name: String
+            switch downpour.type {
+            // If it's a movie file, plex wants "Title (YYYY)"
+            case .movie:
+                name = "\(downpour.title.wordCased)"
+                if let year = downpour.year {
+                    name += " (\(year))"
+                }
+            // If it's a tv show, plex wants "Title - sXXeYY"
+            case .tv:
+                name = "\(downpour.title.wordCased) - s\(String(format: "%02d", Int(downpour.season!)!))e\(String(format: "%02d", Int(downpour.episode!)!))"
+            // Otherwise just return the title (shouldn't ever actually reach this)
+            default:
+                name = downpour.title.wordCased
+            }
+
+            // Return the calulated name
+            return name
+        }
+        var plexFilename: String {
+            var language: String?
+            if let match = path.lastComponent.range(of: "anoXmous_([a-z]{3})", options: .regularExpression) {
+                language = path.lastComponent[match].replacingOccurrences(of: "anoXmous_", with: "")
+            } else {
+                for lang in commonLanguages {
+                    if path.lastComponent.lowercased().contains(lang) || path.lastComponent.lowercased().contains(".\(lang.substring(to: 3)).") {
+                        language = lang.substring(to: 3)
+                        break
+                    }
+                }
+            }
+
+            var name = "\(plexName)."
+            if let l = language {
+                name += "\(l)."
+            } else {
+                name += "unknown-\(path.lastComponent)."
+            }
+            name += path.extension ?? "uft"
+            return name
+        }
+        var finalDirectory: Path {
+            if let lV = linkedVideo {
+                return lV.finalDirectory
+            }
+            var base: Path
+            switch downpour.type {
+            case .movie:
+                base = Path("Movies\(Path.separator)\(plexName)")
+            case .tv:
+                base = Path("TV Shows\(Path.separator)\(downpour.title.wordCased)\(Path.separator)Season \(String(format: "%02d", Int(downpour.season!)!))\(Path.separator)\(plexName)")
+            default:
+                base = ""
+            }
+            return base
+        }
+
+        static var supportedExtensions: [String] = ["srt", "smi", "ssa", "ass",
+                                                    "vtt"]
+
+        /// Common subtitle languages to look out for
+        private let commonLanguages: [String] = [
+            "english", "spanish", "portuguese",
+            "german", "swedish", "russian",
+            "french", "chinese", "japanese",
+            "hindu", "persian", "italian",
+            "greek"
+        ]
+
+        init(_ path: Path) throws {
+            // Check to make sure the extension of the video file matches one of the supported plex extensions
+            guard Subtitle.isSupported(ext: path.extension ?? "") else {
+                throw MediaError.unsupportedFormat(path.extension ?? "")
+            }
+
+            // Set the media file's path to the absolute path
+            self.path = path.absolute
+            // Create the downpour object
+            self.downpour = Downpour(fullPath: path)
+
+            if self.downpour.type == .tv {
+                guard let _ = self.downpour.season else {
+                    throw MediaError.DownpourError.missingTVSeason(path.string)
+                }
+                guard let _ = self.downpour.episode else {
+                    throw MediaError.DownpourError.missingTVEpisode(path.string)
+                }
+            }
+        }
+
+        fileprivate func delete() throws {
+            try self.path.delete()
+        }
     }
+    /// The supported extensions
+    static var supportedExtensions: [String] = ["mp4", "mkv", "m4v", "avi",
+                                                "wmv"]
 
-    // Lazy vars so these are calculated only once
+    var path: Path
+    var downpour: Downpour
+    var unconvertedFile: Path?
+    var subtitles: [Subtitle]
 
-    override var plexName: String {
+    var plexName: String {
         var name: String
         switch downpour.type {
         // If it's a movie file, plex wants "Title (YYYY)"
@@ -46,7 +147,7 @@ final class Video: BaseConvertibleMedia {
         // Return the calulated name
         return name
     }
-    override var finalDirectory: Path {
+    var finalDirectory: Path {
         var base: Path
         switch downpour.type {
         case .movie:
@@ -61,13 +162,13 @@ final class Video: BaseConvertibleMedia {
 
     var container: VideoContainer
 
-    required init(_ path: Path) throws {
+    init(_ path: Path) throws {
         // Check to make sure the extension of the video file matches one of the supported plex extensions
         guard Video.isSupported(ext: path.extension ?? "") else {
             throw MediaError.unsupportedFormat(path.extension ?? "")
         }
         guard !path.string.lowercased().contains("sample") else {
-            throw MediaError.sampleMedia
+            throw MediaError.VideoError.sampleMedia
         }
 
         if let c = VideoContainer(rawValue: path.extension ?? "") {
@@ -76,7 +177,12 @@ final class Video: BaseConvertibleMedia {
             container = .other
         }
 
-        try super.init(path)
+        // Set the media file's path to the absolute path
+        self.path = path.absolute
+        // Create the downpour object
+        self.downpour = Downpour(fullPath: path.absolute)
+
+        self.subtitles = []
 
         if self.downpour.type == .tv {
             guard let _ = self.downpour.season else {
@@ -89,50 +195,42 @@ final class Video: BaseConvertibleMedia {
     }
 
     /// JSONInitializable protocol requirement
-    required init(json: JSON) throws {
-        let p = Path(try json.get("path"))
-        // Check to make sure the extension of the video file matches one of the supported plex extensions
-        guard Video.isSupported(ext: p.extension ?? "") else {
-            throw MediaError.unsupportedFormat(p.extension ?? "")
-        }
-        guard !p.string.lowercased().contains("sample") else {
-            throw MediaError.sampleMedia
+    convenience init(json: JSON) throws {
+        try self.init(Path(json.get("path")))
+        let str: String? = try? json.get("unconvertedFile")
+        if let s = str {
+            unconvertedFile = Path(s)
         }
 
-        if let c = VideoContainer(rawValue: p.extension ?? "") {
-            container = c
-        } else {
-            container = .other
-        }
-
-        try super.init(json: json)
-
-        if self.downpour.type == .tv {
-            guard let _ = self.downpour.season else {
-                throw MediaError.DownpourError.missingTVSeason(p.string)
-            }
-            guard let _ = self.downpour.episode else {
-                throw MediaError.DownpourError.missingTVEpisode(p.string)
-            }
+        subtitles = try json.get("subtitles")
+        for subtitle in subtitles {
+            subtitle.linkedVideo = self
         }
     }
 
-    override func move(to plexPath: Path, log: SwiftyBeaver.Type) throws -> Video {
-        return try super.move(to: plexPath, log: log) as! Video
+    func move(to plexPath: Path, log: SwiftyBeaver.Type) throws -> ConvertibleMedia {
+        for var subtitle in subtitles {
+            subtitle = try subtitle.move(to: plexPath, log: log) as! Video.Subtitle
+        }
+        return try (self as ConvertibleMedia).move(to: plexPath, log: log)
     }
 
-    override func moveUnconverted(to plexPath: Path, log: SwiftyBeaver.Type) throws -> Video {
-        return try super.moveUnconverted(to: plexPath, log: log) as! Video
+    func deleteSubtitles() throws -> Video {
+        while subtitles.count > 0 {
+            let subtitle = subtitles.removeFirst()
+            try subtitle.delete()
+        }
+        return self
     }
 
-    override func convert(_ conversionConfig: ConversionConfig?, _ log: SwiftyBeaver.Type) throws -> Video {
+    func convert(_ conversionConfig: ConversionConfig?, _ log: SwiftyBeaver.Type) throws -> ConvertibleMedia {
         guard let config = conversionConfig as? VideoConversionConfig else {
             throw MediaError.VideoError.invalidConfig
         }
         return try convert(config, log)
     }
 
-    func convert(_ conversionConfig: VideoConversionConfig, _ log: SwiftyBeaver.Type) throws -> Video {
+    func convert(_ conversionConfig: VideoConversionConfig, _ log: SwiftyBeaver.Type) throws -> ConvertibleMedia {
         // Build the arguments for the transcode_video command
         var args: [String] = ["--target", "big", "--quick", "--preset", "fast", "--verbose", "--main-audio", conversionConfig.mainLanguage.rawValue, "--limit-rate", "\(conversionConfig.maxFramerate)"]
 
@@ -184,7 +282,7 @@ final class Video: BaseConvertibleMedia {
         args += [path.absolute.string, "--output", outputPath.string]
 
         log.info("Beginning conversion of media file '\(path)'")
-        let (rc, output) = Video.execute("transcode-video", args)
+        let (rc, output) = Command.execute("transcode-video", args)
 
         guard rc == 0 else {
             var error: String = "Error attempting to transcode: \(path)"
@@ -221,21 +319,20 @@ final class Video: BaseConvertibleMedia {
         return self
     }
 
-    override class func isSupported(ext: String) -> Bool {
-        guard let _ = SupportedExtension(rawValue: ext.lowercased()) else {
-            return false
-        }
-        return true
+    func encoded() -> JSON {
+        var json = (self as ConvertibleMedia).encoded()
+        json["subtitles"] = self.subtitles.encoded()
+        return json
     }
     
-    override class func needsConversion(file: Path, with config: ConversionConfig, log: SwiftyBeaver.Type) throws -> Bool {
+    class func needsConversion(file: Path, with config: ConversionConfig, log: SwiftyBeaver.Type) throws -> Bool {
         guard let conversionConfig = config as? VideoConversionConfig else {
             throw MediaError.VideoError.invalidConfig
         }
         log.info("Getting audio/video stream data for '\(file.absolute)'")
 
         // Get video file metadata using ffprobe
-        let (ffprobeRC, ffprobeOutput) = Video.execute("ffprobe", "-hide_banner", "-of", "json", "-show_streams", file.absolute.string)
+        let (ffprobeRC, ffprobeOutput) = Command.execute("ffprobe", "-hide_banner", "-of", "json", "-show_streams", file.absolute.string)
         guard ffprobeRC == 0 else {
             var err: String = ""
             if let stderr = ffprobeOutput.stderr {
@@ -372,5 +469,38 @@ final class Video: BaseConvertibleMedia {
         guard videoStream.framerate <= config.maxFramerate else { return true }
         
         return false
+    }
+
+    func findSubtitles(below: Path, log: SwiftyBeaver.Type) {
+        // Get the highest directory that is below the below Path
+        var top = path
+        while top.parent != below {
+            top = top.parent
+        }
+        // This occurs when the from Path is in the below Path and so the above
+        // while loop never gets from's parent directory
+        if !top.isDirectory {
+            top = top.parent
+        }
+        do {
+            // Go through the children in the top directory and find all
+            // possible subtitle files
+            let children: [Path] = try top == below ? top.children() : top.recursiveChildren()
+            for childFile in children where childFile.isFile {
+                let ext = childFile.extension ?? ""
+                do {
+                    if Subtitle.isSupported(ext: ext) {
+                        let subtitle = try Subtitle(childFile)
+                        subtitle.linkedVideo = self
+                        subtitles.append(subtitle)
+                    }
+                } catch {
+                    continue
+                }
+            }
+        } catch {
+            log.warning("Failed to get children when trying to find a video file's subtitles")
+            log.error(error)
+        }
     }
 }
