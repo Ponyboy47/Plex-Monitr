@@ -100,6 +100,11 @@ extension Media {
         // Create a path to the location where the file will RIP
         let finalRestingPlace = mediaDirectory + plexFilename
 
+        guard path.absolute != finalRestingPlace.absolute else {
+            log.info("Media file is already located at it's final resting place")
+            return self
+        }
+
         // Ensure the finalRestingPlace doesn't already exist
         guard !finalRestingPlace.isFile else {
             throw MediaError.alreadyExists(finalRestingPlace)
@@ -152,6 +157,11 @@ extension ConvertibleMedia {
 
         // Create a path to the location where the file will RIP
         let finalRestingPlace = mediaDirectory + "\(plexName) - original.\(unconvertedPath.extension ?? "")"
+
+        guard path.absolute != finalRestingPlace.absolute else {
+            log.info("Unconverted media file is already located at it's final resting place")
+            return self
+        }
 
         // Ensure the finalRestingPlace doesn't already exist
         guard !finalRestingPlace.isFile else {

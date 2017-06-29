@@ -30,7 +30,7 @@ enum MonitrError: Error {
 /// Checks the downloads directory for new content to add to Plex
 final class Monitr: DirectoryMonitorDelegate {
     /// The current version of monitr
-    static var version: String = "0.5.3"
+    static var version: String = "0.5.4"
 
     /// The configuration to use for the monitor
     private var config: Config
