@@ -30,7 +30,7 @@ enum MonitrError: Error {
 /// Checks the downloads directory for new content to add to Plex
 final class Monitr: DirectoryMonitorDelegate {
     /// The current version of monitr
-    static var version: String = "0.5.2"
+    static var version: String = "0.5.3"
 
     /// The configuration to use for the monitor
     private var config: Config
@@ -386,34 +386,24 @@ final class Monitr: DirectoryMonitorDelegate {
             let convertGroup = AsyncGroup()
             var simultaneousConversions: Int = 0
             for var m in mediaToConvert {
+                var config: ConversionConfig?
                 if m is Video {
-                    simultaneousConversions += 1
-                    convertGroup.utility {
-                        self.statistics.measure(.convert) {
-                            do {
-                                m = try m.convert(videoConfig, self.config.log)
-                            } catch {
-                                self.config.log.warning("Failed to convert video file: \(m.path)")
-                                self.config.log.error(error)
-                                failedMedia.append(m)
-                            }
-                        }
-                        simultaneousConversions -= 1
-                    }
+                    config = videoConfig
                 } else if m is Audio {
-                    simultaneousConversions += 1
-                    convertGroup.utility {
-                        self.statistics.measure(.convert) {
-                            do {
-                                m = try m.convert(audioConfig, self.config.log)
-                            } catch {
-                                self.config.log.warning("Failed to convert audio file: \(m.path)")
-                                self.config.log.error(error)
-                                failedMedia.append(m)
-                            }
+                    config = audioConfig
+                }
+                simultaneousConversions += 1
+                convertGroup.utility {
+                    self.statistics.measure(.convert) {
+                        do {
+                            m = try m.convert(config, self.config.log)
+                        } catch {
+                            self.config.log.warning("Failed to convert file: \(m.path)")
+                            self.config.log.error(error)
+                            failedMedia.append(m)
                         }
-                        simultaneousConversions -= 1
                     }
+                    simultaneousConversions -= 1
                 }
                 self.config.log.verbose("Currently running \(simultaneousConversions) simultaneous conversion jobs.")
 
@@ -435,7 +425,7 @@ final class Monitr: DirectoryMonitorDelegate {
                     //   increment when a thread starts and decrement when it
                     //   finishes)
                     while simultaneousConversions >= self.config.convertThreads {
-                        self.config.log.info("Maximum number conversion threads (\(self.config.convertThreads)) reached. Waiting 60 seconds and checking to see if any have finished.")
+                        self.config.log.info("Maximum number of conversion threads (\(self.config.convertThreads) threads) reached. Waiting 60 seconds and checking to see if any have finished.")
                         convertGroup.wait(seconds: 60)
                     }
                 }

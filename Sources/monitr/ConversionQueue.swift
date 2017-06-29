@@ -122,17 +122,13 @@ class ConversionQueue: JSONConvertible {
         conversionGroup.utility {
             self.statistics.measure(.convert) {
                 do {
+                    var config: ConversionConfig?
                     if next is Video {
-                        next = try next.convert(self.videoConversionConfig, self.log)
+                        config = self.videoConversionConfig
                     } else if next is Audio {
-                        next = try next.convert(self.audioConversionConfig, self.log)
-                    } else {
-                        // We shouldn't be able to convert anything else, and we
-                        // shouldn't have even put anything else in the queue.
-                        // Calling convert on a BaseMedia object should throw an
-                        // Unimplemented Error
-                        next = try next.convert(nil, self.log)
+                        config = self.audioConversionConfig
                     }
+                    next = try next.convert(config, self.log)
                     try self.finish(next)
                 } catch MediaError.notImplemented {
                     self.log.warning("Media that is neither Video nor Audio somehow ended up in the conversion queue! => \(next.path)")
