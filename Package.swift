@@ -14,28 +14,16 @@ var dependencies: [Package.Dependency] = [
     .Package(url: "https://github.com/Ponyboy47/Cron-Swift.git", majorVersion: 1)
 ]
 
-var targets: [Target] = []
-var swiftDependencies: [Target.Dependency] = []
-var excludes: [String] = ["Tests"]
-
 #if os(Linux)
 // On linux we need to include the inotify C module, and the C functions from select
 dependencies.append(.Package(url: "https://github.com/Ponyboy47/inotify.git", majorVersion: 1))
-targets.append(Target(name: "CSelect"))
-swiftDependencies.append("CSelect")
 #else
-// On osX/iOS/watchOS/tvOS ignore the C funtions in select
-excludes.append("Sources/CSelect")
 // Importing this package through both Downpour and here causes issues with multiple libraries found on linux
 dependencies.append(.Package(url: "https://github.com/vdka/JSON", majorVersion: 0))
 #endif
 
-// The monitr directory is always required
-targets.append(Target(name: "monitr", dependencies: swiftDependencies))
-
 let package = Package(
-    name: "monitr",
-    targets: targets,
+    name: "Plex-Monitr",
     dependencies: dependencies,
-    exclude: excludes
+    exclude: ["Tests"]
 )
