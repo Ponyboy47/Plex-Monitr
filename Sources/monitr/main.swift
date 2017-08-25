@@ -31,7 +31,8 @@ var argParser = ArgumentParser("\(arguments.remove(at: 0)) [Options]", cliArgume
 // Args/Flags to configure this program from the CLI
 let configOption = try Option<Path>("f", alternateNames: ["config"], default: Path("~/.config/monitr/settings.json"), description: "The file from which to read configuration options", required: true, parser: &argParser)
 let plexDirectoryOption = try Option<Path>("p", alternateNames: ["plex-dir"], description: "The directory where the Plex libraries reside", parser: &argParser)
-let downloadDirectoryOption = try Option<Path>("t", alternateNames: ["download-dir"], description: "The directory where media downloads reside", parser: &argParser)
+let downloadDirectoryOption = try Option<ArgArray<Path>>("t", alternateNames: ["download-dirs"], description: "The directory where media downloads reside", parser: &argParser)
+let homeVideoDownloadDirectoryOption = try Option<ArgArray<Path>>("b", alternateNames: ["home-video-download-dirs"], description: "The directory where home video downloads reside", parser: &argParser)
 let convertFlag = try Flag("c", alternateNames: ["convert"], description: "Whether or not newly added files should be converted to a Plex DirectPlay format", parser: &argParser)
 let convertImmediatelyFlag = try Flag("i", alternateNames: ["convert-immediately"], description: "Whether to convert media before sending it to the Plex directory, or to convert it as a scheduled task when the CPU is more likely to be free", parser: &argParser)
 let convertCronStartOption = try Option<DatePattern>("a", alternateNames: ["convert-cron-start"], description: "A Cron string describing when conversion jobs should start running", parser: &argParser)
@@ -100,9 +101,9 @@ if configPath.isFile && ext == "json" {
         log.info("Plex Directory is changing from '\(config.plexDirectory)' to '\(p)'.")
         config.plexDirectory = p
     }
-    if let t = downloadDirectoryOption.value, config.downloadDirectory != t {
-        log.info("Download Directory is changing from '\(config.downloadDirectory)' to '\(t)'.")
-        config.downloadDirectory = t
+    if let t = downloadDirectoryOption.value, config.downloadDirectories != t.values {
+        log.info("Download Directory is changing from '\(config.downloadDirectories)' to '\(t.values)'.")
+        config.downloadDirectories = t.values
     }
     if let c = convertFlag.value, config.convert != c {
         log.info("Convert is changing from '\(config.convert)' to '\(c)'.")
@@ -164,6 +165,10 @@ if configPath.isFile && ext == "json" {
         log.info("Delete Subtitles is changing from '\(config.deleteSubtitles)' to '\(dS)'.")
         config.deleteSubtitles = dS
     }
+    if let b = homeVideoDownloadDirectoryOption.value, config.homeVideoDownloadDirectories != b.values {
+        log.info("Home Video Download Directory is changing from '\(config.homeVideoDownloadDirectories)' to '\(b.values)'.")
+        config.homeVideoDownloadDirectories = b.values
+    }
     if var lL = logLevelOption.value, config.logLevel != lL {
         // Caps logLevel to the maximum/minimum level
         if lL > 4 {
@@ -184,7 +189,7 @@ if configPath.isFile && ext == "json" {
 } else {
     // Try and create the Config from the command line args (fails if anything is not set)
     do {
-        config = try Config(configPath, plexDirectoryOption.value, downloadDirectoryOption.value, convertFlag.value, convertImmediatelyFlag.value, convertCronStartOption.value, convertCronEndOption.value, convertThreadsOption.value, deleteOriginalFlag.value, convertVideoContainerOption.value, convertVideoCodecOption.value, convertAudioContainerOption.value, convertAudioCodecOption.value, convertVideoSubtitleScanFlag.value, convertLanguageOption.value, convertVideoMaxFramerateOption.value, convertTempDirectoryOption.value, deleteSubtitlesFlag.value, logLevelOption.value, logFileOption.value, logger: log)
+        config = try Config(configPath, plexDirectoryOption.value, downloadDirectoryOption.value?.values, convertFlag.value, convertImmediatelyFlag.value, convertCronStartOption.value, convertCronEndOption.value, convertThreadsOption.value, deleteOriginalFlag.value, convertVideoContainerOption.value, convertVideoCodecOption.value, convertAudioContainerOption.value, convertAudioCodecOption.value, convertVideoSubtitleScanFlag.value, convertLanguageOption.value, convertVideoMaxFramerateOption.value, convertTempDirectoryOption.value, deleteSubtitlesFlag.value, homeVideoDownloadDirectoryOption.value?.values, logLevelOption.value, logFileOption.value, logger: log)
     } catch {
         log.warning("Failed to initialize config.")
         log.error(error)
@@ -231,7 +236,7 @@ do {
     log.info("Running Monitr once for startup!")
     monitr.run()
     monitr.setDelegate()
-    log.info("Monitoring '\(config.downloadDirectory)' for new files.")
+    log.info("Monitoring '\((config.downloadDirectories + config.homeVideoDownloadDirectories).map({ $0.string }))' for new files.")
     guard monitr.startMonitoring() else {
         exit(EXIT_FAILURE)
     }

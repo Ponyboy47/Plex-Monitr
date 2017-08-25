@@ -45,6 +45,8 @@ enum MediaError: Error {
 protocol Media: class, JSONConvertible {
     /// The path to the media file
     var path: Path { get set }
+    /// Whether the media file is home media or comercial
+    var isHomeMedia: Bool { get set }
     /// Used to retrieve basic data from the file
     var downpour: Downpour { get set }
     /// The name of the file in the proper Plex standardized format
@@ -73,12 +75,14 @@ extension Media {
     /// JSONRepresentable protocol requirement
     func encoded() -> JSON {
         return [
-            "path": path.string
+            "path": path.string,
+            "isHomeMedia": isHomeMedia
         ]
     }
 
     init(json: JSON) throws {
         try self.init(Path(json.get("path")))
+        self.isHomeMedia = (try? json.get("isHomeMedia")) ?? false
     }
 
     static func isSupported(ext: String) -> Bool {

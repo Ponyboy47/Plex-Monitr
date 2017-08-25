@@ -111,11 +111,21 @@ The default value for this is ~/.config/monitr/settings.json.
 If this is not specified, then /var/lib/plexmediaserver/Library is used.
 
 #### Set the Download directory to monitor:
-`-t` or `--download-dir`
+`-t` or `--download-dirs`
 ```bash
-.build/debug/monitr --download-dir /path/to/downloads/dir
+.build/debug/monitr --t /path/to/downloads/dir
+// or to specify multiple directories, use a comma separated list
+.build/debug/monitr --download-dirs /path/to/downloads/dir/1,/path/to/downloads/dir/2
 ```
 If left unspecified, then /var/lib/deluge/Downloads is used.
+
+`-b` or `--home-video-download-dirs`
+```bash
+.build/debug/monitr --home-video-download-dir /path/to/downloads/dir
+// or to specify multiple directories, use a comma separated list
+.build/debug/monitr --home-video-download-dirs /path/to/downloads/dir/1,/path/to/downloads/dir/2
+```
+If left unspecified, then ~/HomeVideos is used.
 
 #### Set the Convert flag (whether to convert media to Direct Play formats for plex):
 `-c` or `--convert`

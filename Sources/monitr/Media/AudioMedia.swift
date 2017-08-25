@@ -21,6 +21,7 @@ final class Audio: ConvertibleMedia {
                                                 "aac", "wav"]
 
     var path: Path
+    var isHomeMedia: Bool = false
     var downpour: Downpour
     var unconvertedFile: Path?
 

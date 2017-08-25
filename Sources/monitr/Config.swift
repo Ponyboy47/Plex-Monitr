@@ -26,15 +26,33 @@ struct Config {
     /// The directory where the plex Libraries reside
     var plexDirectory: Path = "/var/lib/plexmediaserver/Library"
     /// Where new media is going to be downloaded
-    private var _downloadDirectory: Path = "/var/lib/deluge/Downloads"
-    var downloadDirectory: Path {
+    private var _downloadDirectories: [Path] = ["/var/lib/deluge/Downloads"]
+    var downloadDirectories: [Path] {
         set {
             // When this is set, update the DirectoryMonitor
-            _downloadDirectory = newValue
-            downloadWatcher = DirectoryMonitor(URL: newValue.url)
+            _downloadDirectories = newValue
+            downloadWatchers = []
+            newValue.forEach { d in
+                downloadWatchers.append(DirectoryMonitor(URL: d.url))
+            }
         }
         get {
-            return _downloadDirectory
+            return _downloadDirectories
+        }
+    }
+    /// Where new home media is going to be downloaded
+    private var _homeVideoDownloadDirectories: [Path] = ["~/HomeVideos"]
+    var homeVideoDownloadDirectories: [Path] {
+        set {
+            // When this is set, update the DirectoryMonitor
+            _homeVideoDownloadDirectories = newValue
+            homeVideoDownloadWatchers = []
+            newValue.forEach { d in
+                homeVideoDownloadWatchers.append(DirectoryMonitor(URL: d.url))
+            }
+        }
+        get {
+            return _homeVideoDownloadDirectories
         }
     }
     /// Whether the media should be converted to Plex DirectPlay formats automatically
@@ -73,21 +91,23 @@ struct Config {
     var log: SwiftyBeaver.Type
 
     /// Watches the download directory for new files
-    private var downloadWatcher: DirectoryMonitor?
+    private var downloadWatchers: [DirectoryMonitor?] = []
+    /// Watches the home video download directory for new files
+    private var homeVideoDownloadWatchers: [DirectoryMonitor?] = []
 
-    init(_ configFile: Path? = nil, _ plexDirectory: Path? = nil, _ downloadDirectory: Path? = nil,
+    init(_ configFile: Path? = nil, _ plexDirectory: Path? = nil, _ downloadDirectories: [Path]? = nil,
          _ convert: Bool? = nil, _ convertImmediately: Bool? = nil, _ convertCronStart: DatePattern? = nil,
          _ convertCronEnd: DatePattern? = nil, _ convertThreads: Int? = nil, _ deleteOriginal: Bool? = nil,
          _ convertVideoContainer: VideoContainer? = nil, _ convertVideoCodec: VideoCodec? = nil,
          _ convertAudioContainer: AudioContainer? = nil, _ convertAudioCodec: AudioCodec? = nil,
          _ convertVideoSubtitleScan: Bool? = nil, _ convertLanguage: Language? = nil,
          _ convertVideoMaxFramerate: Double? = nil, _ convertTempDirectory: Path? = nil,
-         _ deleteSubtitles: Bool? = nil,
+         _ deleteSubtitles: Bool? = nil, _ homeVideoDownloadDirectories: [Path]? = nil,
          _ logLevel: Int? = nil, _ logFile: Path? = nil, logger: SwiftyBeaver.Type) throws {
         self.log = logger
         self.configFile = configFile ?? self.configFile
         self.plexDirectory = plexDirectory ?? self.plexDirectory
-        self.downloadDirectory = downloadDirectory ?? self._downloadDirectory
+        self.downloadDirectories = downloadDirectories ?? self._downloadDirectories
         self.convert = convert ?? self.convert
         self.convertImmediately = convertImmediately ?? self.convertImmediately
         self.convertCronStart = convertCronStart ?? self.convertCronStart
@@ -103,6 +123,7 @@ struct Config {
         self.convertVideoMaxFramerate = convertVideoMaxFramerate ?? self.convertVideoMaxFramerate
         self.convertTempDirectory = convertTempDirectory ?? self.convertTempDirectory
         self.deleteSubtitles = deleteSubtitles ?? self.deleteSubtitles
+        self.homeVideoDownloadDirectories = homeVideoDownloadDirectories ?? self._homeVideoDownloadDirectories
         self.logLevel = logLevel ?? self.logLevel
         self.logFile = logFile
 
@@ -125,14 +146,16 @@ struct Config {
             throw ConfigError.pathIsNotDirectory(self.plexDirectory)
         }
 
-        if !self.downloadDirectory.exists {
-            try self.downloadDirectory.mkpath()
-        }
-        guard self.downloadDirectory.exists else {
-            throw ConfigError.pathDoesNotExist(self.downloadDirectory)
-        }
-        guard self.downloadDirectory.isDirectory else {
-            throw ConfigError.pathIsNotDirectory(self.downloadDirectory)
+        for d in self.downloadDirectories + self.homeVideoDownloadDirectories {
+            if !d.exists {
+                try d.mkpath()
+            }
+            guard d.exists else {
+                throw ConfigError.pathDoesNotExist(d)
+            }
+            guard d.isDirectory else {
+                throw ConfigError.pathIsNotDirectory(d)
+            }
         }
 
         if self.convert {
@@ -151,24 +174,30 @@ struct Config {
     /// Starts monitoring the downloads directory for changes
     @discardableResult
     func startMonitoring() -> Bool {
-        do {
-            try downloadWatcher?.startMonitoring()
-        } catch {
-            log.warning("Failed to start directory watcher.")
-            log.error(error)
-            return false
+        for watcher in self.downloadWatchers + self.homeVideoDownloadWatchers {
+            do {
+                try watcher?.startMonitoring()
+            } catch {
+                log.warning("Failed to start the directory watcher for '\(String(describing: watcher?.URL.path))'.")
+                log.error(error)
+                return false
+            }
         }
         return true
     }
 
-    /// Stops monitoring the downloads directory
+    /// Stops monitoring the downloads directories
     func stopMonitoring() {
-       downloadWatcher?.stopMonitoring()
+        for watcher in self.downloadWatchers + self.homeVideoDownloadWatchers {
+            watcher?.stopMonitoring()
+        }
     }
 
-    /// Sets the delegate of the downloadWatcher
+    /// Sets the delegate of the download watchers
     func setDelegate(_ delegate: DirectoryMonitorDelegate) {
-        downloadWatcher?.delegate = delegate
+        for watcher in self.downloadWatchers + self.homeVideoDownloadWatchers {
+            watcher?.delegate = delegate
+        }
     }
 }
 
@@ -191,9 +220,22 @@ extension Config: JSONConvertible {
         log = SwiftyBeaver.self
 
         self.plexDirectory = Path((try? json.get("plexDirectory")) ?? self.plexDirectory.string)
-        self.downloadDirectory = Path((try? json.get("downloadDirectory")) ?? self.downloadDirectory.string)
-        self.convertTempDirectory = Path((try? json.get("convertTempDirectory")) ?? self.convertTempDirectory.string)
+        var downloads: [String] = (try? json.get("downloadDirectories")) ?? []
+        if let downloadDir: String = try? json.get("downloadDirectory") {
+            downloads.append(downloadDir)
+        }
+        if downloads.isEmpty {
+            downloads = self.downloadDirectories.map { $0.string }
+        }
+        self.downloadDirectories = downloads.map { Path($0) }
 
+        var homeDownloads: [String] = (try? json.get("homeVideoDownloadDirectories")) ?? []
+        if homeDownloads.isEmpty {
+            homeDownloads = self.homeVideoDownloadDirectories.map { $0.string }
+        }
+        self.homeVideoDownloadDirectories = homeDownloads.map { Path($0) }
+
+        self.convertTempDirectory = Path((try? json.get("convertTempDirectory")) ?? self.convertTempDirectory.string)
         self.convert = (try? json.get("convert")) ?? self.convert
         self.convertImmediately = (try? json.get("convertImmediately")) ?? self.convertImmediately
         self.convertCronStart = (try? DatePattern(json.get("convertCronStart"))) ?? self.convertCronStart
@@ -231,14 +273,16 @@ extension Config: JSONConvertible {
             throw ConfigError.pathIsNotDirectory(self.plexDirectory)
         }
 
-        if !self.downloadDirectory.exists {
-            try self.downloadDirectory.mkpath()
-        }
-        guard self.downloadDirectory.exists else {
-            throw ConfigError.pathDoesNotExist(self.downloadDirectory)
-        }
-        guard self.downloadDirectory.isDirectory else {
-            throw ConfigError.pathIsNotDirectory(self.downloadDirectory)
+        for d in self.downloadDirectories + self.homeVideoDownloadDirectories {
+            if !d.exists {
+                try d.mkpath()
+            }
+            guard d.exists else {
+                throw ConfigError.pathDoesNotExist(d)
+            }
+            guard d.isDirectory else {
+                throw ConfigError.pathIsNotDirectory(d)
+            }
         }
 
         if self.convert {
@@ -262,7 +306,8 @@ extension Config: JSONConvertible {
     func encoded() -> JSON {
         var json: JSON = [
             "plexDirectory": plexDirectory.string,
-            "downloadDirectory": downloadDirectory.string,
+            "downloadDirectories": downloadDirectories.map({ $0.string }).encoded(),
+            "homeVideoDownloadDirectories": homeVideoDownloadDirectories.map({ $0.string }).encoded(),
             "convert": convert,
             "convertImmediately": convertImmediately,
             "convertCronStart": convertCronStart,
@@ -299,9 +344,18 @@ extension Config: JSONConvertible {
      - Returns: A string of serialized JSON config
     */
     func printable() -> String {
+        var download: [String] = []
+        for d in downloadDirectories {
+            download.append(d.string)
+        }
+        var home: [String] = []
+        for h in homeVideoDownloadDirectories {
+            home.append(h.string)
+        }
         var dict: [String: JSONRepresentable] = [
             "plexDirectory": plexDirectory.string,
-            "downloadDirectory": downloadDirectory.string,
+            "downloadDirectories": download.joined(separator: ", "),
+            "homeVideoDownloadDirectories": home.joined(separator: ", "),
             "convert": convert,
             "convertImmediately": convertImmediately,
             "convertCronStart": convertCronStart.string,

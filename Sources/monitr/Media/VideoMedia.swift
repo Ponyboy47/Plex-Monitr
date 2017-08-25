@@ -18,6 +18,7 @@ import JSON
 final class Video: ConvertibleMedia {
     final class Subtitle: Media {
         var path: Path
+        var isHomeMedia: Bool = false
         var downpour: Downpour
         var linkedVideo: Video?
 
@@ -25,6 +26,11 @@ final class Video: ConvertibleMedia {
             if let lV = linkedVideo {
                 return lV.plexName
             }
+
+            guard !isHomeMedia else {
+                return path.lastComponentWithoutExtension
+            }
+
             var name: String
             switch downpour.type {
             // If it's a movie file, plex wants "Title (YYYY)"
@@ -70,6 +76,11 @@ final class Video: ConvertibleMedia {
             if let lV = linkedVideo {
                 return lV.finalDirectory
             }
+
+            guard !isHomeMedia else {
+                return Path("Home Videos\(Path.separator)\(plexName)")
+            }
+
             var base: Path
             switch downpour.type {
             case .movie:
@@ -121,14 +132,18 @@ final class Video: ConvertibleMedia {
     }
     /// The supported extensions
     static var supportedExtensions: [String] = ["mp4", "mkv", "m4v", "avi",
-                                                "wmv"]
+                                                "wmv", "mpg"]
 
     var path: Path
+    var isHomeMedia: Bool = false
     var downpour: Downpour
     var unconvertedFile: Path?
     var subtitles: [Subtitle]
 
     var plexName: String {
+        guard !isHomeMedia else {
+            return path.lastComponentWithoutExtension
+        }
         var name: String
         switch downpour.type {
         // If it's a movie file, plex wants "Title (YYYY)"
@@ -148,6 +163,10 @@ final class Video: ConvertibleMedia {
         return name
     }
     var finalDirectory: Path {
+        guard !isHomeMedia else {
+            return Path("Home Videos\(Path.separator)\(plexName)")
+        }
+
         var base: Path
         switch downpour.type {
         case .movie:

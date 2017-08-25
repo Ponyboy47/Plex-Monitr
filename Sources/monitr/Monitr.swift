@@ -30,7 +30,7 @@ enum MonitrError: Error {
 /// Checks the downloads directory for new content to add to Plex
 final class Monitr: DirectoryMonitorDelegate {
     /// The current version of monitr
-    static var version: String = "0.5.4"
+    static var version: String = "0.6"
 
     /// The configuration to use for the monitor
     private var config: Config
@@ -167,14 +167,25 @@ final class Monitr: DirectoryMonitorDelegate {
     public func run() {
         // Set that we're modifying the media as long as we're still contained in the run function
         self.isModifyingMedia = true
+        var failed: [Media] = []
         // Unset the isModifyingMedia as soon as the run function completes
         defer {
+            let toClean = self.config.downloadDirectories + self.config.homeVideoDownloadDirectories
             // Removes all empty directories from the download directory
-            self.cleanup(dir: self.config.downloadDirectory)
+            self.cleanup(dirs: toClean, except: failed.map({ $0.path }) + toClean)
             self.isModifyingMedia = false
         }
         // Get all the media in the downloads directory
-        var media = self.getAllMedia(from: self.config.downloadDirectory)
+        var media = self.getAllMedia(from: self.config.downloadDirectories)
+        let homeMedia = self.getAllMedia(from: self.config.homeVideoDownloadDirectories)
+        for m in homeMedia where m is Video {
+            let media = m as! Video
+            media.isHomeMedia = true
+            media.subtitles.forEach { s in 
+                s.isHomeMedia = true
+            }
+        }
+        media += homeMedia
 
         guard media.count > 0 else {
             self.config.log.info("No media found.")
@@ -185,7 +196,10 @@ final class Monitr: DirectoryMonitorDelegate {
         let audio = media.filter { $0 is Audio }
         let ignorable = media.filter { $0 is Ignore }
 
-        self.config.log.info("Found \(media.count) files in the download directory!")
+        self.config.log.info("Found \(media.count) files in the download directories!")
+        if homeMedia.count > 0 {
+            self.config.log.info("\t \(homeMedia.count) home media files")
+        }
         if video.count > 0 {
             self.config.log.info("\t \(video.count) video files")
             self.config.log.verbose(video.map { $0.path })
@@ -203,11 +217,13 @@ final class Monitr: DirectoryMonitorDelegate {
         //   NOTE: If convertImmediately is false, then a queue of conversion 
         //         jobs are created to be run during the scheduled time period
         if self.config.convert, let unconvertedMedia = self.convertMedia(&media) {
+            failed += unconvertedMedia as [Media]
             self.config.log.warning("Failed to convert media:\n\t\(unconvertedMedia.map({ $0.path }))")
         }
 
         // If we gathered any supported media files, move them to their plex location
         if let unmovedMedia = self.moveMedia(&media) {
+            failed += unmovedMedia
             self.config.log.warning("Failed to move media to plex:\n\t\(unmovedMedia.map({ $0.path }))")
         }
     }
@@ -259,26 +275,28 @@ final class Monitr: DirectoryMonitorDelegate {
 
      - Returns: An array of the supported media files found
     */
-    func getAllMedia(from path: Path) -> [Media] {
-        do {
-            // Get all the children in the downloads directory
-            let children = try path.recursiveChildren()
-            var media: [Media] = []
-            // Iterate of the children paths
-            // Skips the directories and just checks for files
-            for childFile in children where childFile.isFile {
-                if let m = self.getMedia(with: childFile) {
-                    if !(m is Video.Subtitle) {
-                        media.append(m)
+    func getAllMedia(from paths: [Path]) -> [Media] {
+        var media: [Media] = []
+        for path in paths {
+            do {
+                // Get all the children in the downloads directory
+                let children = try path.recursiveChildren()
+                // Iterate of the children paths
+                // Skips the directories and just checks for files
+                for childFile in children where childFile.isFile {
+                    if let m = self.getMedia(with: childFile) {
+                        if !(m is Video.Subtitle) {
+                            media.append(m)
+                        }
+                    } else {
+                        self.config.log.warning("Unknown/unsupported file found: \(childFile)")
                     }
-                } else {
-                    self.config.log.warning("Unknown/unsupported file found: \(childFile)")
                 }
+                return media
+            } catch {
+                self.config.log.warning("Failed to get recursive children from the downloads directory.")
+                self.config.log.error(error)
             }
-            return media
-        } catch {
-            self.config.log.warning("Failed to get recursive children from the downloads directory.")
-            self.config.log.error(error)
         }
         return []
     }
@@ -296,8 +314,13 @@ final class Monitr: DirectoryMonitorDelegate {
             if Video.isSupported(ext: ext) {
                 do {
                     let video = try Video(file)
-                    video.findSubtitles(below: self.config.downloadDirectory, log: self.config.log)
-                    return video
+                    let normal = file.normalized
+                    for base in self.config.downloadDirectories + self.config.homeVideoDownloadDirectories {
+                        if normal.contains(base) {
+                            video.findSubtitles(below: base, log: self.config.log)
+                            return video
+                        }
+                    }
                 } catch MediaError.VideoError.sampleMedia {
                     return try Ignore(file)
                 }
@@ -456,25 +479,27 @@ final class Monitr: DirectoryMonitorDelegate {
 
      - Parameter dir: The directory to recursively search through and clean up
     */
-    func cleanup(dir: Path) {
-        do {
-            let children = try dir.children()
-            guard children.count > 0 else {
-                guard dir != config.downloadDirectory else { return }
-                do {
-                    try dir.delete()
-                } catch {
-                    config.log.warning("Failed to delete directory '\(dir)'.")
-                    config.log.error(error)
+    func cleanup(dirs: [Path], except paths: [Path]) {
+        for dir in dirs {
+            do {
+                let children = try dir.children()
+                guard children.count > 0 else {
+                    guard !paths.contains(dir) else { return }
+                    do {
+                        try dir.delete()
+                    } catch {
+                        config.log.warning("Failed to delete directory '\(dir)'.")
+                        config.log.error(error)
+                    }
+                    return
                 }
-                return
+                for childDirectory in children where childDirectory.isDirectory {
+                    cleanup(dirs: [childDirectory], except: paths)
+                }
+            } catch {
+                config.log.warning("Failed to get the '\(dir)' directory's children.")
+                config.log.error(error)
             }
-            for childDirectory in children where childDirectory.isDirectory {
-                cleanup(dir: childDirectory)
-            }
-        } catch {
-            config.log.warning("Failed to get the '\(dir)' directory's children.")
-            config.log.error(error)
         }
     }
 

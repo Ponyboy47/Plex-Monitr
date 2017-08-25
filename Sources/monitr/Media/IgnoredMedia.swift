@@ -26,6 +26,7 @@ final class Ignore: Media {
                                                 "rtf", "db"]
 
     var path: Path
+    var isHomeMedia: Bool = false
     var downpour: Downpour
 
      var finalDirectory: Path {
