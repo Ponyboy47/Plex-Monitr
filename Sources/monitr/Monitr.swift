@@ -292,13 +292,12 @@ final class Monitr: DirectoryMonitorDelegate {
                         self.config.log.warning("Unknown/unsupported file found: \(childFile)")
                     }
                 }
-                return media
             } catch {
                 self.config.log.warning("Failed to get recursive children from the downloads directory.")
                 self.config.log.error(error)
             }
         }
-        return []
+        return media
     }
 
     /**
@@ -314,9 +313,9 @@ final class Monitr: DirectoryMonitorDelegate {
             if Video.isSupported(ext: ext) {
                 do {
                     let video = try Video(file)
-                    let normal = file.normalized
+                    let normal = file.normalized.string
                     for base in self.config.downloadDirectories + self.config.homeVideoDownloadDirectories {
-                        if normal.contains(base) {
+                        if normal.range(of: base.string) != nil {
                             video.findSubtitles(below: base, log: self.config.log)
                             return video
                         }
