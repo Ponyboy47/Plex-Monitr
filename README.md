@@ -23,7 +23,7 @@ It supports either Linux or macOS operating systems using Apple's Swift language
   * Movies & TV Shows
     * Including subtitles
   * Music
-  * Home videos would be placed in either the Movies or TV Shows directories (depends on the file name)
+  * Home Videos
 * Automatically converts media to Plex Direct Play/Stream capable formats
   * It uses the most common Direct Play/Stream formats by default, but you can configure the conversion settings however you'd like
   * Automatic media transcoding can be ran immediately when new media is added, or later as a scheduled task when the server will most likely not be in use
@@ -110,20 +110,21 @@ The default value for this is ~/.config/monitr/settings.json.
 ```
 If this is not specified, then /var/lib/plexmediaserver/Library is used.
 
-#### Set the Download directory to monitor:
+#### Set the Download directories to monitor:
 `-t` or `--download-dirs`
 ```bash
-.build/debug/monitr --t /path/to/downloads/dir
+.build/debug/monitr -t /path/to/downloads/dir
 // or to specify multiple directories, use a comma separated list
-.build/debug/monitr --download-dirs /path/to/downloads/dir/1,/path/to/downloads/dir/2
+.build/debug/monitr -t /path/to/downloads/dir/1,/path/to/downloads/dir/2
 ```
 If left unspecified, then /var/lib/deluge/Downloads is used.
 
+#### Set the Home Video directories to monitor
 `-b` or `--home-video-download-dirs`
 ```bash
-.build/debug/monitr --home-video-download-dir /path/to/downloads/dir
+.build/debug/monitr -b /path/to/downloads/dir
 // or to specify multiple directories, use a comma separated list
-.build/debug/monitr --home-video-download-dirs /path/to/downloads/dir/1,/path/to/downloads/dir/2
+.build/debug/monitr -b /path/to/downloads/dir/1,/path/to/downloads/dir/2
 ```
 If left unspecified, then ~/HomeVideos is used.
 
@@ -274,3 +275,5 @@ NOTE: If set, and logging level >= 3 (debug or verbose), logs are written both t
 - [ ] Preserve TV show episode titles
 - [ ] Support multi-part TV show episodes
 - [ ] Create a command to display the statistics
+- [x] Support monitoring multiple directories
+- [x] Watch a specific directory for Home Videos
