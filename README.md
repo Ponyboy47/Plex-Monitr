@@ -277,3 +277,6 @@ NOTE: If set, and logging level >= 3 (debug or verbose), logs are written both t
 - [ ] Create a command to display the statistics
 - [x] Support monitoring multiple directories
 - [x] Watch a specific directory for Home Videos
+- [ ] Make the entire program more asynchronous
+  - [ ] Continue execution while converting media (Just add new stuff to a queue)
+  - [ ] Finishing conversion automatically continues to moveMedia()
