@@ -15,8 +15,7 @@ var dependencies: [Package.Dependency] = [
 ]
 
 #if os(Linux)
-// On linux we need to include the inotify C module, and the C functions from select
-dependencies.append(.Package(url: "https://github.com/Ponyboy47/inotify.git", majorVersion: 1))
+dependencies.append(.Package(url: "https://github.com/Ponyboy47/inotify.git", majorVersion: 0))
 #else
 // Importing this package through both Downpour and here causes issues with multiple libraries found on linux
 dependencies.append(.Package(url: "https://github.com/vdka/JSON", majorVersion: 0))

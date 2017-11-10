@@ -4,3 +4,4 @@
 /*.xcodeproj
 .*.sw[po]
 Package.pins
+.AppleDouble
