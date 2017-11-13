@@ -280,3 +280,5 @@ NOTE: If set, and logging level >= 3 (debug or verbose), logs are written both t
 - [ ] Make the entire program more asynchronous
   - [ ] Continue execution while converting media (Just add new stuff to a queue)
   - [ ] Finishing conversion automatically continues to moveMedia()
+- [ ] Improve the stability with large amounts of conversion jobs
+- [ ] Swift 4
