@@ -1,5 +1,3 @@
-import JSON
-
 let indent = "\t\t"
 
 enum FFProbeError: Error {
@@ -568,13 +566,13 @@ struct BitRate {
     }()
 
     init(_ bitRateString: String) throws {
-        if bitRateString.ends(with: "Mbit/s") {
+        if bitRateString.hasSuffix("Mbit/s") {
             unit = .mbps
             guard let v = Double(bitRateString.components(separatedBy: " ")[0]) else {
                 throw FFProbeError.BitRateError.unableToConvertStringToDouble(bitRateString.components(separatedBy: " ")[0])
             }
             value = v
-        } else if bitRateString.ends(with: "Kbit/s") {
+        } else if bitRateString.hasSuffix("Kbit/s") {
             unit = .kbps
             guard let v = Double(bitRateString.components(separatedBy: " ")[0]) else {
                 throw FFProbeError.BitRateError.unableToConvertStringToDouble(bitRateString.components(separatedBy: " ")[0])
@@ -644,13 +642,13 @@ struct SampleRate {
     }()
 
     init(_ sampleRateString: String) throws {
-        if sampleRateString.ends(with: "mHz") {
+        if sampleRateString.hasSuffix("mHz") {
             unit = .mhz
             guard let v = Double(sampleRateString.components(separatedBy: " ")[0]) else {
                 throw FFProbeError.SampleRateError.unableToConvertStringToDouble(sampleRateString.components(separatedBy: " ")[0])
             }
             value = v
-        } else if sampleRateString.ends(with: "kHz") {
+        } else if sampleRateString.hasSuffix("kHz") {
             unit = .khz
             guard let v = Double(sampleRateString.components(separatedBy: " ")[0]) else {
                 throw FFProbeError.SampleRateError.unableToConvertStringToDouble(sampleRateString.components(separatedBy: " ")[0])

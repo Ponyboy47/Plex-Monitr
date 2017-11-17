@@ -325,7 +325,7 @@ final class Monitr: DirectoryMonitorDelegate {
                 }
             } else if Audio.isSupported(ext: ext) {
                 return try Audio(file)
-            } else if Ignore.isSupported(ext: ext) || file.string.lowercased().ends(with: ".ds_store") {
+            } else if Ignore.isSupported(ext: ext) || file.string.lowercased().hasSuffix(".ds_store") {
                 return try Ignore(file)
             } else if Video.Subtitle.isSupported(ext: ext) {
                 return try Video.Subtitle(file)

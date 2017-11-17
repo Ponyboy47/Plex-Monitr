@@ -1,8 +1,7 @@
-import JSON
 import PathKit
 import Duration
-import UUID
 import Cron
+import Foundation
 
 extension Array where Element == Double {
     func avg() -> Double? {

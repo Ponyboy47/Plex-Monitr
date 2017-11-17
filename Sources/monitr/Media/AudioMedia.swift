@@ -12,7 +12,6 @@ import Foundation
 import PathKit
 import Downpour
 import SwiftyBeaver
-import JSON
 
 /// Management for Audio files
 final class Audio: ConvertibleMedia {

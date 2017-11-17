@@ -12,7 +12,6 @@ import Foundation
 import PathKit
 import Downpour
 import SwiftyBeaver
-import JSON
 
 /// Management for media types that we don't care about and can just delete
 final class Ignore: Media {

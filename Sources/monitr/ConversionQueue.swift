@@ -2,7 +2,6 @@ import PathKit
 import Async
 import SwiftyBeaver
 import Cron
-import JSON
 
 enum ConversionError: Error {
     case maxThreadsReached

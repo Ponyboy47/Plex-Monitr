@@ -12,7 +12,6 @@ import Foundation
 import PathKit
 import Downpour
 import SwiftyBeaver
-import JSON
 
 // Media related errors
 enum MediaError: Error {

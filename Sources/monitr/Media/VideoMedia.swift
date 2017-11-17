@@ -12,7 +12,6 @@ import Foundation
 import PathKit
 import Downpour
 import SwiftyBeaver
-import JSON
 
 /// Management for Video files
 final class Video: ConvertibleMedia {

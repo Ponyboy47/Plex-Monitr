@@ -9,7 +9,6 @@
 import CLI
 import PathKit
 import Cron
-import JSON
 
 extension Path: ArgumentType {
     public static func from(string value: String) throws -> Path {
