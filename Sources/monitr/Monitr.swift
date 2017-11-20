@@ -13,6 +13,7 @@ import Foundation
 import PathKit
 import Async
 import Cron
+import SwiftShell
 #if os(Linux)
 import Dispatch
 #endif
@@ -48,7 +49,7 @@ final class Monitr: DirectoryMonitorDelegate {
     private var isModifyingMedia: Bool = false {
         didSet {
             if !isModifyingMedia && needsUpdate {
-                config.log.info("Finished moving media, but new media has already been added. Running again.")
+                config.logger.info("Finished moving media, but new media has already been added. Running again.")
                 needsUpdate = false
                 run()
             }
@@ -75,7 +76,7 @@ final class Monitr: DirectoryMonitorDelegate {
         }
 
         if config.convert && !config.convertImmediately {
-            log.info("Setting up the conversion queue cron jobs")
+            logger.info("Setting up the conversion queue cron jobs")
             self.cronStart = CronJob(pattern: config.convertCronStart, queue: .global(qos: .background)) {
                 self.conversionQueue?.start()
             }
@@ -83,81 +84,81 @@ final class Monitr: DirectoryMonitorDelegate {
                 self.conversionQueue?.stop = true
             }
             let next = MediaDuration(double: cronStart!.pattern.next(Date())!.date!.timeIntervalSinceNow)
-            log.info("Set up conversion cron job! It will begin in \(next.description)")
+            logger.info("Set up conversion cron job! It will begin in \(next.description)")
         }
     }
 
     private func checkConversionDependencies() throws {
-		self.config.log.info("Making sure we have the required dependencies for transcoding media...") 
+		self.config.logger.info("Making sure we have the required dependencies for transcoding media...") 
 
         // Check conversion tool dependencies 
         var dependency = "handbrake"
-        let (rc1, output1) = Command.execute("which", "HandBrakeCLI")
-        guard rc1 == 0, let stdout1 = output1.stdout, !stdout1.isEmpty else {
-            var debugMessage = "Error determining if '\(dependency)' dependency is met.\n\tReturn Code: \(rc1)"
-            if let stdout = output1.stdout {
-                debugMessage += "\n\tStandard Output: '\(stdout)'"
+        let response1 = SwiftShell.run(bash: "which HandBrakeCLI")
+        guard response1.succeeded, !response1.stdout.isEmpty else {
+            var debugMessage = "Error determining if '\(dependency)' dependency is met.\n\tReturn Code: \(response1.exitcode)"
+            if !response1.stdout.isEmpty {
+                debugMessage += "\n\tStandard Output: '\(response1.stdout)'"
             }
-            if let stderr = output1.stderr {
-                debugMessage += "\n\tStandard Error: '\(stderr)'"
+            if !response1.stderror.isEmpty {
+                debugMessage += "\n\tStandard Error: '\(response1.stderror)'"
             }
-            self.config.log.debug(debugMessage)
+            self.config.logger.debug(debugMessage)
             throw MonitrError.MissingDependency.handbrake 
         } 
 
         dependency = "mp4v2"
-        let (rc2, output2) = Command.execute("which", "mp4track")
-        guard rc2 == 0, let stdout2 = output2.stdout, !stdout2.isEmpty else { 
-            var debugMessage = "Error determining if '\(dependency)' dependency is met.\n\tReturn Code: \(rc2)"
-            if let stdout = output2.stdout {
-                debugMessage += "\n\tStandard Output: '\(stdout)'"
+        let response2 = SwiftShell.run(bash: "which mp4track")
+        guard response2.succeeded, !response2.stdout.isEmpty else {
+            var debugMessage = "Error determining if '\(dependency)' dependency is met.\n\tReturn Code: \(response2.exitcode)"
+            if !response2.stdout.isEmpty {
+                debugMessage += "\n\tStandard Output: '\(response2.stdout)'"
             }
-            if let stderr = output2.stderr {
-                debugMessage += "\n\tStandard Error: '\(stderr)'"
+            if !response2.stderror.isEmpty {
+                debugMessage += "\n\tStandard Error: '\(response2.stderror)'"
             }
-            self.config.log.debug(debugMessage)
+            self.config.logger.debug(debugMessage)
             throw MonitrError.MissingDependency.mp4v2 
         } 
 
         dependency = "ffmpeg"
-        let (rc3, output3) = Command.execute("which", "ffmpeg")
-        guard rc3 == 0, let stdout3 = output3.stdout, !stdout3.isEmpty else { 
-            var debugMessage = "Error determining if '\(dependency)' dependency is met.\n\tReturn Code: \(rc3)"
-            if let stdout = output3.stdout {
-                debugMessage += "\n\tStandard Output: '\(stdout)'"
+        let response3 = SwiftShell.run(bash: "which ffmpeg")
+        guard response3.succeeded, !response3.stdout.isEmpty else {
+            var debugMessage = "Error determining if '\(dependency)' dependency is met.\n\tReturn Code: \(response3.exitcode)"
+            if !response3.stdout.isEmpty {
+                debugMessage += "\n\tStandard Output: '\(response3.stdout)'"
             }
-            if let stderr = output3.stderr {
-                debugMessage += "\n\tStandard Error: '\(stderr)'"
+            if !response3.stderror.isEmpty {
+                debugMessage += "\n\tStandard Error: '\(response3.stderror)'"
             }
-            self.config.log.debug(debugMessage)
+            self.config.logger.debug(debugMessage)
             throw MonitrError.MissingDependency.ffmpeg 
         } 
 
         dependency = "mkvtoolnix"
-        let (rc4, output4) = Command.execute("which", "mkvpropedit")
-        guard rc4 == 0, let stdout4 = output4.stdout, !stdout4.isEmpty else { 
-            var debugMessage = "Error determining if '\(dependency)' dependency is met.\n\tReturn Code: \(rc4)"
-            if let stdout = output4.stdout {
-                debugMessage += "\n\tStandard Output: '\(stdout)'"
+        let response4 = SwiftShell.run(bash: "which mkvpropedit")
+        guard response4.succeeded, !response4.stdout.isEmpty else {
+            var debugMessage = "Error determining if '\(dependency)' dependency is met.\n\tReturn Code: \(response4.exitcode)"
+            if !response4.stdout.isEmpty {
+                debugMessage += "\n\tStandard Output: '\(response4.stdout)'"
             }
-            if let stderr = output4.stderr {
-                debugMessage += "\n\tStandard Error: '\(stderr)'"
+            if !response4.stderror.isEmpty {
+                debugMessage += "\n\tStandard Error: '\(response4.stderror)'"
             }
-            self.config.log.debug(debugMessage)
+            self.config.logger.debug(debugMessage)
             throw MonitrError.MissingDependency.mkvtoolnix 
         } 
 
         dependency = "transcode-video"
-        let (rc5, output5) = Command.execute("which", "transcode-video")
-        guard rc5 == 0, let stdout5 = output5.stdout, !stdout5.isEmpty else { 
-            var debugMessage = "Error determining if '\(dependency)' dependency is met.\n\tReturn Code: \(rc5)"
-            if let stdout = output5.stdout {
-                debugMessage += "\n\tStandard Output: '\(stdout)'"
+        let response5 = SwiftShell.run(bash: "which transcode-video")
+        guard response5.succeeded, !response5.stdout.isEmpty else {
+            var debugMessage = "Error determining if '\(dependency)' dependency is met.\n\tReturn Code: \(response5.exitcode)"
+            if !response5.stdout.isEmpty {
+                debugMessage += "\n\tStandard Output: '\(response5.stdout)'"
             }
-            if let stderr = output5.stderr {
-                debugMessage += "\n\tStandard Error: '\(stderr)'"
+            if !response5.stderror.isEmpty {
+                debugMessage += "\n\tStandard Error: '\(response5.stderror)'"
             }
-            self.config.log.debug(debugMessage)
+            self.config.logger.debug(debugMessage)
             throw MonitrError.MissingDependency.transcode_video 
         }
     }
@@ -188,7 +189,7 @@ final class Monitr: DirectoryMonitorDelegate {
         media += homeMedia
 
         guard media.count > 0 else {
-            self.config.log.info("No media found.")
+            self.config.logger.info("No media found.")
             return
         }
 
@@ -196,21 +197,21 @@ final class Monitr: DirectoryMonitorDelegate {
         let audio = media.filter { $0 is Audio }
         let ignorable = media.filter { $0 is Ignore }
 
-        self.config.log.info("Found \(media.count) files in the download directories!")
+        self.config.logger.info("Found \(media.count) files in the download directories!")
         if homeMedia.count > 0 {
-            self.config.log.info("\t \(homeMedia.count) home media files")
+            self.config.logger.info("\t \(homeMedia.count) home media files")
         }
         if video.count > 0 {
-            self.config.log.info("\t \(video.count) video files")
-            self.config.log.verbose(video.map { $0.path })
+            self.config.logger.info("\t \(video.count) video files")
+            self.config.logger.verbose(video.map { $0.path })
         }
         if audio.count > 0 {
-            self.config.log.info("\t \(audio.count) audio files")
-            self.config.log.verbose(audio.map { $0.path })
+            self.config.logger.info("\t \(audio.count) audio files")
+            self.config.logger.verbose(audio.map { $0.path })
         }
         if ignorable.count > 0 {
-            self.config.log.info("\t \(ignorable.count) ignorable files")
-            self.config.log.verbose(ignorable.map { $0.path })
+            self.config.logger.info("\t \(ignorable.count) ignorable files")
+            self.config.logger.verbose(ignorable.map { $0.path })
         }
 
         // If we want to convert media, lets do that before we move it to plex
@@ -218,13 +219,13 @@ final class Monitr: DirectoryMonitorDelegate {
         //         jobs are created to be run during the scheduled time period
         if self.config.convert, let unconvertedMedia = self.convertMedia(&media) {
             failed += unconvertedMedia as [Media]
-            self.config.log.warning("Failed to convert media:\n\t\(unconvertedMedia.map({ $0.path }))")
+            self.config.logger.warning("Failed to convert media:\n\t\(unconvertedMedia.map({ $0.path }))")
         }
 
         // If we gathered any supported media files, move them to their plex location
         if let unmovedMedia = self.moveMedia(&media) {
             failed += unmovedMedia
-            self.config.log.warning("Failed to move media to plex:\n\t\(unmovedMedia.map({ $0.path }))")
+            self.config.logger.warning("Failed to move media to plex:\n\t\(unmovedMedia.map({ $0.path }))")
         }
     }
 
@@ -245,12 +246,12 @@ final class Monitr: DirectoryMonitorDelegate {
      - Parameter now: If true, kills any active media management. Defaults to false
     */
     public func shutdown(now: Bool = false) {
-        self.config.log.info("Shutting down monitr.")
+        self.config.logger.info("Shutting down monitr.")
         self.config.stopMonitoring()
-        self.config.log.info("Saving the program's statistics")
+        self.config.logger.info("Saving the program's statistics")
         try? self.statistics.save(self.config.configFile.parent)
         if (self.conversionQueue?.waiting ?? 0) > 0 {
-            self.config.log.info("Saving conversion queue")
+            self.config.logger.info("Saving conversion queue")
             try? self.conversionQueue?.save()
         }
         // Go through conversions and halt them/save them
@@ -262,7 +263,7 @@ final class Monitr: DirectoryMonitorDelegate {
         } else {
             if (self.conversionQueue?.active ?? 0) > 0 {
                 self.conversionQueue?.stop = true
-                self.config.log.info("Waiting for current conversion jobs to finish before shutting down")
+                self.config.logger.info("Waiting for current conversion jobs to finish before shutting down")
                 self.conversionQueue?.conversionGroup.wait()
             }
         }
@@ -289,12 +290,12 @@ final class Monitr: DirectoryMonitorDelegate {
                             media.append(m)
                         }
                     } else {
-                        self.config.log.warning("Unknown/unsupported file found: \(childFile)")
+                        self.config.logger.warning("Unknown/unsupported file found: \(childFile)")
                     }
                 }
             } catch {
-                self.config.log.warning("Failed to get recursive children from the downloads directory.")
-                self.config.log.error(error)
+                self.config.logger.warning("Failed to get recursive children from the downloads directory.")
+                self.config.logger.error(error)
             }
         }
         return media
@@ -316,7 +317,7 @@ final class Monitr: DirectoryMonitorDelegate {
                     let normal = file.normalized.string
                     for base in self.config.downloadDirectories + self.config.homeVideoDownloadDirectories {
                         if normal.range(of: base.string) != nil {
-                            video.findSubtitles(below: base, log: self.config.log)
+                            video.findSubtitles(below: base, log: self.config.logger)
                             return video
                         }
                     }
@@ -331,8 +332,8 @@ final class Monitr: DirectoryMonitorDelegate {
                 return try Video.Subtitle(file)
             }
         } catch {
-            self.config.log.warning("Error occured trying to create media object from '\(file)'.")
-            self.config.log.error(error)
+            self.config.logger.warning("Error occured trying to create media object from '\(file)'.")
+            self.config.logger.error(error)
         }
         return nil
     }
@@ -352,13 +353,13 @@ final class Monitr: DirectoryMonitorDelegate {
             Sync.utility {
                 self.statistics.measure(.move) {
                     do {
-                        m = try m.move(to: self.config.plexDirectory, log: self.config.log)
+                        m = try m.move(to: self.config.plexDirectory, log: self.config.logger)
                         if self.config.deleteSubtitles && m is Video {
                             m = try (m as! Video).deleteSubtitles() as Media
                         }
                     } catch {
-                        self.config.log.warning("Failed to move media: \(m.path)")
-                        self.config.log.error(error)
+                        self.config.logger.warning("Failed to move media: \(m.path)")
+                        self.config.logger.error(error)
                         failedMedia.append(m)
                     }
                 }
@@ -383,27 +384,27 @@ final class Monitr: DirectoryMonitorDelegate {
         let videoConfig = VideoConversionConfig(container: self.config.convertVideoContainer, videoCodec: self.config.convertVideoCodec, audioCodec: self.config.convertAudioCodec, subtitleScan: self.config.convertVideoSubtitleScan, mainLanguage: self.config.convertLanguage, maxFramerate: self.config.convertVideoMaxFramerate, plexDir: self.config.plexDirectory, tempDir: self.config.deleteOriginal ? nil : self.config.convertTempDirectory)
         let audioConfig = AudioConversionConfig(container: self.config.convertAudioContainer, codec: self.config.convertAudioCodec, plexDir: self.config.plexDirectory, tempDir: self.config.deleteOriginal ? nil : self.config.convertTempDirectory)
 
-        self.config.log.info("Getting the array of media that needs to be converted.")
+        self.config.logger.info("Getting the array of media that needs to be converted.")
         let mediaToConvert: [ConvertibleMedia] = media.filter {
             guard $0 is ConvertibleMedia else { return false }
             if $0 is Video {
                 do {
-                    guard try Video.needsConversion(file: $0.path, with: videoConfig, log: self.config.log) else { return false }
+                    guard try Video.needsConversion(file: $0.path, with: videoConfig, log: self.config.logger) else { return false }
                 } catch {}
-                log.info("We must convert video file '\($0.path.absolute)' for Plex Direct Play/Stream.")
+                logger.info("We must convert video file '\($0.path.absolute)' for Plex Direct Play/Stream.")
                 return true
             } else if  $0 is Audio {
                 do {
-                    guard try Audio.needsConversion(file: $0.path, with: audioConfig, log: self.config.log) else { return false }
+                    guard try Audio.needsConversion(file: $0.path, with: audioConfig, log: self.config.logger) else { return false }
                 } catch {}
-                log.info("We must convert audio file '\($0.path.absolute)' for Plex Direct Play/Stream.")
+                logger.info("We must convert audio file '\($0.path.absolute)' for Plex Direct Play/Stream.")
                 return true
             }
             return false
             } as! [ConvertibleMedia]
 
         if self.config.convertImmediately {
-            self.config.log.verbose("Converting media immediately")
+            self.config.logger.verbose("Converting media immediately")
 
             let convertGroup = AsyncGroup()
             var simultaneousConversions: Int = 0
@@ -418,16 +419,16 @@ final class Monitr: DirectoryMonitorDelegate {
                 convertGroup.utility {
                     self.statistics.measure(.convert) {
                         do {
-                            m = try m.convert(config, self.config.log)
+                            m = try m.convert(config, self.config.logger)
                         } catch {
-                            self.config.log.warning("Failed to convert file: \(m.path)")
-                            self.config.log.error(error)
+                            self.config.logger.warning("Failed to convert file: \(m.path)")
+                            self.config.logger.error(error)
                             failedMedia.append(m)
                         }
                     }
                     simultaneousConversions -= 1
                 }
-                self.config.log.verbose("Currently running \(simultaneousConversions) simultaneous conversion jobs.")
+                self.config.logger.verbose("Currently running \(simultaneousConversions) simultaneous conversion jobs.")
 
                 // Check to see if we've started all the conversion jobs now
                 var isLast = false
@@ -447,7 +448,7 @@ final class Monitr: DirectoryMonitorDelegate {
                     //   increment when a thread starts and decrement when it
                     //   finishes)
                     while simultaneousConversions >= self.config.convertThreads {
-                        self.config.log.info("Maximum number of conversion threads (\(self.config.convertThreads) threads) reached. Waiting 60 seconds and checking to see if any have finished.")
+                        self.config.logger.info("Maximum number of conversion threads (\(self.config.convertThreads) threads) reached. Waiting 60 seconds and checking to see if any have finished.")
                         convertGroup.wait(seconds: 60)
                     }
                 }
@@ -456,10 +457,10 @@ final class Monitr: DirectoryMonitorDelegate {
             convertGroup.wait()
         } else {
             if self.conversionQueue == nil {
-                self.config.log.info("Creating a conversion queue")
+                self.config.logger.info("Creating a conversion queue")
                 self.conversionQueue = ConversionQueue(self.config, statistics: self.statistics)
             } else {
-                self.config.log.info("Using existing conversion queue")
+                self.config.logger.info("Using existing conversion queue")
             }
 
             // Create a queue of conversion jobs for later
@@ -487,8 +488,8 @@ final class Monitr: DirectoryMonitorDelegate {
                     do {
                         try dir.delete()
                     } catch {
-                        config.log.warning("Failed to delete directory '\(dir)'.")
-                        config.log.error(error)
+                        config.logger.warning("Failed to delete directory '\(dir)'.")
+                        config.logger.error(error)
                     }
                     return
                 }
@@ -496,8 +497,8 @@ final class Monitr: DirectoryMonitorDelegate {
                     cleanup(dirs: [childDirectory], except: paths)
                 }
             } catch {
-                config.log.warning("Failed to get the '\(dir)' directory's children.")
-                config.log.error(error)
+                config.logger.warning("Failed to get the '\(dir)' directory's children.")
+                config.logger.error(error)
             }
         }
     }
@@ -522,7 +523,7 @@ final class Monitr: DirectoryMonitorDelegate {
         // Make sure we're not already modifying media, otherwise just set the
         //   needsUpdate variable so that it's run again once it finishes
         guard !isModifyingMedia else {
-            config.log.info("Currently moving media. Will move new media after the current operation is completed.")
+            config.logger.info("Currently moving media. Will move new media after the current operation is completed.")
             needsUpdate = true
             return
         }

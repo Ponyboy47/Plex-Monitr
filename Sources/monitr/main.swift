@@ -22,7 +22,7 @@ import Glibc
 import Darwin
 #endif
 
-let log = SwiftyBeaver.self
+let logger = SwiftyBeaver.self
 
 var monitr: Monitr
 var arguments = CommandLine.arguments
@@ -76,9 +76,9 @@ guard let saveConfig: Bool = saveFlag.value else {
 }
 
 let console = ConsoleDestination()
-log.addDestination(console)
+logger.addDestination(console)
 
-log.verbose("Got minimum required arguments from the CLI.")
+logger.verbose("Got minimum required arguments from the CLI.")
 
 // We'll use this in a minute to make sure the config is a json file (hopefully people use file extensions if creating their config manually)
 let ext = (configPath.extension ?? "").lowercased()
@@ -87,163 +87,156 @@ let ext = (configPath.extension ?? "").lowercased()
 var config: Config
 // Make sure it's a real file and it ahs the json extension
 if configPath.isFile && ext == "json" {
-    log.verbose("Reading config from file: \(configPath)")
+    logger.verbose("Reading config from file: \(configPath)")
     // Try and read the config from it's file
     do {
-        config = try Config(configPath, logger: log)
+        config = try Config(fromFile: configPath, with: logger)
     } catch {
-        log.warning("Failed to initialize config from JSON file.")
-        log.error(error)
+        logger.warning("Failed to initialize config from JSON file.")
+        logger.error(error)
         exit(EXIT_FAILURE)
-    }
-    // If an optional arg was specified, change it in the config
-    if let p = plexDirectoryOption.value, config.plexDirectory != p {
-        log.info("Plex Directory is changing from '\(config.plexDirectory)' to '\(p)'.")
-        config.plexDirectory = p
-    }
-    if let t = downloadDirectoryOption.value, config.downloadDirectories != t.values {
-        log.info("Download Directory is changing from '\(config.downloadDirectories)' to '\(t.values)'.")
-        config.downloadDirectories = t.values
-    }
-    if let c = convertFlag.value, config.convert != c {
-        log.info("Convert is changing from '\(config.convert)' to '\(c)'.")
-        config.convert = c
-    }
-    if let cI = convertImmediatelyFlag.value, config.convertImmediately != cI {
-        log.info("Convert Immediately is changing from '\(config.convertImmediately)' to '\(cI)'.")
-        config.convertImmediately = cI
-    }
-    if let cCS = convertCronStartOption.value, config.convertCronStart != cCS {
-        log.info("Convert Cron Start is changing from '\(config.convertCronStart)' to '\(cCS)'.")
-        config.convertCronStart = cCS
-    }
-    if let cCE = convertCronEndOption.value, config.convertCronEnd != cCE {
-        log.info("Convert Cron End is changing from '\(config.convertCronEnd)' to '\(cCE)'.")
-        config.convertCronEnd = cCE
-    }
-    if let cT = convertThreadsOption.value, config.convertThreads != cT {
-        log.info("Convert Threads is changing from '\(config.convertThreads)' to '\(cT)'.")
-        config.convertThreads = cT
-    }
-    if let dO = deleteOriginalFlag.value, config.deleteOriginal != dO {
-        log.info("Delete Original is changing from '\(config.deleteOriginal)' to '\(dO)'.")
-        config.deleteOriginal = dO
-    }
-    if let cVC = convertVideoContainerOption.value, config.convertVideoContainer != cVC {
-        log.info("Convert Video Container is changing from '\(config.convertVideoContainer)' to '\(cVC)'.")
-        config.convertVideoContainer = cVC
-    }
-    if let cVC = convertVideoCodecOption.value, config.convertVideoCodec != cVC {
-        log.info("Convert Video Codec is changing from '\(config.convertVideoCodec)' to '\(cVC)'.")
-        config.convertVideoCodec = cVC
-    }
-    if let cAC = convertAudioContainerOption.value, config.convertAudioContainer != cAC {
-        log.info("Convert Audio Container is changing from '\(config.convertAudioContainer)' to '\(cAC)'.")
-        config.convertAudioContainer = cAC
-    }
-    if let cAC = convertAudioCodecOption.value, config.convertAudioCodec != cAC {
-        log.info("Convert Audio Codec is changing from '\(config.convertAudioCodec)' to '\(cAC)'.")
-        config.convertAudioCodec = cAC
-    }
-    if let cVSS = convertVideoSubtitleScanFlag.value, config.convertVideoSubtitleScan != cVSS {
-        log.info("Convert Video Subtitle Scan is changing from '\(config.convertVideoSubtitleScan)' to '\(cVSS)'.")
-        config.convertVideoSubtitleScan = cVSS
-    }
-    if let cL = convertLanguageOption.value, config.convertLanguage != cL {
-        log.info("Convert Language is changing from '\(config.convertLanguage)' to '\(cL)'.")
-        config.convertLanguage = cL
-    }
-    if let cVMF = convertVideoMaxFramerateOption.value, config.convertVideoMaxFramerate != cVMF {
-        log.info("Convert Video Max Framerate is changing from '\(config.convertVideoMaxFramerate)' to '\(cVMF)'.")
-        config.convertVideoMaxFramerate = cVMF
-    }
-    if let cTD = convertTempDirectoryOption.value, config.convertTempDirectory != cTD {
-        log.info("Convert Temp Directory is changing from '\(config.convertTempDirectory)' to '\(cTD)'.")
-        config.convertTempDirectory = cTD
-    }
-    if let dS = deleteSubtitlesFlag.value, config.deleteSubtitles != dS {
-        log.info("Delete Subtitles is changing from '\(config.deleteSubtitles)' to '\(dS)'.")
-        config.deleteSubtitles = dS
-    }
-    if let b = homeVideoDownloadDirectoryOption.value, config.homeVideoDownloadDirectories != b.values {
-        log.info("Home Video Download Directory is changing from '\(config.homeVideoDownloadDirectories)' to '\(b.values)'.")
-        config.homeVideoDownloadDirectories = b.values
-    }
-    if var lL = logLevelOption.value, config.logLevel != lL {
-        // Caps logLevel to the maximum/minimum level
-        if lL > 4 {
-            lL = 4
-        } else if lL < 0 {
-            lL = 0
-        }
-
-        if lL != config.logLevel {
-            log.info("Log Level is changing from '\(config.logLevel)' to '\(lL)'.")
-            config.logLevel = lL
-        }
-    }
-    if let lF = logFileOption.value, config.logFile != lF {
-        log.info("Log File is changing from '\(config.logFile ?? "nil")' to '\(lF)'.")
-        config.logFile = lF
     }
 } else {
-    // Try and create the Config from the command line args (fails if anything is not set)
-    do {
-        config = try Config(configPath, plexDirectoryOption.value, downloadDirectoryOption.value?.values, convertFlag.value, convertImmediatelyFlag.value, convertCronStartOption.value, convertCronEndOption.value, convertThreadsOption.value, deleteOriginalFlag.value, convertVideoContainerOption.value, convertVideoCodecOption.value, convertAudioContainerOption.value, convertAudioCodecOption.value, convertVideoSubtitleScanFlag.value, convertLanguageOption.value, convertVideoMaxFramerateOption.value, convertTempDirectoryOption.value, deleteSubtitlesFlag.value, homeVideoDownloadDirectoryOption.value?.values, logLevelOption.value, logFileOption.value, logger: log)
-    } catch {
-        log.warning("Failed to initialize config.")
-        log.error(error)
-        exit(EXIT_FAILURE)
+    config = Config(logger)
+}
+// If an optional arg was specified, change it in the config
+if let p = plexDirectoryOption.value, config.plexDirectory != p {
+    logger.info("Plex Directory is changing from '\(config.plexDirectory)' to '\(p)'.")
+    config.plexDirectory = p
+}
+if let t = downloadDirectoryOption.value, config.downloadDirectories != t.values {
+    logger.info("Download Directory is changing from '\(config.downloadDirectories)' to '\(t.values)'.")
+    config.downloadDirectories = t.values
+}
+if let c = convertFlag.value, config.convert != c {
+    logger.info("Convert is changing from '\(config.convert)' to '\(c)'.")
+    config.convert = c
+}
+if let cI = convertImmediatelyFlag.value, config.convertImmediately != cI {
+    logger.info("Convert Immediately is changing from '\(config.convertImmediately)' to '\(cI)'.")
+    config.convertImmediately = cI
+}
+if let cCS = convertCronStartOption.value, config.convertCronStart != cCS {
+    logger.info("Convert Cron Start is changing from '\(config.convertCronStart)' to '\(cCS)'.")
+    config.convertCronStart = cCS
+}
+if let cCE = convertCronEndOption.value, config.convertCronEnd != cCE {
+    logger.info("Convert Cron End is changing from '\(config.convertCronEnd)' to '\(cCE)'.")
+    config.convertCronEnd = cCE
+}
+if let cT = convertThreadsOption.value, config.convertThreads != cT {
+    logger.info("Convert Threads is changing from '\(config.convertThreads)' to '\(cT)'.")
+    config.convertThreads = cT
+}
+if let dO = deleteOriginalFlag.value, config.deleteOriginal != dO {
+    logger.info("Delete Original is changing from '\(config.deleteOriginal)' to '\(dO)'.")
+    config.deleteOriginal = dO
+}
+if let cVC = convertVideoContainerOption.value, config.convertVideoContainer != cVC {
+    logger.info("Convert Video Container is changing from '\(config.convertVideoContainer)' to '\(cVC)'.")
+    config.convertVideoContainer = cVC
+}
+if let cVC = convertVideoCodecOption.value, config.convertVideoCodec != cVC {
+    logger.info("Convert Video Codec is changing from '\(config.convertVideoCodec)' to '\(cVC)'.")
+    config.convertVideoCodec = cVC
+}
+if let cAC = convertAudioContainerOption.value, config.convertAudioContainer != cAC {
+    logger.info("Convert Audio Container is changing from '\(config.convertAudioContainer)' to '\(cAC)'.")
+    config.convertAudioContainer = cAC
+}
+if let cAC = convertAudioCodecOption.value, config.convertAudioCodec != cAC {
+    logger.info("Convert Audio Codec is changing from '\(config.convertAudioCodec)' to '\(cAC)'.")
+    config.convertAudioCodec = cAC
+}
+if let cVSS = convertVideoSubtitleScanFlag.value, config.convertVideoSubtitleScan != cVSS {
+    logger.info("Convert Video Subtitle Scan is changing from '\(config.convertVideoSubtitleScan)' to '\(cVSS)'.")
+    config.convertVideoSubtitleScan = cVSS
+}
+if let cL = convertLanguageOption.value, config.convertLanguage != cL {
+    logger.info("Convert Language is changing from '\(config.convertLanguage)' to '\(cL)'.")
+    config.convertLanguage = cL
+}
+if let cVMF = convertVideoMaxFramerateOption.value, config.convertVideoMaxFramerate != cVMF {
+    logger.info("Convert Video Max Framerate is changing from '\(config.convertVideoMaxFramerate)' to '\(cVMF)'.")
+    config.convertVideoMaxFramerate = cVMF
+}
+if let cTD = convertTempDirectoryOption.value, config.convertTempDirectory != cTD {
+    logger.info("Convert Temp Directory is changing from '\(config.convertTempDirectory)' to '\(cTD)'.")
+    config.convertTempDirectory = cTD
+}
+if let dS = deleteSubtitlesFlag.value, config.deleteSubtitles != dS {
+    logger.info("Delete Subtitles is changing from '\(config.deleteSubtitles)' to '\(dS)'.")
+    config.deleteSubtitles = dS
+}
+if let b = homeVideoDownloadDirectoryOption.value, config.homeVideoDownloadDirectories != b.values {
+    logger.info("Home Video Download Directory is changing from '\(config.homeVideoDownloadDirectories)' to '\(b.values)'.")
+    config.homeVideoDownloadDirectories = b.values
+}
+if var lL = logLevelOption.value, config.logLevel != lL {
+    // Caps logLevel to the maximum/minimum level
+    if lL > 4 {
+        lL = 4
+    } else if lL < 0 {
+        lL = 0
+    }
+
+    if lL != config.logLevel {
+        logger.info("Log Level is changing from '\(config.logLevel)' to '\(lL)'.")
+        config.logLevel = lL
     }
 }
+if let lF = logFileOption.value, config.logFile != lF {
+    logger.info("Log File is changing from '\(config.logFile ?? "nil")' to '\(lF)'.")
+    config.logFile = lF
+}
 
-log.verbose("Configuration:\n\(config.printable())")
+logger.verbose("Configuration:\n\(config.printable())")
 
 // Only log to console when we're not logging to a file or if the logLevel
 //   is debug/verbose
 if config.logLevel < 3 && config.logFile != nil {
-    log.removeDestination(console)
+    logger.removeDestination(console)
 }
 
 if let lF = config.logFile {
     let file = FileDestination()
     file.logFileURL = lF.url
-    log.addDestination(file)
+    logger.addDestination(file)
 }
 
 let minLevel = SwiftyBeaver.Level(rawValue: 4 - config.logLevel)!
-for dest in log.destinations {
+for dest in logger.destinations {
     dest.minLevel = minLevel
 }
 
 // Try and save the config (if the flag is set to true)
 if saveConfig {
-    log.verbose("Saving the configuration to file.")
+    logger.verbose("Saving the configuration to file.")
     do {
         try config.save()
     } catch {
-        log.warning("Failed to save configuration to file.")
-        log.error(error)
+        logger.warning("Failed to save configuration to file.")
+        logger.error(error)
     }
 }
 
 // Create the monitr
 do {
     monitr = try Monitr(config)
-    log.verbose("Sucessfully created the Monitr object from the config")
+    logger.verbose("Sucessfully created the Monitr object from the config")
     
     // Run once and then start monitoring regularly
-    log.info("Running Monitr once for startup!")
+    logger.info("Running Monitr once for startup!")
     monitr.run()
     monitr.setDelegate()
-    log.info("Monitoring '\((config.downloadDirectories + config.homeVideoDownloadDirectories).map({ $0.string }))' for new files.")
+    logger.info("Monitoring '\((config.downloadDirectories + config.homeVideoDownloadDirectories).map({ $0.string }))' for new files.")
     guard monitr.startMonitoring() else {
         exit(EXIT_FAILURE)
     }
 
     // Watch for signals so we can shut down properly
     Signals.trap(signals: [.int, .term, .kill, .quit]) { _ in
-        log.info("Received signal. Stopping monitr.")
+        logger.info("Received signal. Stopping monitr.")
         monitr.shutdown()
         // Sleep before exiting or else monitr may not finish shutting down before the program is exited
         sleep(1)
@@ -255,7 +248,7 @@ do {
     keepalive.enter()
     keepalive.wait()
 } catch {
-    log.error("Failed to create the monitr with error '\(error)'. Correct the error and try again.")
+    logger.error("Failed to create the monitr with error '\(error)'. Correct the error and try again.")
     // Sleep before exiting or else the log message is not written correctly
     sleep(1)
     exit(EXIT_FAILURE)

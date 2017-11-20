@@ -16,15 +16,15 @@ extension Array where Element == Double {
 
 extension Array where Element == Statistic.Event {
     func avg() -> Double? {
-        return self.map({ $0.duration }).avg()
+        return self.flatMap({ $0.duration }).avg()
     }
 
     func min() -> Double? {
-        return self.map({ $0.duration }).min()
+        return self.flatMap({ $0.duration }).min()
     }
 
     func max() -> Double? {
-        return self.map({ $0.duration }).max()
+        return self.flatMap({ $0.duration }).max()
     }
 }
 
@@ -39,11 +39,37 @@ enum Statistics: String {
     case lifespan
 }
 
-struct Statistic {
-    struct Event {
+struct Statistic: Codable {
+    struct Event: Codable {
         var start: Cron.Date = Cron.Date()
         var finish: Cron.Date?
-        var duration: Double = 0.0
+        var success: Bool?
+        var duration: Double?
+
+        enum CodingKeys: String, CodingKey {
+            case start
+            case finish
+            case success
+            case duration
+        }
+
+        init() {}
+
+        init(from decoder: Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            start = try values.decode(Cron.Date.self, forKey: .start)
+            finish = try values.decodeIfPresent(Cron.Date.self, forKey: .finish)
+            success = try values.decodeIfPresent(Bool.self, forKey: .success)
+            duration = try values.decodeIfPresent(Double.self, forKey: .duration)
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(start, forKey: .start)
+            try container.encodeIfPresent(duration, forKey: .duration)
+            try container.encodeIfPresent(success, forKey: .success)
+            try container.encodeIfPresent(finish, forKey: .finish)
+        }
     }
 
     static let filename: Path = "statistics.json"
@@ -100,97 +126,31 @@ struct Statistic {
         Duration.pushLogStyle(style: .none)
     }
 
-    public func measure(_ statKey: Statistics, _ block: MeasuredBlock) {
-        var event = Event()
-        event.duration = Duration.measure(UUID().description, block: block)
-        event.finish = Cron.Date()
-
-        var stat = keyMapper(statKey)
-        stat.append(event)
+    enum CodingKeys: String, CodingKey {
+        case startups
+        case moves
+        case conversions
+        case lifespans
     }
 
-    private func keyMapper(_ key: Statistics) -> [Event] {
-        switch key {
-        case .startup:
-            return startups
-        case .move:
-            return moves
-        case .convert:
-            return conversions
-        case .lifespan:
-            return lifespans
-        }
-    }
-}
-
-extension Cron.Date: JSONConvertible {
-    public init(json: JSON) throws {
-        year = try json.get("year")
-        month = try json.get("month")
-        day = try json.get("day")
-        hour = try json.get("hour")
-        minute = try json.get("minute")
-        second = try json.get("second")
-    }
-
-    public func encoded() -> JSON {
-        return [
-            "year": year,
-            "month": month,
-            "day": day,
-            "hour": hour,
-            "minute": minute,
-            "second": second
-        ]
-    }
-}
-
-extension Statistic.Event: JSONConvertible {
-    init(json: JSON) throws {
-        start = try json.get("start")
-        finish = try? json.get("finish")
-        duration = (try? json.get("duration")) ?? 0.0
-    }
-
-    func encoded() -> JSON {
-        var json: JSON = [
-            "start": start,
-            "duration": duration
-        ]
-        if let f = finish {
-            json["finish"] = f.encoded()
-        }
-        return json
-    }
-}
-
-extension Statistic: JSONConvertible {
     init(_ path: Path) throws {
-        try self.init(path.read())
+        self = try path.decode(with: JSONDecoder(), to: Statistic.self)
     }
 
-    init(_ str: String) throws {
-        try self.init(json: JSON.Parser.parse(str))
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        startups = try values.decode([Event].self, forKey: .startups)
+        moves = try values.decode([Event].self, forKey: .moves)
+        conversions = try values.decode([Event].self, forKey: .conversions)
+        lifespans = try values.decode([Event].self, forKey: .lifespans)
     }
 
-    init(json: JSON) throws {
-        startups = try json.get("startups")
-        moves = try json.get("moves")
-        conversions = try json.get("conversions")
-        lifespans = try json.get("lifespans")
-    }
-
-    func encoded() -> JSON {
-        return [
-            "startups": startups.encoded(),
-            "moves": moves.encoded(),
-            "conversions": conversions.encoded(),
-            "lifespans": lifespans.encoded()
-        ]
-    }
-
-    func serialized() throws -> String {
-        return try encoded().serialized()
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(startups, forKey: .startups)
+        try container.encode(moves, forKey: .moves)
+        try container.encode(conversions, forKey: .conversions)
+        try container.encode(lifespans, forKey: .lifespans)
     }
 
     func save(_ dir: Path) throws {
@@ -203,6 +163,29 @@ extension Statistic: JSONConvertible {
         }
 
         let statisticsPath = dir + Statistic.filename
-        try statisticsPath.write(self.serialized(), force: true)
+        let data = try JSONEncoder().encode(self)
+        try statisticsPath.write(data, force: true)
+    }
+
+    public func measure(_ statKey: Statistics, _ block: MeasuredBlock) {
+        var event = Event()
+        event.duration = Duration.measure(UUID().description, block: block)
+        event.finish = Cron.Date()
+
+        var stat = self[statKey]
+        stat.append(event)
+    }
+
+    public subscript(_ key: Statistics) -> [Event] {
+        switch key {
+        case .startup:
+            return startups
+        case .move:
+            return moves
+        case .convert:
+            return conversions
+        case .lifespan:
+            return lifespans
+        }
     }
 }

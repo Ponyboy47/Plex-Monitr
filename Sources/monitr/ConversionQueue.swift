@@ -2,6 +2,7 @@ import PathKit
 import Async
 import SwiftyBeaver
 import Cron
+import Foundation
 
 enum ConversionError: Error {
     case maxThreadsReached
@@ -9,14 +10,14 @@ enum ConversionError: Error {
     case noJobIndex
 }
 
-class ConversionQueue: JSONConvertible {
+final class ConversionQueue: Codable {
     static let filename: String = "conversionqueue.json"
 
     fileprivate var configPath: Path
     fileprivate var statistics: Statistic
     fileprivate var maxThreads: Int
     fileprivate var deleteOriginal: Bool
-    fileprivate var log: SwiftyBeaver.Type
+    fileprivate var logger: SwiftyBeaver.Type
     fileprivate var videoConversionConfig: VideoConversionConfig
     fileprivate var audioConversionConfig: AudioConversionConfig
 
@@ -37,6 +38,12 @@ class ConversionQueue: JSONConvertible {
         return jobs.count
     }
 
+    enum CodingKeys: String, CodingKey {
+        case configPath
+        case videoJobs
+        case audioJobs
+    }
+
     init(_ config: Config, statistics stats: Statistic? = nil) {
         configPath = config.configFile
         maxThreads = config.convertThreads
@@ -46,9 +53,45 @@ class ConversionQueue: JSONConvertible {
         } else {
             statistics = Statistic()
         }
-        log = config.log
+        logger = config.logger
         videoConversionConfig = VideoConversionConfig(container: config.convertVideoContainer, videoCodec: config.convertVideoCodec, audioCodec: config.convertAudioCodec, subtitleScan: config.convertVideoSubtitleScan, mainLanguage: config.convertLanguage, maxFramerate: config.convertVideoMaxFramerate, plexDir: config.plexDirectory, tempDir: config.deleteOriginal ? nil : config.convertTempDirectory)
         audioConversionConfig = AudioConversionConfig(container: config.convertAudioContainer, codec: config.convertAudioCodec, plexDir: config.plexDirectory, tempDir: config.deleteOriginal ? nil : config.convertTempDirectory)
+    }
+
+    init(_ path: Path) throws {
+        let other = try path.decode(with: JSONDecoder(), to: ConversionQueue.self)
+        self.configPath = other.configPath
+        self.maxThreads = other.maxThreads
+        self.deleteOriginal = other.deleteOriginal
+        self.statistics = other.statistics
+        self.logger = other.logger
+        self.videoConversionConfig = other.videoConversionConfig
+        self.audioConversionConfig = other.audioConversionConfig
+        self.videoJobs = other.videoJobs
+        self.audioJobs = other.audioJobs
+    }
+
+    required init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+
+        configPath = try values.decode(Path.self, forKey: .configPath)
+        config = try JSONDecoder().decode(Config.self, from: configPath.read())
+        maxThreads = config.convertThreads
+        deleteOriginal = config.deleteOriginal
+        statistics = Statistic()
+        logger = config.logger
+        videoConversionConfig = VideoConversionConfig(container: config.convertVideoContainer, videoCodec: config.convertVideoCodec, audioCodec: config.convertAudioCodec, subtitleScan: config.convertVideoSubtitleScan, mainLanguage: config.convertLanguage, maxFramerate: config.convertVideoMaxFramerate, plexDir: config.plexDirectory, tempDir: config.deleteOriginal ? nil : config.convertTempDirectory)
+        audioConversionConfig = AudioConversionConfig(container: config.convertAudioContainer, codec: config.convertAudioCodec, plexDir: config.plexDirectory, tempDir: config.deleteOriginal ? nil : config.convertTempDirectory)
+        videoJobs = try values.decode([Video].self, forKey: .videoJobs)
+        audioJobs = try values.decode([Audio].self, forKey: .audioJobs)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+
+        try container.encode(configPath, forKey: .configPath)
+        try container.encode(videoJobs, forKey: .videoJobs)
+        try container.encode(audioJobs, forKey: .audioJobs)
     }
 
     /// Adds a new Media object to the list of media items to convert
@@ -63,7 +106,7 @@ class ConversionQueue: JSONConvertible {
             } else if job is Audio {
                 audioJobs.append(job as! Audio)
             } else {
-                self.log.warning("Job is neither Audio nor Video and will not be added to the array of jobs.")
+                self.logger.warning("Job is neither Audio nor Video and will not be added to the array of jobs.")
             }
         }
     }
@@ -76,7 +119,7 @@ class ConversionQueue: JSONConvertible {
         } else if job is Audio {
             self.activeJobs.append(self.audioJobs.removeFirst())
         } else {
-            self.log.warning("First job is of an unknown type!")
+            self.logger.warning("First job is of an unknown type!")
             return nil
         }
         return self.activeJobs.last
@@ -107,7 +150,7 @@ class ConversionQueue: JSONConvertible {
         } else if job is Audio {
             self.audioJobs.append(self.activeJobs.remove(at: index) as! Audio)
         } else {
-            self.log.warning("Job is of an unknow type and cannot be re-queued")
+            self.logger.warning("Job is of an unknow type and cannot be re-queued")
         }
     }
 
@@ -127,15 +170,15 @@ class ConversionQueue: JSONConvertible {
                     } else if next is Audio {
                         config = self.audioConversionConfig
                     }
-                    next = try next.convert(config, self.log)
+                    next = try next.convert(config, self.logger)
                     try self.finish(next)
                 } catch MediaError.notImplemented {
-                    self.log.warning("Media that is neither Video nor Audio somehow ended up in the conversion queue! => \(next.path)")
+                    self.logger.warning("Media that is neither Video nor Audio somehow ended up in the conversion queue! => \(next.path)")
                 } catch ConversionError.noJobIndex {
-                    self.log.error("Error finding job index in the active jobs array. Unable to remove job, this will prevent other jobs from starting!")
+                    self.logger.error("Error finding job index in the active jobs array. Unable to remove job, this will prevent other jobs from starting!")
                 } catch {
-                    self.log.warning("Error while converting media: \(next.path)")
-                    self.log.error(error)
+                    self.logger.warning("Error while converting media: \(next.path)")
+                    self.logger.error(error)
                     self.requeue(next)
                 }
             }
@@ -143,62 +186,29 @@ class ConversionQueue: JSONConvertible {
     }
 
     func start() {
-        self.log.info("Beginning conversion cron job")
+        self.logger.info("Beginning conversion cron job")
         while !stop {
             do {
                 try self.startNextConversion()
             } catch ConversionError.maxThreadsReached {
-                self.log.info("Reached the concurrent conversion thread limit. Waiting for a thread to be freed")
+                self.logger.info("Reached the concurrent conversion thread limit. Waiting for a thread to be freed")
             } catch ConversionError.noJobsLeft {
-                self.log.info("All conversion jobs are either finished or currently running")
+                self.logger.info("All conversion jobs are either finished or currently running")
                 break
             } catch {
-                self.log.error("Uncaught expection occurred while converting media => '\(error)'")
+                self.logger.error("Uncaught expection occurred while converting media => '\(error)'")
             }
             while active == maxThreads && !stop {
                 conversionGroup.wait(seconds: 60)
             }
         }
-        self.log.info("Conversion cron job will stop as soon as the current conversion jobs have finished")
+        self.logger.info("Conversion cron job will stop as soon as the current conversion jobs have finished")
         conversionGroup.wait()
-        self.log.info("The conversion cron job is officially done running (for now)")
-    }
-
-    convenience init(_ path: Path) throws {
-        try self.init(path.read())
-    }
-
-    convenience init(_ str: String) throws {
-        try self.init(json: JSON.Parser.parse(str))
-    }
-
-    required init(json: JSON) throws {
-        configPath = Path(try json.get("configPath"))
-        config = try Config(configPath.read())
-        maxThreads = config.convertThreads
-        deleteOriginal = config.deleteOriginal
-        statistics = Statistic()
-        log = config.log
-        videoConversionConfig = VideoConversionConfig(container: config.convertVideoContainer, videoCodec: config.convertVideoCodec, audioCodec: config.convertAudioCodec, subtitleScan: config.convertVideoSubtitleScan, mainLanguage: config.convertLanguage, maxFramerate: config.convertVideoMaxFramerate, plexDir: config.plexDirectory, tempDir: config.deleteOriginal ? nil : config.convertTempDirectory)
-        audioConversionConfig = AudioConversionConfig(container: config.convertAudioContainer, codec: config.convertAudioCodec, plexDir: config.plexDirectory, tempDir: config.deleteOriginal ? nil : config.convertTempDirectory)
-        videoJobs = try json.get("videoJobs")
-        audioJobs = try json.get("audioJobs")
-    }
-
-    public func encoded() -> JSON {
-        return [
-            "configPath": configPath.string,
-            "videoJobs": videoJobs.encoded(),
-            "audioJobs": audioJobs.encoded()
-        ]
-    }
-
-    private func serialized() throws -> String {
-        return try self.encoded().serialized()
+        self.logger.info("The conversion cron job is officially done running (for now)")
     }
 
     public func save() throws {
         let file: Path = configPath.parent + ConversionQueue.filename
-        try file.write(self.serialized(), force: true)
+        try file.write(JSONEncoder().encode(self), force: true)
     }
 }

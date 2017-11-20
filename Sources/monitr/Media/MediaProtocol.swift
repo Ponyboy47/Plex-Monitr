@@ -40,8 +40,19 @@ enum MediaError: Error {
     }
 }
 
+enum MediaCodingKeys: String, CodingKey {
+    case path
+    case isHomeMedia
+}
+
+enum ConvertibleMediaCodingKeys: String, CodingKey {
+    case path
+    case isHomeMedia
+    case unconvertedFile
+}
+
 /// Protocol for the common implementation of Media types
-protocol Media: class, JSONConvertible {
+protocol Media: class, Codable {
     /// The path to the media file
     var path: Path { get set }
     /// Whether the media file is home media or comercial
@@ -71,21 +82,21 @@ extension Media {
         return plexName + "." + (path.extension ?? "")
     }
 
-    /// JSONRepresentable protocol requirement
-    func encoded() -> JSON {
-        return [
-            "path": path.string,
-            "isHomeMedia": isHomeMedia
-        ]
-    }
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: MediaCodingKeys.self)
 
-    init(json: JSON) throws {
-        try self.init(Path(json.get("path")))
-        self.isHomeMedia = (try? json.get("isHomeMedia")) ?? false
+        try self.init(values.decode(Path.self, forKey: .path))
+        self.isHomeMedia = try values.decode(Bool.self, forKey: .isHomeMedia)
     }
 
     static func isSupported(ext: String) -> Bool {
         return supportedExtensions.contains(ext.lowercased())
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: MediaCodingKeys.self)
+        try container.encode(path, forKey: .path)
+        try container.encode(isHomeMedia, forKey: .isHomeMedia)
     }
 
     func move(to plexPath: Path, log: SwiftyBeaver.Type) throws -> Media {
@@ -137,6 +148,21 @@ protocol ConvertibleMedia: Media {
 }
 
 extension ConvertibleMedia {
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: ConvertibleMediaCodingKeys.self)
+
+        try self.init(values.decode(Path.self, forKey: .path))
+        self.isHomeMedia = try values.decode(Bool.self, forKey: .isHomeMedia)
+        self.unconvertedFile = try values.decode(Path.self, forKey: .unconvertedFile)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: ConvertibleMediaCodingKeys.self)
+        try container.encode(path, forKey: .path)
+        try container.encode(isHomeMedia, forKey: .isHomeMedia)
+        try container.encode(unconvertedFile, forKey: .unconvertedFile)
+    }
+
     func move(to plexPath: Path, log: SwiftyBeaver.Type) throws -> ConvertibleMedia {
         if let _ = unconvertedFile {
             return try ((self as Media).move(to: plexPath, log: log) as! ConvertibleMedia).moveUnconverted(to: plexPath, log: log)
@@ -179,14 +205,5 @@ extension ConvertibleMedia {
         unconvertedFile = finalRestingPlace
 
         return self
-    }
-
-    /// JSONRepresentable protocol requirement
-    func encoded() -> JSON {
-        var json: JSON = (self as Media).encoded()
-        if let uF = unconvertedFile {
-            json["unconvertedFile"] = uF.string.encoded()
-        }
-        return json
     }
 }

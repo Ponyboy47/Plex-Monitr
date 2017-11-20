@@ -1,3 +1,5 @@
+import Foundation
+
 let indent = "\t\t"
 
 enum FFProbeError: Error {
@@ -26,56 +28,39 @@ enum FFProbeError: Error {
 }
 
 /// Struct for all of the streams returned by the `ffprobe` command
-struct FFProbe {
+struct FFProbe: Decodable {
     fileprivate var streams: [FFProbeStreamProtocol] = []
-    lazy var videoStreams: [VideoStream] = {
+    var videoStreams: [VideoStream] {
         return self.streams.filter({ $0.type == .video }) as! [VideoStream]
-    }()
-    lazy var audioStreams: [AudioStream] = {
+    }
+    var audioStreams: [AudioStream] {
         return self.streams.filter({ $0.type == .audio }) as! [AudioStream]
-    }()
-    lazy var dataStreams: [DataStream] = {
+    }
+    var dataStreams: [DataStream] {
         return self.streams.filter({ $0.type == .data }) as! [DataStream]
-    }()
-    lazy var unknownStreams: [UnknownStream] = {
+    }
+    var unknownStreams: [UnknownStream] {
         return self.streams.filter({ $0.type == .unknown }) as! [UnknownStream]
-    }()
-    init() {}
-}
-
-extension FFProbe: JSONInitializable {
-    init(_ ffprobeString: String) throws {
-        try self.init(json: JSON.Parser.parse(ffprobeString))
     }
 
-    init(json: JSON) throws {
-        let genericStreams = try json.get(field: "streams")
-        for stream in genericStreams {
-            do {
-                let s = try UnknownStream(json: stream)
-                streams.append(s)
-            } catch FFProbeError.IncorrectTypeError.data {
-                let s = try DataStream(json: stream)
-                streams.append(s)
-            } catch FFProbeError.IncorrectTypeError.video {
-                let s = try VideoStream(json: stream)
-                streams.append(s)
-            } catch FFProbeError.IncorrectTypeError.audio {
-                let s = try AudioStream(json: stream)
-                streams.append(s)
-            }
-        }
+    enum CodingKeys: String, CodingKey {
+        case streams
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        streams = try values.decode([FFProbeStreamProtocol].self, forKey: .streams)
     }
 }
 
-enum CodecType: String {
+enum CodecType: String, Codable {
     case video
     case audio
     case data
     case unknown
 }
 
-protocol Codec {}
+protocol Codec: Codable {}
 
 enum VideoCodec: String, Codec {
     case h264
@@ -91,15 +76,20 @@ enum AudioCodec: String, Codec {
     case any
 }
 
-protocol FFProbeStreamProtocol: JSONInitializable {
+protocol FFProbeStreamProtocol: Decodable {
     var index: Int { get set }
     var type: CodecType { get set }
     var duration: MediaDuration { get set }
     var bitRate: BitRate { get set }
     var tags: Tags? { get set }
-    var language: Language? { get set }
+    var language: Language? { get }
     var description: String { get }
-    init(stream str: String) throws
+}
+
+extension FFProbeStreamProtocol {
+    var language: Language? {
+        return tags?.language ?? .und
+    }
 }
 
 protocol FFProbeCodecStreamProtocol: FFProbeStreamProtocol {
@@ -126,7 +116,6 @@ struct UnknownStream: FFProbeStreamProtocol {
     var duration: MediaDuration
     var bitRate: BitRate
     var tags: Tags?
-    var language: Language?
 
     var description: String {
         var str = "\(indent)Index: \(index)"
@@ -143,14 +132,20 @@ struct UnknownStream: FFProbeStreamProtocol {
         return str
     }
 
-    init(stream str: String) throws {
-        try self.init(json: JSON.Parser.parse(str))
+    enum CodingKeys: String, CodingKey {
+        case index
+        case type = "codec_type"
+        case duration
+        case bitRate = "bit_rate"
+        case tags
     }
 
-    init(json: JSON) throws {
-        index = try json.get("index")
-        let t: CodecType = try CodecType(rawValue: json.get("codec_type")) ?? .unknown
-        guard t == self.type else {
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+
+        index = try values.decode(Int.self, forKey: .index)
+        let t = try values.decodeIfPresent(CodecType.self, forKey: .type) ?? .unknown
+        guard t == type else {
             switch t {
             case .video:
                 throw FFProbeError.IncorrectTypeError.video
@@ -159,19 +154,14 @@ struct UnknownStream: FFProbeStreamProtocol {
             case .data:
                 throw FFProbeError.IncorrectTypeError.data
             default:
-                throw FFProbeError.IncorrectTypeError.other(try json.get("codec_type"))
+                throw FFProbeError.IncorrectTypeError.other(t.rawValue)
             }
         }
+        duration = try values.decode(MediaDuration.self, forKey: .duration)
 
-        let durationString: String = try json.get("duration")
-        duration = try MediaDuration(durationString)
+        bitRate = try values.decode(BitRate.self, forKey: .bitRate)
 
-        let bitRateString: String = try json.get("bit_rate")
-        bitRate = try BitRate(bitRateString)
-
-        tags = try? json.get("tags")
-
-        language = tags?.language ?? .und
+        tags = try values.decode(Tags.self, forKey: .tags)
     }
 }
 
@@ -181,7 +171,6 @@ struct DataStream: FFProbeStreamProtocol {
     var duration: MediaDuration
     var bitRate: BitRate
     var tags: Tags?
-    var language: Language?
 
     var description: String {
         var str = "\(indent)Index: \(index)"
@@ -198,35 +187,36 @@ struct DataStream: FFProbeStreamProtocol {
         return str
     }
 
-    init(stream str: String) throws {
-        try self.init(json: JSON.Parser.parse(str))
+    enum CodingKeys: String, CodingKey {
+        case index
+        case type = "codec_type"
+        case duration
+        case bitRate = "bit_rate"
+        case tags
     }
 
-    init(json: JSON) throws {
-        index = try json.get("index")
-        let t: CodecType = try CodecType(rawValue: json.get("codec_type")) ?? .unknown
-        guard t == self.type else {
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        index = try values.decode(Int.self, forKey: .index)
+        let t = try values.decodeIfPresent(CodecType.self, forKey: .type) ?? .unknown
+        guard t == type else {
             switch t {
             case .video:
                 throw FFProbeError.IncorrectTypeError.video
             case .audio:
                 throw FFProbeError.IncorrectTypeError.audio
             case .unknown:
-                throw FFProbeError.IncorrectTypeError.other(try json.get("codec_type"))
+                throw FFProbeError.IncorrectTypeError.other(t.rawValue)
             default:
                 throw FFProbeError.IncorrectTypeError.data
             }
         }
 
-        let durationString: String = try json.get("duration")
-        duration = try MediaDuration(durationString)
+        duration = try values.decode(MediaDuration.self, forKey: .duration)
 
-        let bitRateString: String = try json.get("bit_rate")
-        bitRate = try BitRate(bitRateString)
+        bitRate = try values.decode(BitRate.self, forKey: .bitRate)
 
-        tags = try? json.get("tags")
-
-        language = tags?.language ?? .und
+        tags = try values.decode(Tags.self, forKey: .tags)
     }
 }
 
@@ -238,7 +228,6 @@ struct VideoStream: FFProbeVideoStreamProtocol {
     var duration: MediaDuration
     var bitRate: BitRate
     var tags: Tags?
-    var language: Language?
     var dimensions: (Int, Int)
     var aspectRatio: String
     var framerate: Double
@@ -267,18 +256,31 @@ struct VideoStream: FFProbeVideoStreamProtocol {
         return str
     }
 
-    init(stream str: String) throws {
-        try self.init(json: JSON.Parser.parse(str))
+    enum CodingKeys: String, CodingKey {
+        case index
+        case rawCodec = "codec_name"
+        case type = "codec_type"
+        case duration
+        case bitRate = "bit_rate"
+        case tags
+        case width
+        case height
+        case aspectRatio = "display_aspect_ratio"
+        case framerate = "avg_frame_rate"
+        case bitDepth = "bits_per_raw_sample"
     }
 
-    init(json: JSON) throws {
-        index = try json.get("index")
-        rawCodec = try json.get("codec_name")
-        let t: CodecType = try CodecType(rawValue: json.get("codec_type")) ?? .unknown
-        guard t == self.type else {
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+
+        index = try values.decode(Int.self, forKey: .index)
+        rawCodec = try values.decode(String.self, forKey: .rawCodec)
+
+        let t = try values.decodeIfPresent(CodecType.self, forKey: .type) ?? .unknown
+        guard t == type else {
             switch t {
             case .unknown:
-                throw FFProbeError.IncorrectTypeError.other(try json.get("codec_type"))
+                throw FFProbeError.IncorrectTypeError.other(rawCodec)
             case .data:
                 throw FFProbeError.IncorrectTypeError.data
             case .audio:
@@ -287,25 +289,25 @@ struct VideoStream: FFProbeVideoStreamProtocol {
                 throw FFProbeError.IncorrectTypeError.video
             }
         }
-        guard let c = try VideoCodec(rawValue: json.get("codec_name")) else {
-            throw FFProbeError.JSONParserError.unknownCodec(try json.get("codec_name"))
+
+        guard let c = try? values.decode(VideoCodec.self, forKey: .rawCodec) else {
+            throw FFProbeError.JSONParserError.unknownCodec(rawCodec)
         }
         codec = c
 
-        duration = try MediaDuration(json.get("duration"))
+        duration = try values.decode(MediaDuration.self, forKey: .duration)
 
-        bitRate = try BitRate(json.get("bit_rate"))
+        bitRate = try values.decode(BitRate.self, forKey: .bitRate)
 
-        tags = try? json.get("tags")
-        language = tags?.language
+        tags = try values.decode(Tags.self, forKey: .tags)
 
-        let width: Int = try json.get("width")
-        let height: Int = try json.get("height")
+        let width = try values.decode(Int.self, forKey: .width)
+        let height = try values.decode(Int.self, forKey: .height)
         dimensions = (width, height)
 
-        aspectRatio = try json.get("display_aspect_ratio")
+        aspectRatio = try values.decode(String.self, forKey: .aspectRatio)
 
-        let framerateString: String = try json.get("avg_frame_rate")
+        let framerateString = try values.decode(String.self, forKey: .framerate)
         if framerateString.contains("/") {
             let components = framerateString.components(separatedBy: "/")
             guard let top = Double(components[0]), let bottom = Double(components[1]) else {
@@ -326,7 +328,7 @@ struct VideoStream: FFProbeVideoStreamProtocol {
             framerate = f
         }
 
-        bitDepth = try? json.get("bits_per_raw_sample")
+        bitDepth = try values.decode(Int.self, forKey: .bitDepth)
     }
 }
 
@@ -338,7 +340,6 @@ struct AudioStream: FFProbeAudioStreamProtocol {
     var duration: MediaDuration
     var bitRate: BitRate
     var tags: Tags?
-    var language: Language?
     var sampleRate: SampleRate
     var channels: Int
     var channelLayout: ChannelLayout
@@ -364,15 +365,26 @@ struct AudioStream: FFProbeAudioStreamProtocol {
         return str
     }
 
-    init(stream str: String) throws {
-        try self.init(json: JSON.Parser.parse(str))
+    enum CodingKeys: String, CodingKey {
+        case index
+        case rawCodec = "codec_name"
+        case type = "codec_type"
+        case duration
+        case bitRate = "bit_rate"
+        case tags
+        case sampleRate = "sample_rate"
+        case channels
+        case channelLayout = "channel_layout"
     }
 
-    init(json: JSON) throws {
-        index = try json.get("index")
-        rawCodec = try json.get("codec_name")
-        let t: CodecType = try CodecType(rawValue: json.get("codec_type")) ?? .unknown
-        guard t == self.type else {
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+
+        index = try values.decode(Int.self, forKey: .index)
+        rawCodec = try values.decode(String.self, forKey: .rawCodec)
+
+        let t = try values.decodeIfPresent(CodecType.self, forKey: .type) ?? .unknown
+        guard t == type else {
             switch t {
             case .unknown:
                 throw FFProbeError.IncorrectTypeError.other(rawCodec)
@@ -384,28 +396,26 @@ struct AudioStream: FFProbeAudioStreamProtocol {
                 throw FFProbeError.IncorrectTypeError.audio
             }
         }
-        guard let c = AudioCodec(rawValue: try json.get("codec_name")) else {
-            throw FFProbeError.JSONParserError.unknownCodec(try json.get("codec_name"))
+        guard let c = try? values.decode(AudioCodec.self, forKey: .rawCodec) else {
+            throw FFProbeError.JSONParserError.unknownCodec(rawCodec)
         }
         codec = c
 
-        duration = try MediaDuration(json.get("duration"))
+        duration = try values.decode(MediaDuration.self, forKey: .duration)
 
-        bitRate = try BitRate(json.get("bit_rate"))
+        bitRate = try values.decode(BitRate.self, forKey: .bitRate)
 
-        tags = try? json.get("tags")
+        tags = try values.decode(Tags.self, forKey: .tags)
 
-        language = tags?.language ?? .und
+        sampleRate = try values.decode(SampleRate.self, forKey: .sampleRate)
 
-        sampleRate = try SampleRate(json.get("sample_rate"))
+        channels = try values.decode(Int.self, forKey: .channels)
 
-        channels = try json.get("channels")
-
-        channelLayout = ChannelLayout(rawValue: try json.get("channel_layout")) ?? .unknown_or_new
+        channelLayout = try values.decodeIfPresent(ChannelLayout.self, forKey: .channelLayout) ?? .unknown_or_new
     }
 }
 
-protocol Container {}
+protocol Container: Codable {}
 
 enum VideoContainer: String, Container {
     case mp4
@@ -421,13 +431,13 @@ enum AudioContainer: String, Container {
     case other
 }
 
-enum ChannelLayout: String {
+enum ChannelLayout: String, Codable {
     case mono
     case stereo
     case unknown_or_new
 }
 
-struct MediaDuration {
+struct MediaDuration: Codable {
     var hours: UInt
     var minutes: UInt
     var seconds: UInt
@@ -445,7 +455,9 @@ struct MediaDuration {
         return d
     }
 
-    init(_ durationString: String) throws {
+    init(from decoder: Decoder) throws {
+        var container = try decoder.unkeyedContainer()
+        let durationString = try container.decode(String.self)
         let parts = durationString.components(separatedBy: ":")
 
         if parts.count == 3 {
@@ -493,19 +505,19 @@ struct MediaDuration {
         }
     }
 
-    init(double duration: Double) {
-        hours = 0
-        minutes = 0
-        seconds = UInt(duration)
-        while seconds >= 60 {
-            seconds -= 60
-            minutes += 1
-            if minutes >= 60 {
-                minutes -= 60
-                hours += 1
-            }
-        }
-    }
+     init(double duration: Double) {
+         hours = 0
+         minutes = 0
+         seconds = UInt(duration)
+         while seconds >= 60 {
+             seconds -= 60
+             minutes += 1
+             if minutes >= 60 {
+                 minutes -= 60
+                 hours += 1
+             }
+         }
+     }
 }
 
 extension MediaDuration: Comparable {
@@ -526,7 +538,7 @@ extension MediaDuration: Comparable {
     }
 }
 
-struct BitRate {
+struct BitRate: Decodable {
     enum BitRateUnit: String {
         case bps
         case kbps
@@ -565,7 +577,10 @@ struct BitRate {
         }
     }()
 
-    init(_ bitRateString: String) throws {
+    init(from decoder: Decoder) throws {
+        var container = try decoder.unkeyedContainer()
+        let bitRateString = try container.decode(String.self)
+
         if bitRateString.hasSuffix("Mbit/s") {
             unit = .mbps
             guard let v = Double(bitRateString.components(separatedBy: " ")[0]) else {
@@ -602,7 +617,7 @@ extension BitRate: Comparable {
     }
 }
 
-struct SampleRate {
+struct SampleRate: Decodable {
     enum SampleRateUnit: String {
         case hz
         case khz
@@ -641,7 +656,10 @@ struct SampleRate {
         }
     }()
 
-    init(_ sampleRateString: String) throws {
+    init(from decoder: Decoder) throws {
+        var container = try decoder.unkeyedContainer()
+        let sampleRateString = try container.decode(String.self)
+
         if sampleRateString.hasSuffix("mHz") {
             unit = .mhz
             guard let v = Double(sampleRateString.components(separatedBy: " ")[0]) else {
@@ -678,7 +696,7 @@ extension SampleRate: Comparable {
     }
 }
 
-enum Language: String {
+enum Language: String, Codable {
     case eng // English
     case spa // Spanish
     case ita // Italian
@@ -693,12 +711,6 @@ enum Language: String {
     case und // Undetermined
 }
 
-struct Tags: JSONInitializable {
+struct Tags: Codable {
     var language: Language?
-
-    init(json: JSON) throws {
-        if let languageString: String = try? json.get("language") {
-            language = Language(rawValue: languageString)
-        }
-    }
 }

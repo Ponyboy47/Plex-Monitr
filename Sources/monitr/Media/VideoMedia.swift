@@ -12,6 +12,7 @@ import Foundation
 import PathKit
 import Downpour
 import SwiftyBeaver
+import SwiftShell
 
 /// Management for Video files
 final class Video: ConvertibleMedia {
@@ -55,8 +56,8 @@ final class Video: ConvertibleMedia {
                 language = path.lastComponent[match].replacingOccurrences(of: "anoXmous_", with: "")
             } else {
                 for lang in commonLanguages {
-                    if path.lastComponent.lowercased().contains(lang) || path.lastComponent.lowercased().contains(".\(lang.substring(to: 3)).") {
-                        language = lang.substring(to: 3)
+                    if path.lastComponent.lowercased().contains(lang) || path.lastComponent.lowercased().contains(".\(lang[..<3]).") {
+                        language = String(lang[..<3])
                         break
                     }
                 }
@@ -212,15 +213,19 @@ final class Video: ConvertibleMedia {
         }
     }
 
-    /// JSONInitializable protocol requirement
-    convenience init(json: JSON) throws {
-        try self.init(Path(json.get("path")))
-        let str: String? = try? json.get("unconvertedFile")
-        if let s = str {
-            unconvertedFile = Path(s)
-        }
+    enum CodingKeys: String, CodingKey {
+        case path
+        case isHomeMedia
+        case unconvertedFile
+        case subtitles
+    }
 
-        subtitles = try json.get("subtitles")
+    convenience init(from decoder: Decoder) throws {
+        try self.init(from: decoder)
+
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+
+        subtitles = try values.decode([Subtitle].self, forKey: .subtitles)
         for subtitle in subtitles {
             subtitle.linkedVideo = self
         }
@@ -300,21 +305,21 @@ final class Video: ConvertibleMedia {
         args += [path.absolute.string, "--output", outputPath.string]
 
         log.info("Beginning conversion of media file '\(path)'")
-        let (rc, output) = Command.execute("transcode-video", args)
+        let transcodeVideoResponse = SwiftShell.run("transcode-video", args)
 
-        guard rc == 0 else {
+        guard transcodeVideoResponse.succeeded else {
             var error: String = "Error attempting to transcode: \(path)"
-            error += "\n\tCommand: transcode-video \(args.joined(separator: " "))"
-            if let stderr = output.stderr, !stderr.isEmpty {
-                error += "\n\tStandard Error: \(stderr)"
+            error += "\n\tCommand: transcode-video \(args.joined(separator: " "))\n\tResponse: \(transcodeVideoResponse.exitcode)"
+            if !transcodeVideoResponse.stdout.isEmpty {
+                error += "\n\tStandard Out: \(transcodeVideoResponse.stdout)"
             }
-            if let stdout = output.stdout, !stdout.isEmpty {
-                error += "\n\tStandard Out: \(stdout)"
+            if !transcodeVideoResponse.stderror.isEmpty {
+                error += "\n\tStandard Error: \(transcodeVideoResponse.stderror)"
             }
             throw MediaError.conversionError(error)
         }
-        if let stdout = output.stdout, !stdout.isEmpty {
-            log.verbose("transcode-video output:\n\n\(stdout)\n\n")
+        if !transcodeVideoResponse.stdout.isEmpty {
+            log.verbose("transcode-video output:\n\n\(transcodeVideoResponse.stdout)\n\n")
         }
 
         log.info("Successfully converted media file '\(path)' to '\(outputPath)'")
@@ -337,10 +342,11 @@ final class Video: ConvertibleMedia {
         return self
     }
 
-    func encoded() -> JSON {
-        var json = (self as ConvertibleMedia).encoded()
-        json["subtitles"] = self.subtitles.encoded()
-        return json
+    func encode(to encoder: Encoder) throws {
+        try (self as ConvertibleMedia).encode(to: encoder)
+        var container = encoder.container(keyedBy: CodingKeys.self)
+
+        try container.encode(subtitles, forKey: .subtitles)
     }
     
     class func needsConversion(file: Path, with config: ConversionConfig, log: SwiftyBeaver.Type) throws -> Bool {
@@ -350,22 +356,22 @@ final class Video: ConvertibleMedia {
         log.info("Getting audio/video stream data for '\(file.absolute)'")
 
         // Get video file metadata using ffprobe
-        let (ffprobeRC, ffprobeOutput) = Command.execute("ffprobe", "-hide_banner", "-of", "json", "-show_streams", file.absolute.string)
-        guard ffprobeRC == 0 else {
+        let ffprobeResponse = SwiftShell.run(bash: "ffprobe -hide_banner -of json -show_streams \(file.absolute.string)")
+        guard ffprobeResponse.succeeded else {
             var err: String = ""
-            if let stderr = ffprobeOutput.stderr {
-                err = stderr
+            if !ffprobeResponse.stderror.isEmpty {
+                err = ffprobeResponse.stderror
             }
             throw MediaError.FFProbeError.couldNotGetMetadata(err)
         }
-        guard let ffprobeStdout = ffprobeOutput.stdout else {
+        guard !ffprobeResponse.stdout.isEmpty else {
             throw MediaError.FFProbeError.couldNotGetMetadata("File does not contain any metadata")
         }
-        log.verbose("Got audio/video stream data for '\(file.absolute)' => '\(ffprobeStdout)'")
+        log.verbose("Got audio/video stream data for '\(file.absolute)' => '\(ffprobeResponse.stdout)'")
 
         var ffprobe: FFProbe
         do {
-            ffprobe = try FFProbe(ffprobeStdout)
+            ffprobe = try JSONDecoder().decode(FFProbe.self, from: ffprobeResponse.stdout.data(using: .utf8)!)
         } catch {
             throw MediaError.FFProbeError.couldNotCreateFFProbe("Failed creating the FFProbe from stdout of the ffprobe command => \(error)")
         }
