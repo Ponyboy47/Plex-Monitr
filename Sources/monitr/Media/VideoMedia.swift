@@ -53,7 +53,7 @@ final class Video: ConvertibleMedia {
         var plexFilename: String {
             var language: String?
             if let match = path.lastComponent.range(of: "anoXmous_([a-z]{3})", options: .regularExpression) {
-                language = path.lastComponent[match].replacingOccurrences(of: "anoXmous_", with: "")
+                language = String(path.lastComponent[match]).replacingOccurrences(of: "anoXmous_", with: "")
             } else {
                 for lang in commonLanguages {
                     if path.lastComponent.lowercased().contains(lang) || path.lastComponent.lowercased().contains(".\(lang[..<3]).") {
