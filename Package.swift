@@ -25,7 +25,7 @@ let package = Package(
     name: "Plex-Monitr",
     products: [
         .executable(
-            name: "Plex-Monitr",
+            name: "monitr",
             targets: ["monitr"])
     ],
     dependencies: dependencies,
