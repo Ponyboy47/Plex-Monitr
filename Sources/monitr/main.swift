@@ -24,7 +24,6 @@ import Darwin
 
 let logger = SwiftyBeaver.self
 
-var monitr: Monitr
 var arguments = CommandLine.arguments
 var argParser = ArgumentParser("\(arguments.remove(at: 0)) [Options]", cliArguments: arguments)
 
@@ -59,7 +58,7 @@ guard !argParser.needsHelp else {
 }
 
 guard !argParser.wantsVersion else {
-    print(Monitr.version)
+    print(Monitr<Video>.version)
     exit(EXIT_SUCCESS)
 }
 
@@ -99,6 +98,7 @@ if configPath.isFile && ext == "json" {
 } else {
     config = Config(logger)
 }
+
 // If an optional arg was specified, change it in the config
 if let p = plexDirectoryOption.value, config.plexDirectory != p {
     logger.info("Plex Directory is changing from '\(config.plexDirectory)' to '\(p)'.")
@@ -220,24 +220,52 @@ if saveConfig {
     }
 }
 
-// Create the monitr
+let videoMonitr: Monitr<Video>
+let audioMonitr: Monitr<Audio>
+let ignoreMonitr: Monitr<Ignore>
+
+// Create the monitrs
 do {
-    monitr = try Monitr(config)
-    logger.verbose("Sucessfully created the Monitr object from the config")
+    videoMonitr = try Monitr<Video>(config)
+    audioMonitr = try Monitr<Audio>(config)
+    ignoreMonitr = try Monitr<Ignore>(config)
+
+    logger.verbose("Sucessfully created the Monitr objects from the config")
     
     // Run once and then start monitoring regularly
-    logger.info("Running Monitr once for startup!")
-    monitr.run()
-    monitr.setDelegate()
+    logger.info("Running the Monitrs once for startup!")
+    Async.utility {
+        videoMonitr.run()
+        videoMonitr.setDelegate()
+    }
+    Async.utility {
+        audioMonitr.run()
+        audioMonitr.setDelegate()
+    }
+    Async.utility {
+        ignoreMonitr.run()
+        ignoreMonitr.setDelegate()
+    }
     logger.info("Monitoring '\((config.downloadDirectories + config.homeVideoDownloadDirectories).map({ $0.string }))' for new files.")
-    guard monitr.startMonitoring() else {
+    guard videoMonitr.startMonitoring() else {
+        logger.error("Failed to start monitoring the download directories for video files")
+        exit(EXIT_FAILURE)
+    }
+    guard audioMonitr.startMonitoring() else {
+        logger.error("Failed to start monitoring the download directories for audio files")
+        exit(EXIT_FAILURE)
+    }
+    guard ignoreMonitr.startMonitoring() else {
+        logger.error("Failed to start monitoring the download directories for ignorable files")
         exit(EXIT_FAILURE)
     }
 
     // Watch for signals so we can shut down properly
     Signals.trap(signals: [.int, .term, .kill, .quit]) { _ in
         logger.info("Received signal. Stopping monitr.")
-        monitr.shutdown()
+        videoMonitr.shutdown()
+        audioMonitr.shutdown()
+        ignoreMonitr.shutdown()
         // Sleep before exiting or else monitr may not finish shutting down before the program is exited
         sleep(1)
         exit(EXIT_SUCCESS)

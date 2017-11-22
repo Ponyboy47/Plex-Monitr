@@ -15,121 +15,7 @@ import SwiftyBeaver
 import SwiftShell
 
 /// Management for Video files
-final class Video: ConvertibleMedia {
-    final class Subtitle: Media {
-        var path: Path
-        var isHomeMedia: Bool = false
-        var downpour: Downpour
-        var linkedVideo: Video?
-
-        var plexName: String {
-            if let lV = linkedVideo {
-                return lV.plexName
-            }
-
-            guard !isHomeMedia else {
-                return path.lastComponentWithoutExtension
-            }
-
-            var name: String
-            switch downpour.type {
-            // If it's a movie file, plex wants "Title (YYYY)"
-            case .movie:
-                name = "\(downpour.title.wordCased)"
-                if let year = downpour.year {
-                    name += " (\(year))"
-                }
-            // If it's a tv show, plex wants "Title - sXXeYY"
-            case .tv:
-                name = "\(downpour.title.wordCased) - s\(String(format: "%02d", Int(downpour.season!)!))e\(String(format: "%02d", Int(downpour.episode!)!))"
-            // Otherwise just return the title (shouldn't ever actually reach this)
-            default:
-                name = downpour.title.wordCased
-            }
-
-            // Return the calulated name
-            return name
-        }
-        var plexFilename: String {
-            var language: String?
-            if let match = path.lastComponent.range(of: "anoXmous_([a-z]{3})", options: .regularExpression) {
-                language = String(path.lastComponent[match]).replacingOccurrences(of: "anoXmous_", with: "")
-            } else {
-                for lang in commonLanguages {
-                    if path.lastComponent.lowercased().contains(lang) || path.lastComponent.lowercased().contains(".\(lang[..<3]).") {
-                        language = String(lang[..<3])
-                        break
-                    }
-                }
-            }
-
-            var name = "\(plexName)."
-            if let l = language {
-                name += "\(l)."
-            } else {
-                name += "unknown-\(path.lastComponent)."
-            }
-            name += path.extension ?? "uft"
-            return name
-        }
-        var finalDirectory: Path {
-            if let lV = linkedVideo {
-                return lV.finalDirectory
-            }
-
-            guard !isHomeMedia else {
-                return Path("Home Videos\(Path.separator)\(plexName)")
-            }
-
-            var base: Path
-            switch downpour.type {
-            case .movie:
-                base = Path("Movies\(Path.separator)\(plexName)")
-            case .tv:
-                base = Path("TV Shows\(Path.separator)\(downpour.title.wordCased)\(Path.separator)Season \(String(format: "%02d", Int(downpour.season!)!))\(Path.separator)\(plexName)")
-            default:
-                base = ""
-            }
-            return base
-        }
-
-        static var supportedExtensions: [String] = ["srt", "smi", "ssa", "ass",
-                                                    "vtt"]
-
-        /// Common subtitle languages to look out for
-        private let commonLanguages: [String] = [
-            "english", "spanish", "portuguese",
-            "german", "swedish", "russian",
-            "french", "chinese", "japanese",
-            "hindu", "persian", "italian",
-            "greek"
-        ]
-
-        init(_ path: Path) throws {
-            // Check to make sure the extension of the video file matches one of the supported plex extensions
-            guard Subtitle.isSupported(ext: path.extension ?? "") else {
-                throw MediaError.unsupportedFormat(path.extension ?? "")
-            }
-
-            // Set the media file's path to the absolute path
-            self.path = path.absolute
-            // Create the downpour object
-            self.downpour = Downpour(fullPath: path)
-
-            if self.downpour.type == .tv {
-                guard let _ = self.downpour.season else {
-                    throw MediaError.DownpourError.missingTVSeason(path.string)
-                }
-                guard let _ = self.downpour.episode else {
-                    throw MediaError.DownpourError.missingTVEpisode(path.string)
-                }
-            }
-        }
-
-        fileprivate func delete() throws {
-            try self.path.delete()
-        }
-    }
+final class Video: ConvertibleMedia, Equatable {
     /// The supported extensions
     static var supportedExtensions: [String] = ["mp4", "mkv", "m4v", "avi",
                                                 "wmv", "mpg"]
@@ -139,6 +25,7 @@ final class Video: ConvertibleMedia {
     var downpour: Downpour
     var unconvertedFile: Path?
     var subtitles: [Subtitle]
+    var conversionConfig: ConversionConfig?
 
     var plexName: String {
         guard !isHomeMedia else {
@@ -231,41 +118,41 @@ final class Video: ConvertibleMedia {
         }
     }
 
-    func move(to plexPath: Path, log: SwiftyBeaver.Type) throws -> ConvertibleMedia {
-        for var subtitle in subtitles {
-            subtitle = try subtitle.move(to: plexPath, log: log) as! Video.Subtitle
+    func move(to plexPath: Path, logger: SwiftyBeaver.Type) throws -> MediaState {
+        for subtitle in subtitles {
+            let subtitleState = try subtitle.move(to: plexPath, logger: logger)
+            switch subtitleState {
+            case .success:
+                continue
+            default:
+                return .subtitle(subtitleState, subtitle)
+            }
         }
-        return try (self as ConvertibleMedia).move(to: plexPath, log: log)
+        return try (self as ConvertibleMedia).move(to: plexPath, logger: logger)
     }
 
-    func deleteSubtitles() throws -> Video {
+    func deleteSubtitles() throws {
         while subtitles.count > 0 {
             let subtitle = subtitles.removeFirst()
             try subtitle.delete()
         }
-        return self
     }
 
-    func convert(_ conversionConfig: ConversionConfig?, _ log: SwiftyBeaver.Type) throws -> ConvertibleMedia {
-        guard let config = conversionConfig as? VideoConversionConfig else {
-            throw MediaError.VideoError.invalidConfig
-        }
-        return try convert(config, log)
-    }
+    func convert(_ logger: SwiftyBeaver.Type) throws -> MediaState {
+        let config = conversionConfig as! VideoConversionConfig
 
-    func convert(_ conversionConfig: VideoConversionConfig, _ log: SwiftyBeaver.Type) throws -> ConvertibleMedia {
         // Build the arguments for the transcode_video command
-        var args: [String] = ["--target", "big", "--quick", "--preset", "fast", "--verbose", "--main-audio", conversionConfig.mainLanguage.rawValue, "--limit-rate", "\(conversionConfig.maxFramerate)"]
+        var args: [String] = ["--target", "big", "--quick", "--preset", "fast", "--verbose", "--main-audio", config.mainLanguage.rawValue, "--limit-rate", "\(config.maxFramerate)"]
 
-        if conversionConfig.subtitleScan {
+        if config.subtitleScan {
             args += ["--burn-subtitle", "scan"]
         }
 
         var outputExtension = "mkv"
-        if conversionConfig.container == .mp4 {
+        if config.container == .mp4 {
             args.append("--mp4")
             outputExtension = "mp4"
-        } else if conversionConfig.container == .m4v {
+        } else if config.container == .m4v {
             args.append("--m4v")
             outputExtension = "m4v"
         }
@@ -275,14 +162,14 @@ final class Video: ConvertibleMedia {
         var outputPath: Path
 
         // This is only set when deleteOriginal is false
-        if let tempDir = conversionConfig.tempDir {
-            log.info("Using temporary directory to convert '\(path)'")
+        if let tempDir = config.tempDir {
+            logger.info("Using temporary directory to convert '\(path)'")
             outputPath = tempDir
             // If the current container is the same as the output container,
             // rename the original file
             if ext == outputExtension {
                 let filename = "\(plexName) - original.\(ext)"
-                log.info("Input/output extensions are identical, renaming original file from '\(path.lastComponent)' to '\(filename)'")
+                logger.info("Input/output extensions are identical, renaming original file from '\(path.lastComponent)' to '\(filename)'")
                 try path.rename(filename)
                 path = path.parent + filename
             }
@@ -290,7 +177,7 @@ final class Video: ConvertibleMedia {
             deleteOriginal = true
             if ext == outputExtension {
                 let filename = "\(plexName) - original.\(ext)"
-                log.info("Input/output extensions are identical, renaming original file from '\(path.lastComponent)' to '\(filename)'")
+                logger.info("Input/output extensions are identical, renaming original file from '\(path.lastComponent)' to '\(filename)'")
                 try path.rename(filename)
                 path = path.parent + filename
             }
@@ -304,7 +191,7 @@ final class Video: ConvertibleMedia {
         // Add the input filepath to the args
         args += [path.absolute.string, "--output", outputPath.string]
 
-        log.info("Beginning conversion of media file '\(path)'")
+        logger.info("Beginning conversion of media file '\(path)'")
         let transcodeVideoResponse = SwiftShell.run("transcode-video", args)
 
         guard transcodeVideoResponse.succeeded else {
@@ -319,14 +206,14 @@ final class Video: ConvertibleMedia {
             throw MediaError.conversionError(error)
         }
         if !transcodeVideoResponse.stdout.isEmpty {
-            log.verbose("transcode-video output:\n\n\(transcodeVideoResponse.stdout)\n\n")
+            logger.verbose("transcode-video output:\n\n\(transcodeVideoResponse.stdout)\n\n")
         }
 
-        log.info("Successfully converted media file '\(path)' to '\(outputPath)'")
+        logger.info("Successfully converted media file '\(path)' to '\(outputPath)'")
 
         if deleteOriginal {
             try path.delete()
-            log.info("Successfully deleted original media file '\(path)'")
+            logger.info("Successfully deleted original media file '\(path)'")
         } else {
             unconvertedFile = path
         }
@@ -334,12 +221,7 @@ final class Video: ConvertibleMedia {
         // Update the media object's path
         path = outputPath
 
-        // If the converted file location is not already in the plexDirectory
-        if !path.string.contains(finalDirectory.string) {
-            return try move(to: conversionConfig.plexDir, log: log)
-        }
-
-        return self
+        return .success(.converting)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -349,14 +231,14 @@ final class Video: ConvertibleMedia {
         try container.encode(subtitles, forKey: .subtitles)
     }
     
-    class func needsConversion(file: Path, with config: ConversionConfig, log: SwiftyBeaver.Type) throws -> Bool {
-        guard let conversionConfig = config as? VideoConversionConfig else {
+    func needsConversion(_ logger: SwiftyBeaver.Type) throws -> Bool {
+        guard let config = conversionConfig as? VideoConversionConfig else {
             throw MediaError.VideoError.invalidConfig
         }
-        log.info("Getting audio/video stream data for '\(file.absolute)'")
+        logger.info("Getting audio/video stream data for '\(path.absolute)'")
 
         // Get video file metadata using ffprobe
-        let ffprobeResponse = SwiftShell.run(bash: "ffprobe -hide_banner -of json -show_streams \(file.absolute.string)")
+        let ffprobeResponse = SwiftShell.run(bash: "ffprobe -hide_banner -of json -show_streams \(path.absolute.string)")
         guard ffprobeResponse.succeeded else {
             var err: String = ""
             if !ffprobeResponse.stderror.isEmpty {
@@ -367,7 +249,7 @@ final class Video: ConvertibleMedia {
         guard !ffprobeResponse.stdout.isEmpty else {
             throw MediaError.FFProbeError.couldNotGetMetadata("File does not contain any metadata")
         }
-        log.verbose("Got audio/video stream data for '\(file.absolute)' => '\(ffprobeResponse.stdout)'")
+        logger.verbose("Got audio/video stream data for '\(path.absolute)' => '\(ffprobeResponse.stdout)'")
 
         var ffprobe: FFProbe
         do {
@@ -391,7 +273,7 @@ final class Video: ConvertibleMedia {
         // If multiple have the same bitrate, see if either has the right codec. If
         // neither has the preferred codec, or they both do, then go for the lowest index
         if videoStreams.count > 1 {
-            log.info("Multiple video streams found, trying to identify the main one...")
+            logger.info("Multiple video streams found, trying to identify the main one...")
             mainVideoStream = videoStreams.reduce(videoStreams[0]) { prevStream, nextStream in
                 if prevStream.duration != nextStream.duration {
                     if prevStream.duration > nextStream.duration {
@@ -406,9 +288,9 @@ final class Video: ConvertibleMedia {
                         return prevStream
                     }
                 } else if prevStream.codec as! VideoCodec != nextStream.codec as! VideoCodec {
-                    if prevStream.codec as! VideoCodec == conversionConfig.videoCodec {
+                    if prevStream.codec as! VideoCodec == config.videoCodec {
                         return prevStream
-                    } else if nextStream.codec as! VideoCodec != conversionConfig.videoCodec && prevStream.index < nextStream.index {
+                    } else if nextStream.codec as! VideoCodec != config.videoCodec && prevStream.index < nextStream.index {
                         return prevStream
                     }
                 } else if prevStream.index < nextStream.index {
@@ -428,7 +310,7 @@ final class Video: ConvertibleMedia {
         // higher, then we'll check the sample rates, next the codecs, and
         // finally their indexes
         if audioStreams.count > 1 {
-            log.info("Multiple audio streams found, trying to identify the main one...")
+            logger.info("Multiple audio streams found, trying to identify the main one...")
             mainAudioStream = audioStreams.reduce(audioStreams[0]) { prevStream, nextStream in
                 func followupComparisons(_ pStream: FFProbeAudioStreamProtocol, _ nStream: FFProbeAudioStreamProtocol) -> FFProbeAudioStreamProtocol {
                     if pStream.bitRate != nStream.bitRate {
@@ -440,9 +322,9 @@ final class Video: ConvertibleMedia {
                             return pStream
                         }
                     } else if pStream.codec as! AudioCodec != nStream.codec as! AudioCodec {
-                        if pStream.codec as! AudioCodec == conversionConfig.audioCodec {
+                        if pStream.codec as! AudioCodec == config.audioCodec {
                             return pStream
-                        } else if nStream.codec as! AudioCodec != conversionConfig.audioCodec && pStream.index < nStream.index {
+                        } else if nStream.codec as! AudioCodec != config.audioCodec && pStream.index < nStream.index {
                             return pStream
                         }
                     } else if pStream.index < nStream.index {
@@ -453,9 +335,9 @@ final class Video: ConvertibleMedia {
                 if prevStream.language != nextStream.language {
                     let pLang = prevStream.language
                     let nLang = nextStream.language
-                    if pLang == conversionConfig.mainLanguage {
+                    if pLang == config.mainLanguage {
                         return prevStream
-                    } else if nLang != conversionConfig.mainLanguage {
+                    } else if nLang != config.mainLanguage {
                         return followupComparisons(prevStream, nextStream) as! AudioStream
                     }
                 } else {
@@ -469,11 +351,14 @@ final class Video: ConvertibleMedia {
             throw MediaError.AudioError.noStreams
         }
 
-        log.info("Got main audio/video streams. Checking if we need to convert them")
-        return try needToConvert(file: file, streams: (mainVideoStream, mainAudioStream), with: conversionConfig, log: log)
+        logger.info("Got main audio/video streams. Checking if we need to convert them")
+        return try needToConvert(streams: (mainVideoStream, mainAudioStream), logger: logger)
     }
 
-    private class func needToConvert(file: Path, streams: (FFProbeVideoStreamProtocol, FFProbeAudioStreamProtocol), with config: VideoConversionConfig, log: SwiftyBeaver.Type) throws -> Bool {
+    private func needToConvert(streams: (FFProbeVideoStreamProtocol, FFProbeAudioStreamProtocol), logger: SwiftyBeaver.Type) throws -> Bool {
+        guard let config = conversionConfig as? VideoConversionConfig else {
+            throw MediaError.VideoError.invalidConfig
+        }
         guard let videoStream = streams.0 as? VideoStream else {
             throw MediaError.FFProbeError.streamNotConvertible(to: .video, stream: streams.0)
         }
@@ -481,9 +366,9 @@ final class Video: ConvertibleMedia {
             throw MediaError.FFProbeError.streamNotConvertible(to: .audio, stream: streams.1)
         }
 
-        log.verbose("Streams:\n\nVideo:\n\(videoStream.description)\n\nAudio:\n\(audioStream.description)")
+        logger.verbose("Streams:\n\nVideo:\n\(videoStream.description)\n\nAudio:\n\(audioStream.description)")
 
-        let container = VideoContainer(rawValue: file.extension ?? "") ?? .other
+        let container = VideoContainer(rawValue: path.extension ?? "") ?? .other
         guard container == config.container else { return true }
 
         guard let videoCodec = videoStream.codec as? VideoCodec, config.videoCodec == .any || videoCodec == config.videoCodec else { return true }
@@ -495,7 +380,7 @@ final class Video: ConvertibleMedia {
         return false
     }
 
-    func findSubtitles(below: Path, log: SwiftyBeaver.Type) {
+    func findSubtitles(below: Path, logger: SwiftyBeaver.Type) {
         // Get the highest directory that is below the below Path
         var top = path
         // If we don't do the absolute paths, then the string comparison on the
@@ -525,8 +410,18 @@ final class Video: ConvertibleMedia {
                 }
             }
         } catch {
-            log.warning("Failed to get children when trying to find a video file's subtitles")
-            log.error(error)
+            logger.warning("Failed to get children when trying to find a video file's subtitles")
+            logger.error(error)
         }
+    }
+
+    static func ==(lhs: Video, rhs: Video) -> Bool {
+        return lhs.path == rhs.path
+    }
+    static func ==<T: Media>(lhs: Video, rhs: T) -> Bool {
+        return lhs.path == rhs.path
+    }
+    static func ==<T: Media>(lhs: T, rhs: Video) -> Bool {
+        return lhs.path == rhs.path
     }
 }

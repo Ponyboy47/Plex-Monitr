@@ -1,6 +1,7 @@
 import PathKit
 import Cron
 import Foundation
+import Dispatch
 
 extension Path: Codable {
     public init(from decoder: Decoder) throws {
@@ -76,3 +77,40 @@ extension Cron.DatePattern: Codable {
         try container.encode(hash, forKey: .hash)
     }
 }
+
+extension DispatchQoS: Codable {
+    enum CodingKeys: String, CodingKey {
+        case qosClass
+        case relativePriority
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+
+        qosClass = try values.decode(DispatchQoS.QoSClass.self, forKey: .qosClass)
+        relativePriority = try values.decode(Int.self, forKey: .relativePriority)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+
+        try container.encode(qosClass, forKey: .qosClass)
+        try container.encode(relativePriority, forKey: .relativePriority)
+    }
+}
+
+extension DispatchQoS.QoSClass: Codable {
+    public init(from decoder: Decoder) throws {
+        var values = try decoder.unkeyedContainer()
+        self.init(rawValue: try values.decode(qos_class_t.self))!
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.unkeyedContainer()
+        try container.encode(self.rawValue)
+    }
+
+
+}
+
+extension qos_class_t: Codable {}

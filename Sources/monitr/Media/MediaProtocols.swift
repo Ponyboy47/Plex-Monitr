@@ -51,6 +51,17 @@ enum ConvertibleMediaCodingKeys: String, CodingKey {
     case unconvertedFile
 }
 
+enum MediaState {
+    case moving
+    case converting
+    case deleting
+    indirect case success(MediaState)
+    indirect case failed(MediaState, Media)
+    indirect case waiting(MediaState)
+    indirect case unconverted(MediaState)
+    indirect case subtitle(MediaState, Video.Subtitle)
+}
+
 /// Protocol for the common implementation of Media types
 protocol Media: class, Codable {
     /// The path to the media file
@@ -71,7 +82,7 @@ protocol Media: class, Codable {
     /// Initializer
     init(_ path: Path) throws
     /// Moves the media file to the finalDirectory
-    func move(to plexPath: Path, log: SwiftyBeaver.Type) throws -> Media
+    func move(to plexPath: Path, logger: SwiftyBeaver.Type) throws -> MediaState
     /// Returns whether or not the Media type supports the given format
     static func isSupported(ext: String) -> Bool
 }
@@ -99,24 +110,23 @@ extension Media {
         try container.encode(isHomeMedia, forKey: .isHomeMedia)
     }
 
-    func move(to plexPath: Path, log: SwiftyBeaver.Type) throws -> Media {
-        // If it's already in the final directory then go ahead and return
-        guard !path.string.contains(finalDirectory.string) else { return self }
-        log.verbose("Preparing to move file: \(path.string)")
+    func move(to plexPath: Path, logger: SwiftyBeaver.Type) throws -> MediaState {
         // Get the location of the finalDirectory inside the plexPath
         let mediaDirectory = plexPath + finalDirectory
-        // Create the directory
-        if !mediaDirectory.isDirectory {
-            log.verbose("Creating the media file's directory: \(mediaDirectory.string)")
-            try mediaDirectory.mkpath()
-        }
 
         // Create a path to the location where the file will RIP
         let finalRestingPlace = mediaDirectory + plexFilename
 
         guard path.absolute != finalRestingPlace.absolute else {
-            log.info("Media file is already located at it's final resting place")
-            return self
+            logger.info("Media file is already located at it's final resting place")
+            return .success(.moving)
+        }
+
+        logger.verbose("Preparing to move file: \(path.string)")
+        // Create the directory
+        if !mediaDirectory.isDirectory {
+            logger.verbose("Creating the media file's directory: \(mediaDirectory.string)")
+            try mediaDirectory.mkpath()
         }
 
         // Ensure the finalRestingPlace doesn't already exist
@@ -124,27 +134,34 @@ extension Media {
             throw MediaError.alreadyExists(finalRestingPlace)
         }
 
-        log.verbose("Moving media file '\(path.string)' => '\(finalRestingPlace.string)'")
+        logger.verbose("Moving media file '\(path.string)' => '\(finalRestingPlace.string)'")
         // Move the file to the correct plex location
         try path.move(finalRestingPlace)
-        log.verbose("Successfully moved file to '\(finalRestingPlace.string)'")
+        logger.verbose("Successfully moved file to '\(finalRestingPlace.string)'")
         // Change the path now to match
         path = finalRestingPlace
 
-        return self
+        guard path.isFile else {
+            logger.error("Successfully moved the file, but there is no file located at the final resting place '\(path.string)'")
+            return .failed(.moving, self)
+        }
+
+        return .success(.moving)
     }
 }
 
 protocol ConvertibleMedia: Media {
     /// The path to the original media file (before it was converted). Only set when the original file is not to be deleted
     var unconvertedFile: Path? { get set }
+    /// The config to use when converting the media
+    var conversionConfig: ConversionConfig? { get set }
     /// Moves the original media file to the finalDirectory
-    func moveUnconverted(to plexPath: Path, log: SwiftyBeaver.Type) throws -> ConvertibleMedia
+    func moveUnconverted(to plexPath: Path, logger: SwiftyBeaver.Type) throws -> MediaState
     /// Converts the media file to a Plex DirectPlay supported format
-    func convert(_ conversionConfig: ConversionConfig?, _ log: SwiftyBeaver.Type) throws -> ConvertibleMedia
+    func convert(_ logger: SwiftyBeaver.Type) throws -> MediaState
     /// Returns whether or not the Media type needs to be converted for Plex
     ///   DirectPlay capabilities to be enabled
-    static func needsConversion(file: Path, with config: ConversionConfig, log: SwiftyBeaver.Type) throws -> Bool
+    func needsConversion(_ logger: SwiftyBeaver.Type) throws -> Bool
 }
 
 extension ConvertibleMedia {
@@ -163,33 +180,42 @@ extension ConvertibleMedia {
         try container.encode(unconvertedFile, forKey: .unconvertedFile)
     }
 
-    func move(to plexPath: Path, log: SwiftyBeaver.Type) throws -> ConvertibleMedia {
-        if let _ = unconvertedFile {
-            return try ((self as Media).move(to: plexPath, log: log) as! ConvertibleMedia).moveUnconverted(to: plexPath, log: log)
+    func move(to plexPath: Path, logger: SwiftyBeaver.Type) throws -> MediaState {
+        if self.conversionConfig != nil, try self.needsConversion(logger) {
+            return .waiting(.converting)
         }
-        return try (self as Media).move(to: plexPath, log: log) as! ConvertibleMedia
+
+        let convertedMediaState = try (self as Media).move(to: plexPath, logger: logger)
+        switch convertedMediaState {
+        case .success:
+            return .unconverted(try self.moveUnconverted(to: plexPath, logger: logger))
+        default:
+            return convertedMediaState
+        }
     }
 
-    func moveUnconverted(to plexPath: Path, log: SwiftyBeaver.Type) throws -> ConvertibleMedia {
-        guard let unconvertedPath = unconvertedFile else { return self }
-        // If it's already in the final directory then go ahead and return
-        guard !unconvertedPath.string.contains(finalDirectory.string) else { return self }
-
-        log.verbose("Preparing to move file: \(unconvertedPath.string)")
+    func moveUnconverted(to plexPath: Path, logger: SwiftyBeaver.Type) throws -> MediaState {
+        guard let unconvertedPath = unconvertedFile else {
+            logger.verbose("No unconverted file to move")
+            return .success(.moving)
+        }
         // Get the location of the finalDirectory inside the plexPath
         let mediaDirectory = plexPath + finalDirectory
-        // Create the directory
-        if !mediaDirectory.isDirectory {
-            log.verbose("Creating the media file's directory: \(mediaDirectory.string)")
-            try mediaDirectory.mkpath()
-        }
 
         // Create a path to the location where the file will RIP
         let finalRestingPlace = mediaDirectory + "\(plexName) - original.\(unconvertedPath.extension ?? "")"
 
         guard path.absolute != finalRestingPlace.absolute else {
-            log.info("Unconverted media file is already located at it's final resting place")
-            return self
+            logger.info("Unconverted media file is already located at it's final resting place")
+            return .success(.moving)
+        }
+
+        logger.verbose("Preparing to move file: \(unconvertedPath.string)")
+
+        // Create the directory
+        if !mediaDirectory.isDirectory {
+            logger.verbose("Creating the media file's directory: \(mediaDirectory.string)")
+            try mediaDirectory.mkpath()
         }
 
         // Ensure the finalRestingPlace doesn't already exist
@@ -197,13 +223,18 @@ extension ConvertibleMedia {
             throw MediaError.alreadyExists(finalRestingPlace)
         }
 
-        log.verbose("Moving media file '\(unconvertedPath.string)' => '\(finalRestingPlace.string)'")
+        logger.verbose("Moving media file '\(unconvertedPath.string)' => '\(finalRestingPlace.string)'")
         // Move the file to the correct plex location
         try unconvertedPath.move(finalRestingPlace)
-        log.verbose("Successfully moved file to '\(finalRestingPlace.string)'")
+        logger.verbose("Successfully moved file to '\(finalRestingPlace.string)'")
         // Change the path now to match
         unconvertedFile = finalRestingPlace
 
-        return self
+        guard unconvertedPath.isFile else {
+            logger.error("Successfully moved the file, but there is no file located at the final resting place '\(unconvertedPath.string)'")
+            return .failed(.moving, self)
+        }
+
+        return .success(.moving)
     }
 }
