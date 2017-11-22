@@ -139,3 +139,7 @@ extension DispatchQoS.QoSClass: Codable {
         try container.encode(self)
     }
 }
+
+#if !os(Linux)
+extension qos_class_t: Codable {}
+#endif
