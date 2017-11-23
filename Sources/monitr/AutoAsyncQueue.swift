@@ -136,6 +136,8 @@ final class AutoAsyncQueue<T: Equatable & Codable>: Collection, Codable {
     }
 
     func save(to file: Path) throws {
-        try file.write(try JSONEncoder().encode(self), force: true)
+        let data = try JSONEncoder().encode(self)
+        let str = String(data: data, encoding: .utf8)!
+        try file.write(str, force: true)
     }
 }

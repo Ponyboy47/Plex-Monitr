@@ -302,7 +302,9 @@ struct Config: Codable {
 
     /// Writes the config to the configFile path
     func save() throws {
-        try configFile.write(JSONEncoder().encode(self), force: true)
+        let data = try JSONEncoder().encode(self)
+        let str = String(data: data, encoding: .utf8)!
+        try configFile.write(str, force: true)
     }
 }
 
