@@ -40,7 +40,8 @@ extension Path: Codable {
     }
 
     public func decode<T>(with decoder: JSONDecoder, to type: T.Type) throws -> T where T: Decodable {
-        return try decoder.decode(type, from: self.read()) 
+        let str: String = try self.read()
+        return try decoder.decode(type, from: str.data(using: .utf8)!)
     }
 }
 
