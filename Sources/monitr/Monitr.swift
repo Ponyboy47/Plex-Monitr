@@ -13,6 +13,7 @@ import Foundation
 import PathKit
 import Cron
 import SwiftShell
+import SwiftyBeaver
 #if os(Linux)
 import Dispatch
 #endif
@@ -54,6 +55,10 @@ final class Monitr<M>: DirectoryMonitorDelegate where M: Media & Equatable {
     }
     /// If new content has been added since the run routine began
     private var needsUpdate: Bool = false
+
+    init(logger: SwiftyBeaver.Type) {
+        config = Config(logger)
+    }
 
     init(_ config: Config) throws {
         self.config = config
@@ -325,10 +330,9 @@ final class Monitr<M>: DirectoryMonitorDelegate where M: Media & Equatable {
 
 extension Monitr where M: ConvertibleMedia {
     convenience init(_ config: Config) throws {
-        try self.init(config)
+        self.init(logger: config.logger)
 
-        // Overwrite the main initializer and set convert to it's true value
-        self.config.convert = config.convert
+        self.config = config
 
         if config.convert {
             try checkConversionDependencies()

@@ -32,7 +32,7 @@ struct Config: Codable {
             _downloadDirectories = newValue
             downloadWatchers = []
             newValue.forEach { d in
-                downloadWatchers.append(DirectoryMonitor(URL: d.url))
+                downloadWatchers.append(DirectoryMonitor(URL: d.absolute.url))
             }
         }
         get {
@@ -47,7 +47,7 @@ struct Config: Codable {
             _homeVideoDownloadDirectories = newValue
             homeVideoDownloadWatchers = []
             newValue.forEach { d in
-                homeVideoDownloadWatchers.append(DirectoryMonitor(URL: d.url))
+                homeVideoDownloadWatchers.append(DirectoryMonitor(URL: d.absolute.url))
             }
         }
         get {
