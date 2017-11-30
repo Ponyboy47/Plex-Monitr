@@ -193,9 +193,7 @@ final class Video: ConvertibleMedia, Equatable {
             args.append("--mp4")
         case .m4v:
             args.append("--m4v")
-        case .mkv: break
-        default:
-            throw MediaError.VideoError.unknownContainer(config.container.rawValue)
+        default: break
         }
 
         let ext = path.extension ?? ""

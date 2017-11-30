@@ -32,7 +32,6 @@ enum MediaError: Error {
         case sampleMedia
         case invalidConfig
         case noStreams
-        case unknownContainer(String)
     }
     enum AudioError: Error {
         case invalidConfig
