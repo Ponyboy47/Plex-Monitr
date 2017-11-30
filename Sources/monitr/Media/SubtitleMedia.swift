@@ -110,10 +110,10 @@ extension Video {
             self.downpour = Downpour(fullPath: path)
 
             if self.downpour.type == .tv {
-                guard let _ = self.downpour.season else {
+                guard self.downpour.season != nil else {
                     throw MediaError.DownpourError.missingTVSeason(path.string)
                 }
-                guard let _ = self.downpour.episode else {
+                guard self.downpour.episode != nil else {
                     throw MediaError.DownpourError.missingTVEpisode(path.string)
                 }
             }
@@ -123,13 +123,13 @@ extension Video {
             try self.path.delete()
         }
 
-        static func ==(lhs: Subtitle, rhs: Subtitle) -> Bool {
+        static func == (lhs: Subtitle, rhs: Subtitle) -> Bool {
             return lhs.path == rhs.path
         }
-        static func ==<T: Media>(lhs: Subtitle, rhs: T) -> Bool {
+        static func == <T: Media>(lhs: Subtitle, rhs: T) -> Bool {
             return lhs.path == rhs.path
         }
-        static func ==<T: Media>(lhs: T, rhs: Subtitle) -> Bool {
+        static func == <T: Media>(lhs: T, rhs: Subtitle) -> Bool {
             return lhs.path == rhs.path
         }
     }

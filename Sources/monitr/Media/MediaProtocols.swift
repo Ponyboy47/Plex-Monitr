@@ -16,23 +16,23 @@ import SwiftyBeaver
 // Media related errors
 enum MediaError: Error {
     case unsupportedFormat(String)
-    case notImplemented
     case alreadyExists(Path)
     case conversionError(String)
     case fileNotDeletable
+    case unknownContainer(String)
     enum DownpourError: Error {
         case missingTVSeason(String)
         case missingTVEpisode(String)
     }
     enum FFProbeError: Error {
         case couldNotGetMetadata(String)
-        case couldNotCreateFFProbe(String)
         case streamNotConvertible(to: CodecType, stream: FFProbeStreamProtocol)
     }
     enum VideoError: Error {
         case sampleMedia
         case invalidConfig
         case noStreams
+        case unknownContainer(String)
     }
     enum AudioError: Error {
         case invalidConfig

@@ -60,14 +60,14 @@ final class Audio: ConvertibleMedia, Equatable {
         }
         return false
     }
-    
-    static func ==(lhs: Audio, rhs: Audio) -> Bool {
+
+    static func == (lhs: Audio, rhs: Audio) -> Bool {
         return lhs.path == rhs.path
     }
-    static func ==<T: Media>(lhs: Audio, rhs: T) -> Bool {
+    static func == <T: Media>(lhs: Audio, rhs: T) -> Bool {
         return lhs.path == rhs.path
     }
-    static func ==<T: Media>(lhs: T, rhs: Audio) -> Bool {
+    static func == <T: Media>(lhs: T, rhs: Audio) -> Bool {
         return lhs.path == rhs.path
     }
 }

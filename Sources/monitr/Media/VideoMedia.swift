@@ -77,11 +77,10 @@ final class Video: ConvertibleMedia, Equatable {
             throw MediaError.VideoError.sampleMedia
         }
 
-        if let c = VideoContainer(rawValue: path.extension ?? "") {
-            container = c
-        } else {
-            container = .other
+        guard let c = VideoContainer(rawValue: path.extension ?? "") else {
+            throw MediaError.unknownContainer(path.extension ?? "")
         }
+        container = c
 
         // Set the media file's path to the absolute path
         self.path = path.absolute
@@ -91,10 +90,10 @@ final class Video: ConvertibleMedia, Equatable {
         self.subtitles = []
 
         if self.downpour.type == .tv {
-            guard let _ = self.downpour.season else {
+            guard self.downpour.season != nil else {
                 throw MediaError.DownpourError.missingTVSeason(self.path.string)
             }
-            guard let _ = self.downpour.episode else {
+            guard self.downpour.episode != nil else {
                 throw MediaError.DownpourError.missingTVEpisode(self.path.string)
             }
         }
@@ -128,7 +127,47 @@ final class Video: ConvertibleMedia, Equatable {
                 return .subtitle(subtitleState, subtitle)
             }
         }
-        return try (self as ConvertibleMedia).move(to: plexPath, logger: logger)
+
+        if self.conversionConfig != nil, try self.needsConversion(logger) {
+            return .waiting(.converting)
+        }
+
+        // Get the location of the finalDirectory inside the plexPath
+        let mediaDirectory = plexPath + finalDirectory
+
+        // Create a path to the location where the file will RIP
+        let finalRestingPlace = mediaDirectory + plexFilename
+
+        guard path.absolute != finalRestingPlace.absolute else {
+            logger.info("Media file is already located at it's final resting place")
+            return .unconverted(try self.moveUnconverted(to: plexPath, logger: logger))
+        }
+
+        logger.verbose("Preparing to move file: \(path.string)")
+        // Create the directory
+        if !mediaDirectory.isDirectory {
+            logger.verbose("Creating the media file's directory: \(mediaDirectory.string)")
+            try mediaDirectory.mkpath()
+        }
+
+        // Ensure the finalRestingPlace doesn't already exist
+        guard !finalRestingPlace.isFile else {
+            throw MediaError.alreadyExists(finalRestingPlace)
+        }
+
+        logger.verbose("Moving media file '\(path.string)' => '\(finalRestingPlace.string)'")
+        // Move the file to the correct plex location
+        try path.move(finalRestingPlace)
+        logger.verbose("Successfully moved file to '\(finalRestingPlace.string)'")
+        // Change the path now to match
+        path = finalRestingPlace
+
+        guard path.isFile else {
+            logger.error("Successfully moved the file, but there is no file located at the final resting place '\(path.string)'")
+            return .failed(.moving, self)
+        }
+
+        return .unconverted(try self.moveUnconverted(to: plexPath, logger: logger))
     }
 
     func deleteSubtitles() throws {
@@ -148,13 +187,15 @@ final class Video: ConvertibleMedia, Equatable {
             args += ["--burn-subtitle", "scan"]
         }
 
-        var outputExtension = "mkv"
-        if config.container == .mp4 {
+        let outputExtension = config.container.rawValue
+        switch config.container {
+        case .mp4:
             args.append("--mp4")
-            outputExtension = "mp4"
-        } else if config.container == .m4v {
+        case .m4v:
             args.append("--m4v")
-            outputExtension = "m4v"
+        case .mkv: break
+        default:
+            throw MediaError.VideoError.unknownContainer(config.container.rawValue)
         }
 
         let ext = path.extension ?? ""
@@ -205,9 +246,6 @@ final class Video: ConvertibleMedia, Equatable {
             }
             throw MediaError.conversionError(error)
         }
-        if !transcodeVideoResponse.stdout.isEmpty {
-            logger.verbose("transcode-video output:\n\n\(transcodeVideoResponse.stdout)\n\n")
-        }
 
         logger.info("Successfully converted media file '\(path)' to '\(outputPath)'")
 
@@ -230,39 +268,31 @@ final class Video: ConvertibleMedia, Equatable {
 
         try container.encode(subtitles, forKey: .subtitles)
     }
-    
+
     func needsConversion(_ logger: SwiftyBeaver.Type) throws -> Bool {
         guard let config = conversionConfig as? VideoConversionConfig else {
             throw MediaError.VideoError.invalidConfig
         }
         logger.info("Getting audio/video stream data for '\(path.absolute)'")
 
-        // Get video file metadata using ffprobe
-        let ffprobeResponse = SwiftShell.run(bash: "ffprobe -hide_banner -of json -show_streams \(path.absolute.string)")
+        // Get video file metadata using ffprobe (We must escape spaces or this
+        // command fails to execute)
+        let ffprobeResponse = SwiftShell.run(bash: "ffprobe -hide_banner -of json -show_streams '\(path.absolute.string)'")
         guard ffprobeResponse.succeeded else {
-            var err: String = ""
-            if !ffprobeResponse.stderror.isEmpty {
-                err = ffprobeResponse.stderror
-            }
-            throw MediaError.FFProbeError.couldNotGetMetadata(err)
+            throw MediaError.FFProbeError.couldNotGetMetadata(ffprobeResponse.stderror)
         }
         guard !ffprobeResponse.stdout.isEmpty else {
             throw MediaError.FFProbeError.couldNotGetMetadata("File does not contain any metadata")
         }
         logger.verbose("Got audio/video stream data for '\(path.absolute)' => '\(ffprobeResponse.stdout)'")
 
-        var ffprobe: FFProbe
-        do {
-            ffprobe = try JSONDecoder().decode(FFProbe.self, from: ffprobeResponse.stdout.data(using: .utf8)!)
-        } catch {
-            throw MediaError.FFProbeError.couldNotCreateFFProbe("Failed creating the FFProbe from stdout of the ffprobe command => \(error)")
-        }
+        let ffprobe = try JSONDecoder().decode(FFProbe.self, from: ffprobeResponse.stdout.data(using: .utf8)!)
 
         var videoStreams = ffprobe.videoStreams
         var audioStreams = ffprobe.audioStreams
 
-        var mainVideoStream: FFProbeVideoStreamProtocol
-        var mainAudioStream: FFProbeAudioStreamProtocol
+        let mainVideoStream: VideoStream
+        let mainAudioStream: AudioStream
 
         // I assume that this will probably never be used since pretty much
         // everything is just gonna have one video stream, but just in case,
@@ -275,16 +305,16 @@ final class Video: ConvertibleMedia, Equatable {
         if videoStreams.count > 1 {
             logger.info("Multiple video streams found, trying to identify the main one...")
             mainVideoStream = videoStreams.reduce(videoStreams[0]) { prevStream, nextStream in
-                if prevStream.duration != nextStream.duration {
-                    if prevStream.duration > nextStream.duration {
+                if let prevDuration = prevStream.duration, let nextDuration = nextStream.duration {
+                    if prevDuration > nextDuration {
                         return prevStream
                     }
-                } else if prevStream.dimensions != nextStream.dimensions {
-                    if prevStream.dimensions > nextStream.dimensions {
+                } else if prevStream.dimensions! != nextStream.dimensions! {
+                    if prevStream.dimensions! > nextStream.dimensions! {
                         return prevStream
                     }
-                } else if prevStream.bitRate != nextStream.bitRate {
-                    if prevStream.bitRate > nextStream.bitRate {
+                } else if let prevBitRate = prevStream.bitRate, let nextBitRate = nextStream.bitRate {
+                    if prevBitRate > nextBitRate {
                         return prevStream
                     }
                 } else if prevStream.codec as! VideoCodec != nextStream.codec as! VideoCodec {
@@ -313,12 +343,12 @@ final class Video: ConvertibleMedia, Equatable {
             logger.info("Multiple audio streams found, trying to identify the main one...")
             mainAudioStream = audioStreams.reduce(audioStreams[0]) { prevStream, nextStream in
                 func followupComparisons(_ pStream: FFProbeAudioStreamProtocol, _ nStream: FFProbeAudioStreamProtocol) -> FFProbeAudioStreamProtocol {
-                    if pStream.bitRate != nStream.bitRate {
-                        if pStream.bitRate > nStream.bitRate {
+                    if let pBitRate = pStream.bitRate, let nBitRate = nStream.bitRate {
+                        if pBitRate > nBitRate {
                             return pStream
                         }
                     } else if pStream.sampleRate != nStream.sampleRate {
-                        if pStream.sampleRate > nStream.sampleRate {
+                        if pStream.sampleRate! > nStream.sampleRate! {
                             return pStream
                         }
                     } else if pStream.codec as! AudioCodec != nStream.codec as! AudioCodec {
@@ -352,31 +382,27 @@ final class Video: ConvertibleMedia, Equatable {
         }
 
         logger.info("Got main audio/video streams. Checking if we need to convert them")
-        return try needToConvert(streams: (mainVideoStream, mainAudioStream), logger: logger)
+        return try needToConvert(videoStream: mainVideoStream, audioStream: mainAudioStream, logger: logger)
     }
 
-    private func needToConvert(streams: (FFProbeVideoStreamProtocol, FFProbeAudioStreamProtocol), logger: SwiftyBeaver.Type) throws -> Bool {
+    private func needToConvert(videoStream: VideoStream, audioStream: AudioStream, logger: SwiftyBeaver.Type) throws -> Bool {
         guard let config = conversionConfig as? VideoConversionConfig else {
             throw MediaError.VideoError.invalidConfig
-        }
-        guard let videoStream = streams.0 as? VideoStream else {
-            throw MediaError.FFProbeError.streamNotConvertible(to: .video, stream: streams.0)
-        }
-        guard let audioStream = streams.1 as? AudioStream else {
-            throw MediaError.FFProbeError.streamNotConvertible(to: .audio, stream: streams.1)
         }
 
         logger.verbose("Streams:\n\nVideo:\n\(videoStream.description)\n\nAudio:\n\(audioStream.description)")
 
-        let container = VideoContainer(rawValue: path.extension ?? "") ?? .other
+        guard let container = VideoContainer(rawValue: path.extension ?? "") else {
+            throw MediaError.unknownContainer(path.extension ?? "")
+        }
         guard container == config.container else { return true }
 
         guard let videoCodec = videoStream.codec as? VideoCodec, config.videoCodec == .any || videoCodec == config.videoCodec else { return true }
 
         guard let audioCodec = audioStream.codec as? AudioCodec, config.audioCodec == .any || audioCodec == config.audioCodec else { return true }
 
-        guard videoStream.framerate <= config.maxFramerate else { return true }
-        
+        guard videoStream.framerate!.value <= config.maxFramerate else { return true }
+
         return false
     }
 
@@ -415,13 +441,13 @@ final class Video: ConvertibleMedia, Equatable {
         }
     }
 
-    static func ==(lhs: Video, rhs: Video) -> Bool {
+    static func == (lhs: Video, rhs: Video) -> Bool {
         return lhs.path == rhs.path
     }
-    static func ==<T: Media>(lhs: Video, rhs: T) -> Bool {
+    static func == <T: Media>(lhs: Video, rhs: T) -> Bool {
         return lhs.path == rhs.path
     }
-    static func ==<T: Media>(lhs: T, rhs: Video) -> Bool {
+    static func == <T: Media>(lhs: T, rhs: Video) -> Bool {
         return lhs.path == rhs.path
     }
 }

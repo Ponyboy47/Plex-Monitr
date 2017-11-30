@@ -30,7 +30,7 @@ extension DatePattern: ArgumentType, Equatable {
         return pattern
     }
 
-    public static func ==(lhs: DatePattern, rhs: DatePattern) -> Bool {
+    public static func == (lhs: DatePattern, rhs: DatePattern) -> Bool {
         return lhs.string == rhs.string
     }
 }

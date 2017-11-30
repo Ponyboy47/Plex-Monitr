@@ -56,8 +56,12 @@ final class DirectoryMonitor {
     init(URL: URL) {
         self.URL = URL
         #if os(Linux)
-        self.inotify = try? Inotify(eventWatcher: SelectEventWatcher.self, qos: .background, watching: self.URL.path, for: .movedTo) { _ in
-            self.delegate?.directoryMonitorDidObserveChange(self)
+        do {
+            self.inotify = try Inotify(eventWatcher: SelectEventWatcher.self, qos: .background, watching: self.URL.path.replacingOccurrences(of: "file://", with: ""), for: .movedTo) { _ in
+                self.delegate?.directoryMonitorDidObserveChange(self)
+            }
+        } catch {
+            fatalError("Error creating inotify: \(error)")
         }
         #endif
     }

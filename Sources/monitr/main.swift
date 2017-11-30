@@ -220,63 +220,118 @@ if saveConfig {
     }
 }
 
-let videoMonitr: Monitr<Video>
-let audioMonitr: Monitr<Audio>
-let ignoreMonitr: Monitr<Ignore>
+class Main: DirectoryMonitorDelegate {
+    let videoMonitr: Monitr<Video>
+    let audioMonitr: Monitr<Audio>
+    let ignoreMonitr: Monitr<Ignore>
+    let config: Config
+
+    init(config: Config) throws {
+        self.config = config
+        videoMonitr = try Monitr<Video>(config)
+        audioMonitr = try Monitr<Audio>(config)
+        ignoreMonitr = try Monitr<Ignore>(config)
+    }
+
+    func run() {
+        Async.utility {
+            self.videoMonitr.run()
+        }
+        Async.utility {
+            self.audioMonitr.run()
+        }
+        Async.utility {
+            self.ignoreMonitr.run()
+        }
+    }
+
+    func setDelegate() {
+        self.config.setDelegate(self)
+    }
+
+    @discardableResult
+    func startMonitoring() -> Bool {
+        return self.config.startMonitoring()
+    }
+
+    func shutdown(now: Bool = false) {
+        self.config.stopMonitoring()
+        videoMonitr.shutdown(now: now)
+        audioMonitr.shutdown(now: now)
+        ignoreMonitr.shutdown(now: now)
+    }
+
+	// MARK: - DirectorMonitor delegate method(s)
+
+    /**
+     Called when an event is triggered by the directory monitor
+
+     - Parameter directoryMonitor: The DirectoryMonitor that triggered the event
+    */
+    func directoryMonitorDidObserveChange(_ directoryMonitor: DirectoryMonitor) {
+        // The FileSystem monitoring doesn't work on Linux yet, so only check
+        //   if a write occurred in the directory if we're not on Linux
+        #if !os(Linux)
+        // Check that a new write occured
+        guard directoryMonitor.directoryMonitorSource?.data == .write else {
+            videoMonitr.needsUpdate = false
+            audioMonitr.needsUpdate = false
+            ignoreMonitr.needsUpdate = false
+            return
+        }
+        #endif
+        // Make sure we're not already modifying media, otherwise just set the
+        //   needsUpdate variable so that it's run again once it finishes
+        if videoMonitr.isModifyingMedia {
+            videoMonitr.needsUpdate = true
+        } else {
+	        videoMonitr.run()
+		}
+        if audioMonitr.isModifyingMedia {
+            audioMonitr.needsUpdate = true
+        } else {
+	        audioMonitr.run()
+		}
+        if ignoreMonitr.isModifyingMedia {
+            ignoreMonitr.needsUpdate = true
+        } else {
+	        ignoreMonitr.run()
+		}
+    }
+}
+
+let main: Main
 
 // Create the monitrs
 do {
-    videoMonitr = try Monitr<Video>(config)
-    audioMonitr = try Monitr<Audio>(config)
-    ignoreMonitr = try Monitr<Ignore>(config)
-
+    main = try Main(config: config)
     logger.verbose("Sucessfully created the Monitr objects from the config")
-    
+
     // Run once and then start monitoring regularly
     logger.info("Running the Monitrs once for startup!")
-    Async.utility {
-        videoMonitr.run()
-        videoMonitr.setDelegate()
-    }
-    Async.utility {
-        audioMonitr.run()
-        audioMonitr.setDelegate()
-    }
-    Async.utility {
-        ignoreMonitr.run()
-        ignoreMonitr.setDelegate()
-    }
+    main.run()
+    main.setDelegate()
     logger.info("Monitoring '\((config.downloadDirectories + config.homeVideoDownloadDirectories).map({ $0.string }))' for new files.")
-    guard videoMonitr.startMonitoring() else {
-        logger.error("Failed to start monitoring the download directories for video files")
-        exit(EXIT_FAILURE)
-    }
-    guard audioMonitr.startMonitoring() else {
-        logger.error("Failed to start monitoring the download directories for audio files")
-        exit(EXIT_FAILURE)
-    }
-    guard ignoreMonitr.startMonitoring() else {
-        logger.error("Failed to start monitoring the download directories for ignorable files")
+    guard main.startMonitoring() else {
+        logger.error("Failed to start monitoring the download directories for new files")
         exit(EXIT_FAILURE)
     }
 
     // Watch for signals so we can shut down properly
     Signals.trap(signals: [.int, .term, .kill, .quit]) { _ in
         logger.info("Received signal. Stopping monitr.")
-        videoMonitr.shutdown()
-        audioMonitr.shutdown()
-        ignoreMonitr.shutdown()
+        main.shutdown()
         // Sleep before exiting or else monitr may not finish shutting down before the program is exited
         sleep(1)
         exit(EXIT_SUCCESS)
     }
-    
+
     // This keeps the program alive until ctrl-c is pressed or a signal is sent to the process
     let keepalive = AsyncGroup()
     keepalive.enter()
     keepalive.wait()
 } catch {
-    logger.error("Failed to create the monitr with error '\(error)'. Correct the error and try again.")
+    logger.error("Failed to create the monitrs with error '\(error)'. Correct the error and try again.")
     // Sleep before exiting or else the log message is not written correctly
     sleep(1)
     exit(EXIT_FAILURE)

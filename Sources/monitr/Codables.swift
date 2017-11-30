@@ -6,7 +6,7 @@ import Dispatch
 import CDispatch
 typealias qos_class_t = dispatch_qos_class_t
 
-internal enum _OSQoSClass : UInt32  {
+internal enum _OSQoSClass: UInt32 {
 	case QOS_CLASS_USER_INTERACTIVE = 0x21
 	case QOS_CLASS_USER_INITIATED = 0x19
 	case QOS_CLASS_DEFAULT = 0x15
@@ -127,7 +127,7 @@ extension DispatchQoS: Codable {
 
 extension DispatchQoS.QoSClass: Codable {
     public init(from decoder: Decoder) throws {
-        var values = try decoder.unkeyedContainer()
+        var values = try decoder.singleValueContainer()
 		#if !os(Linux)
         self.init(rawValue: try values.decode(qos_class_t.self))!
         #else
@@ -136,7 +136,7 @@ extension DispatchQoS.QoSClass: Codable {
     }
 
     public func encode(to encoder: Encoder) throws {
-        var container = encoder.unkeyedContainer()
+        var container = encoder.singleValueContainer()
         try container.encode(self)
     }
 }

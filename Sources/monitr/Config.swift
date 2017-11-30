@@ -14,7 +14,7 @@ import SwiftyBeaver
 import Cron
 
 enum ConfigError: Error {
-    case pathIsNotDirectory(Path)
+    case incorrectPathType(Path, Bool)
     case pathDoesNotExist(Path)
     case invalidCronString(String)
 }
@@ -31,8 +31,8 @@ struct Config: Codable {
             // When this is set, update the DirectoryMonitor
             _downloadDirectories = newValue
             downloadWatchers = []
-            newValue.forEach { d in
-                downloadWatchers.append(DirectoryMonitor(URL: d.absolute.url))
+            newValue.forEach { dir in
+                downloadWatchers.append(DirectoryMonitor(URL: dir.absolute.url))
             }
         }
         get {
@@ -46,8 +46,8 @@ struct Config: Codable {
             // When this is set, update the DirectoryMonitor
             _homeVideoDownloadDirectories = newValue
             homeVideoDownloadWatchers = []
-            newValue.forEach { d in
-                homeVideoDownloadWatchers.append(DirectoryMonitor(URL: d.absolute.url))
+            newValue.forEach { dir in
+                homeVideoDownloadWatchers.append(DirectoryMonitor(URL: dir.absolute.url))
             }
         }
         get {
@@ -155,7 +155,7 @@ struct Config: Codable {
 
         self.logLevel = try values.decode(Int.self, forKey: .logLevel)
         self.logFile = try values.decode(Path?.self, forKey: .logFile)
-        
+
         downloadDirectories = try values.decode([Path].self, forKey: .downloadDirectories)
         if let downloadDir: Path = try values.decodeIfPresent(Path.self, forKey: .downloadDirectory) {
             downloadDirectories.append(downloadDir)
@@ -163,39 +163,36 @@ struct Config: Codable {
 
         self.homeVideoDownloadDirectories = try values.decode([Path].self, forKey: .homeVideoDownloadDirectories)
 
-        if !self.plexDirectory.exists {
-            try self.plexDirectory.mkpath()
-        }
-        guard self.plexDirectory.exists else {
-            throw ConfigError.pathDoesNotExist(self.plexDirectory)
-        }
-        guard self.plexDirectory.isDirectory else {
-            throw ConfigError.pathIsNotDirectory(self.plexDirectory)
-        }
+        try createAndValidate(path: self.plexDirectory, isDirectory: true)
 
         for d in self.downloadDirectories + self.homeVideoDownloadDirectories {
-            if !d.exists {
-                try d.mkpath()
-            }
-            guard d.exists else {
-                throw ConfigError.pathDoesNotExist(d)
-            }
-            guard d.isDirectory else {
-                throw ConfigError.pathIsNotDirectory(d)
-            }
+            try createAndValidate(path: d, isDirectory: true)
         }
 
         if self.convert {
-            if !self.convertTempDirectory.exists {
-                try self.convertTempDirectory.mkpath()
-            }
-            guard self.convertTempDirectory.exists else {
-                throw ConfigError.pathDoesNotExist(self.convertTempDirectory)
-            }
-            guard self.convertTempDirectory.isDirectory else {
-                throw ConfigError.pathIsNotDirectory(self.convertTempDirectory)
-            }
+            try createAndValidate(path: self.convertTempDirectory, isDirectory: true)
         }
+    }
+
+    private func create(path: Path) throws {
+        guard !path.exists else { return }
+
+        try path.mkpath()
+
+        guard path.exists else {
+            throw ConfigError.pathDoesNotExist(path)
+        }
+    }
+
+    private func validate(path: Path, isDirectory: Bool = false) throws {
+        guard path.isDirectory == isDirectory else {
+            throw ConfigError.incorrectPathType(path, isDirectory)
+        }
+    }
+
+    private func createAndValidate(path: Path, isDirectory: Bool = false) throws {
+        try create(path: path)
+        try validate(path: path, isDirectory: isDirectory)
     }
 
     /// Starts monitoring the downloads directory for changes
@@ -255,7 +252,6 @@ struct Config: Codable {
         try container.encode(logLevel, forKey: .logLevel)
         try container.encode(logFile, forKey: .logFile)
     }
-
 
     /** Creates a printable representation of self
      - Returns: A string of serialized JSON config
@@ -319,6 +315,17 @@ struct VideoConversionConfig: ConversionConfig {
     var maxFramerate: Double
     var plexDir: Path
     var tempDir: Path?
+
+    init(config: Config) {
+        container = config.convertVideoContainer
+        videoCodec = config.convertVideoCodec
+        audioCodec = config.convertAudioCodec
+        subtitleScan = config.convertVideoSubtitleScan
+        mainLanguage =  config.convertLanguage
+        maxFramerate = config.convertVideoMaxFramerate
+        plexDir = config.plexDirectory
+        tempDir = config.deleteOriginal ? config.convertTempDirectory : nil
+    }
 }
 
 struct AudioConversionConfig: ConversionConfig {
@@ -326,4 +333,11 @@ struct AudioConversionConfig: ConversionConfig {
     var codec: AudioCodec
     var plexDir: Path
     var tempDir: Path?
+
+    init(config: Config) {
+        container = config.convertAudioContainer
+        codec = config.convertAudioCodec
+        plexDir = config.plexDirectory
+        tempDir = config.deleteOriginal ? config.convertTempDirectory : nil
+    }
 }

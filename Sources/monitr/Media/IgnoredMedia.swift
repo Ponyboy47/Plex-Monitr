@@ -55,13 +55,13 @@ final class Ignore: Media, Equatable {
         return .success(.deleting)
     }
 
-    static func ==(lhs: Ignore, rhs: Ignore) -> Bool {
+    static func == (lhs: Ignore, rhs: Ignore) -> Bool {
         return lhs.path == rhs.path
     }
-    static func ==<T: Media>(lhs: Ignore, rhs: T) -> Bool {
+    static func == <T: Media>(lhs: Ignore, rhs: T) -> Bool {
         return lhs.path == rhs.path
     }
-    static func ==<T: Media>(lhs: T, rhs: Ignore) -> Bool {
+    static func == <T: Media>(lhs: T, rhs: Ignore) -> Bool {
         return lhs.path == rhs.path
     }
 }
