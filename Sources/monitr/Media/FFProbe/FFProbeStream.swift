@@ -85,7 +85,9 @@ struct FFProbeStream: FFProbeAllStreamsProtocol {
         try container.encodeIfPresent(dimensions?.1, forKey: .height)
         try container.encodeIfPresent(aspectRatio, forKey: .aspectRatio)
         try container.encodeIfPresent(framerate, forKey: .framerate)
-        try container.encodeIfPresent("\(bitDepth)", forKey: .bitDepth)
+        if let bD = bitDepth {
+            try container.encode("\(bD)", forKey: .bitDepth)
+        }
         try container.encodeIfPresent(sampleRate, forKey: .sampleRate)
         try container.encodeIfPresent(channels, forKey: .channels)
         try container.encodeIfPresent(channelLayout, forKey: .channelLayout)
