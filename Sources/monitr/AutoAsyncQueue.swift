@@ -90,7 +90,7 @@ final class AutoAsyncQueue<T: Equatable & Codable>: Collection, Codable {
     }
 
     func start() {
-        self.logger?.verbose("Starting Queue Execution")
+        logger?.verbose("Starting Queue Execution")
         run = true
         check()
     }
@@ -100,18 +100,18 @@ final class AutoAsyncQueue<T: Equatable & Codable>: Collection, Codable {
     }
 
     func wait() {
-        self.logger?.verbose("Waiting for Dispatch Group to complete")
-        self.group.wait()
+        logger?.verbose("Waiting for Dispatch Group to complete")
+        group.wait()
     }
 
     private func check() {
         guard run else { return }
         while active.count + upNext.count < maxSimultaneous && !queue.isEmpty {
-            self.logger?.verbose("Adding an item to the upNext array")
+            logger?.verbose("Adding an item to the upNext array")
             upNext.append(queue.remove(at: 0))
         }
         if active.count < maxSimultaneous && upNext.count > 0 {
-            self.logger?.verbose("Empty slots in the active array being filled by the upNext array")
+            logger?.verbose("Empty slots in the active array being filled by the upNext array")
             runUpNext()
         }
     }
@@ -121,12 +121,13 @@ final class AutoAsyncQueue<T: Equatable & Codable>: Collection, Codable {
         while !upNext.isEmpty {
             let item = upNext.remove(at: 0)
             active.append(item)
-            dispatchQueue.async(group: self.group) {
+            dispatchQueue.async(group: group) {
                 self.callback?(item)
+                self.logger?.verbose("Finished item callback")
                 guard let index = self.active.index(where: { (elem: T) -> Bool in
                     return elem == item
                 }) else {
-                    print("Something very wrong has occurred and the item cannot be found in the active array")
+                    self.logger?.error("Something very wrong has occurred and the item cannot be found in the active array")
                     return
                 }
                 self.active.remove(at: index)
@@ -136,8 +137,8 @@ final class AutoAsyncQueue<T: Equatable & Codable>: Collection, Codable {
     }
 
     func append(_ newElement: T) {
-        self.logger?.verbose("Appending new element to queue")
-        self.queue.append(newElement)
+        logger?.verbose("Appending new element to queue")
+        queue.append(newElement)
     }
 
     func save(to file: Path) throws {

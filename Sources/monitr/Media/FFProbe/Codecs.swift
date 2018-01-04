@@ -31,6 +31,7 @@ enum AudioCodec: String, Codec {
 }
 enum SubtitleCodec: String, Codec {
     case srt
+    case mov_text
 
     init?(rawValue: String?) throws {
         if let rV = rawValue {

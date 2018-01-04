@@ -19,6 +19,11 @@ struct Tags: Codable {
     var language: Language?
     var handler: String?
     var creation: Date?
+    var creationFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return formatter
+    }
 
     enum CodingKeys: String, CodingKey {
         case language
@@ -31,7 +36,9 @@ struct Tags: Codable {
 
         language = try values.decodeIfPresent(Language.self, forKey: .language)
         handler = try values.decodeIfPresent(String.self, forKey: .handler)
-        creation = try values.decodeIfPresent(Date.self, forKey: .creation)
+        if let creationString = try values.decodeIfPresent(String.self, forKey: .creation) {
+            creation = creationFormatter.date(from: creationString)
+        }
     }
 
     func encode(to encoder: Encoder) throws {
@@ -39,6 +46,8 @@ struct Tags: Codable {
 
         try container.encodeIfPresent(language, forKey: .language)
         try container.encodeIfPresent(handler, forKey: .handler)
-        try container.encodeIfPresent(creation, forKey: .creation)
+        if let creation = creation {
+            try container.encodeIfPresent(creationFormatter.string(from: creation), forKey: .creation)
+        }
     }
 }
