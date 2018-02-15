@@ -46,11 +46,12 @@ final class Monitr<M> where M: Media & Equatable {
     private var conversionCallback: (M, SwiftyBeaver.Type) -> () = { convertibleMedia, logger in
         do {
             let state = try (convertibleMedia as! ConvertibleMedia).convert(logger)
+            logger.verbose("Completed '\(convertibleMedia.path)' media file conversion with state: \(state)")
             switch state {
             default: return
             }
         } catch {
-            print("Error while converting \(M.self) media: \(error)")
+            logger.error("Error while converting \(M.self) media: \(error)")
         }
     }
 
