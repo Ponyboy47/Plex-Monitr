@@ -154,6 +154,8 @@ protocol ConvertibleMedia: Media {
     var unconvertedFile: Path? { get set }
     /// The config to use when converting the media
     var conversionConfig: ConversionConfig? { get set }
+    /// Whether the media file has already been converted or not
+    var beenConverted: Bool { get set }
     /// Moves the original media file to the finalDirectory
     func moveUnconverted(to plexPath: Path, logger: SwiftyBeaver.Type) throws -> MediaState
     /// Converts the media file to a Plex DirectPlay supported format
@@ -180,7 +182,7 @@ extension ConvertibleMedia {
     }
 
     func move(to plexPath: Path, logger: SwiftyBeaver.Type) throws -> MediaState {
-        if self.conversionConfig != nil, try self.needsConversion(logger) {
+        if (self.conversionConfig != nil && !self.beenConverted), try self.needsConversion(logger) {
             return .waiting(.converting)
         }
 

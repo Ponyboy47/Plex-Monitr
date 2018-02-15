@@ -43,6 +43,16 @@ final class Monitr<M> where M: Media & Equatable {
     private var cronStart: CronJob?
     private var cronEnd: CronJob?
     private lazy var conversionQueueFilename: String = { return "conversionqueue.\(M.self).json" }()
+    private var conversionCallback: (M, SwiftyBeaver.Type) -> () = { convertibleMedia, logger in
+        do {
+            let state = try (convertibleMedia as! ConvertibleMedia).convert(logger)
+            switch state {
+            default: return
+            }
+        } catch {
+            print("Error while converting \(M.self) media: \(error)")
+        }
+    }
 
     /// Whether or not media is currently being migrated to Plex. Automatically
     ///   runs a new again if new media has been added since the run routine began
@@ -82,9 +92,11 @@ final class Monitr<M> where M: Media & Equatable {
         // Get all the media in the downloads directory
         var media = getAllMedia(from: config.downloadDirectories)
         let homeMedia = getAllMedia(from: config.homeVideoDownloadDirectories)
+        for m in homeMedia {
+            m.isHomeMedia = true
+        }
         for m in homeMedia where m is Video {
             let media = m as! Video
-            media.isHomeMedia = true
             media.subtitles.forEach { subtitle in
                 subtitle.isHomeMedia = true
             }
@@ -92,11 +104,11 @@ final class Monitr<M> where M: Media & Equatable {
         media += homeMedia
 
         guard media.count > 0 else {
-            config.logger.info("No \(M.self) media found.")
+            config.logger.info("No new \(M.self) media found.")
             return
         }
 
-        config.logger.info("Found \(media.count) \(M.self) files in the download directories!")
+        config.logger.info("Found \(media.count) new \(M.self) files in the download directories!")
         config.logger.verbose(media.map { $0.path })
 
         if media is [ConvertibleMedia] && config.convert {
@@ -165,16 +177,7 @@ final class Monitr<M> where M: Media & Equatable {
         })
 
         if conversionQueue == nil {
-            conversionQueue = AutoAsyncQueue<M>(maxSimultaneous: config.convertThreads, logger: config.logger) { convertibleMedia in
-                do {
-                    let state = try (convertibleMedia as! ConvertibleMedia).convert(self.config.logger)
-                    switch state {
-                    default: return
-                    }
-                } catch {
-                    print("Error while converting \(M.self) media: \(error)")
-                }
-            }
+            conversionQueue = AutoAsyncQueue<M>(maxSimultaneous: config.convertThreads, logger: config.logger, callback: self.conversionCallback)
         }
 
         conversionQueue?.start()
@@ -299,16 +302,7 @@ extension Monitr where M: ConvertibleMedia {
 
         let conversionQueueFile = config.configFile.parent + conversionQueueFilename
         if conversionQueueFile.exists && conversionQueueFile.isFile {
-            conversionQueue = try AutoAsyncQueue<M>(fromFile: conversionQueueFile, with: config.logger) { convertibleMedia in
-                do {
-                    let state = try convertibleMedia.convert(config.logger)
-                    switch state {
-                    default: return
-                    }
-                } catch {
-                    print("Error while converting \(M.self) media: \(error)")
-                }
-            }
+            conversionQueue = try AutoAsyncQueue<M>(fromFile: conversionQueueFile, with: config.logger, callback: self.conversionCallback)
         }
 
         if config.convert && !config.convertImmediately {
