@@ -4,7 +4,7 @@
 
 Let's be honest. Managing your Plex media can be a pain. Especially when you have a ton of new stuff you want to add all at once or if you are just constantly adding new stuff! That's where Monitr comes in.
 
-Downloading movies or tv shows or ripping cds/dvds/blu-rays is now the hardest part of getting new media onto your plex server. No more manually placing files or hacking together the proper metadata for your media. Monitr makes adding new media to your Plex server much easier. Just make sure you add new files to a designated "downloads" directory and that's all! Monitr puts it exactly where Plex wants it and names it appropriately so that Plex can identify it and find it's proper match.
+Downloading movies or tv shows or ripping cds/dvds/blu-rays is now the hardest part of getting new media onto your plex server. No more manually placing files or hacking together the proper metadata for your media. Monitr makes adding new media to your Plex server much easier. Just make sure you add new files to a designated "downloads" directory and that's all! Monitr puts it exactly where Plex wants it and names it appropriately so that Plex can identify it and find it's proper metadata match.
 
 It works by watching a designated "Downloads" directory and whenever a new video, audio, or subtitle file is added to that directory, Monitr will automatically move it right to where it should be, then Plex takes care of the rest!
 
@@ -31,7 +31,7 @@ It supports either Linux or macOS operating systems using Apple's Swift language
 ---
 
 ## Installation
-### macOS
+### macOS (Tested on macOS High Sierra 10.13.2)
 ```bash
 # Homebrew installation (To install swiftenv and also the transcode_video dependencies)
 /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
@@ -47,10 +47,10 @@ git clone https://github.com/Ponyboy47/Plex-Monitr.git
 cd Plex-Monitr
 swiftenv install $(cat .swift-version)
 swift build
-.build/debug/monitr -v
+.build/debug/monitr
 ```
 
-### Linux (Ubuntu 16.04)
+### Linux (Tested on Ubuntu 16.04)
 ```bash
 # transcode_video dependency installation (only needed if you're going to enable automatic media conversion)
 sudo add-apt-repository ppa:stebbins/handbrake-releases
