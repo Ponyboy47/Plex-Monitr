@@ -31,7 +31,7 @@ It supports either Linux or macOS operating systems using Apple's Swift language
 ---
 
 ## Installation
-### macOS
+### macOS (Tested on macOS High Sierra 10.13.2)
 ```bash
 # Homebrew installation (To install swiftenv and also the transcode_video dependencies)
 /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
@@ -47,10 +47,10 @@ git clone https://github.com/Ponyboy47/Plex-Monitr.git
 cd Plex-Monitr
 swiftenv install $(cat .swift-version)
 swift build
-.build/debug/monitr -v
+.build/debug/monitr
 ```
 
-### Linux (Ubuntu 16.04)
+### Linux (Tested on Ubuntu 16.04)
 ```bash
 # transcode_video dependency installation (only needed if you're going to enable automatic media conversion)
 sudo add-apt-repository ppa:stebbins/handbrake-releases
