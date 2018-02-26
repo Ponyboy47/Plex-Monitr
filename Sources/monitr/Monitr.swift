@@ -39,7 +39,7 @@ final class Monitr<M> where M: Media & Equatable {
     private var config: Config
 
     /// The queue of objects needing to be converted
-    private var conversionQueue: AutoAsyncQueue<M>?
+    private var conversionQueue: AutoAsyncQueue<M, MediaState>?
     private var cronStart: CronJob?
     private var cronEnd: CronJob?
     private lazy var conversionQueueFilename: String = { return "conversionqueue.\(M.self).json" }()
@@ -165,19 +165,27 @@ final class Monitr<M> where M: Media & Equatable {
         })
 
         if conversionQueue == nil {
-            conversionQueue = AutoAsyncQueue<M>(maxSimultaneous: config.convertThreads, logger: config.logger) { convertibleMedia in
+            conversionQueue = AutoAsyncQueue<M, MediaState>(maxSimultaneous: config.convertThreads, logger: config.logger) { convertibleMedia in
                 do {
                     let state = try (convertibleMedia as! ConvertibleMedia).convert(self.config.logger)
                     switch state {
-                    default: return
+                    case .success:
+                        self.config.logger.info("Finished converting media! Moving now")
+                        return try (convertibleMedia as! ConvertibleMedia).move(to: self.config.plexDirectory, logger: self.config.logger)
+                    default:
+                        self.config.logger.info("Failed converting media! \(state)")
+                        return state
                     }
                 } catch {
-                    print("Error while converting \(M.self) media: \(error)")
+                    self.config.logger.error("Error while converting \(M.self) media: \(error)")
+                    return .failed(.converting, convertibleMedia)
                 }
             }
         }
 
-        conversionQueue?.start()
+        if config.convertImmediately {
+            conversionQueue?.start()
+        }
     }
 
     /**
@@ -299,14 +307,17 @@ extension Monitr where M: ConvertibleMedia {
 
         let conversionQueueFile = config.configFile.parent + conversionQueueFilename
         if conversionQueueFile.exists && conversionQueueFile.isFile {
-            conversionQueue = try AutoAsyncQueue<M>(fromFile: conversionQueueFile, with: config.logger) { convertibleMedia in
+            conversionQueue = try AutoAsyncQueue<M, MediaState>(fromFile: conversionQueueFile, with: logger) { convertibleMedia in
                 do {
-                    let state = try convertibleMedia.convert(config.logger)
+                    let state = try convertibleMedia.convert(self.config.logger)
                     switch state {
-                    default: return
+                    case .success:
+                        return try (convertibleMedia as! ConvertibleMedia).move(to: self.config.plexDirectory, logger: self.config.logger)
+                    default: return state
                     }
                 } catch {
-                    print("Error while converting \(M.self) media: \(error)")
+                    self.config.logger.error("Error while converting \(M.self) media: \(error)")
+                    return .failed(.converting, convertibleMedia)
                 }
             }
         }

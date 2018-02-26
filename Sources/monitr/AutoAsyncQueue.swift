@@ -10,9 +10,9 @@ import SwiftyBeaver
 import Foundation
 import PathKit
 
-final class AutoAsyncQueue<T: Equatable & Codable>: Collection, Codable {
+final class AutoAsyncQueue<T: Equatable & Codable, R>: Collection, Codable {
     typealias Index = Int
-    typealias AutoAsyncCallback = (T) -> Void
+    typealias AutoAsyncCallback = (T) -> R
 
     var startIndex: Index {
         return self.queue.startIndex
@@ -90,40 +90,44 @@ final class AutoAsyncQueue<T: Equatable & Codable>: Collection, Codable {
     }
 
     func start() {
-        logger?.verbose("Starting Queue Execution")
+        logger?.info("Starting Queue Execution")
         run = true
         check()
     }
 
     func stop() {
+        logger?.info("Stopping Queue Execution")
         run = false
     }
 
     func wait() {
-        logger?.verbose("Waiting for Dispatch Group to complete")
+        logger?.info("Waiting for Dispatch Group to complete")
         group.wait()
     }
 
     private func check() {
         guard run else { return }
+        logger?.info("Checking for more items in the queue")
         while active.count + upNext.count < maxSimultaneous && !queue.isEmpty {
-            logger?.verbose("Adding an item to the upNext array")
+            logger?.info("Adding an item to the upNext array")
             upNext.append(queue.remove(at: 0))
         }
         if active.count < maxSimultaneous && upNext.count > 0 {
-            logger?.verbose("Empty slots in the active array being filled by the upNext array")
+            logger?.info("Empty slots in the active array being filled by the upNext array")
             runUpNext()
         }
     }
 
     private func runUpNext() {
         guard run else { return }
+        logger?.info("upNext: \(upNext)")
         while !upNext.isEmpty {
             let item = upNext.remove(at: 0)
+            logger?.info("Running the next item")
             active.append(item)
             dispatchQueue.async(group: group) {
-                self.callback?(item)
-                self.logger?.verbose("Finished item callback")
+                let r = self.callback?(item)
+                self.logger?.info("Finished item callback")
                 guard let index = self.active.index(where: { (elem: T) -> Bool in
                     return elem == item
                 }) else {
@@ -137,7 +141,7 @@ final class AutoAsyncQueue<T: Equatable & Codable>: Collection, Codable {
     }
 
     func append(_ newElement: T) {
-        logger?.verbose("Appending new element to queue")
+        logger?.info("Appending new element to queue")
         queue.append(newElement)
     }
 
