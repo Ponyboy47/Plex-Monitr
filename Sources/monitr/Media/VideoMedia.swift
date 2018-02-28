@@ -26,6 +26,7 @@ final class Video: ConvertibleMedia, Equatable {
     var unconvertedFile: Path?
     var subtitles: [Subtitle]
     var conversionConfig: ConversionConfig?
+    var beenConverted: Bool = false
 
     var plexName: String {
         guard !isHomeMedia else {
@@ -128,7 +129,7 @@ final class Video: ConvertibleMedia, Equatable {
             }
         }
 
-        if self.conversionConfig != nil, try self.needsConversion(logger) {
+        if (self.conversionConfig != nil && !self.beenConverted), try self.needsConversion(logger) {
             return .waiting(.converting)
         }
 
@@ -232,6 +233,7 @@ final class Video: ConvertibleMedia, Equatable {
 
         logger.info("Beginning conversion of media file '\(path)'")
         let transcodeVideoResponse = SwiftShell.run("transcode-video", args)
+        logger.info("Finished conversion of media file '\(path)'")
 
         guard transcodeVideoResponse.succeeded else {
             var error: String = "Error attempting to transcode: \(path)"
@@ -257,6 +259,7 @@ final class Video: ConvertibleMedia, Equatable {
         // Update the media object's path
         path = outputPath
 
+        self.beenConverted = true
         return .success(.converting)
     }
 

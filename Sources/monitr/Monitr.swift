@@ -25,9 +25,9 @@ enum Dependency: String {
     case mp4v2 = "mp4track"
     case ffmpeg
     case mkvtoolnix = "mkvpropedit"
-    case transcode_video = "transcode-video"
+    case transcodeVideo = "transcode-video"
 
-    static let all: [Dependency] = [.handbrake, .mp4v2, .ffmpeg, .mkvtoolnix, .transcode_video]
+    static let all: [Dependency] = [.handbrake, .mp4v2, .ffmpeg, .mkvtoolnix, .transcodeVideo]
 }
 
 /// Checks the downloads directory for new content to add to Plex
@@ -43,6 +43,16 @@ final class Monitr<M> where M: Media & Equatable {
     private var cronStart: CronJob?
     private var cronEnd: CronJob?
     private lazy var conversionQueueFilename: String = { return "conversionqueue.\(M.self).json" }()
+    private var conversionCallback: (M, SwiftyBeaver.Type) -> MediaState = { convertibleMedia, logger in
+        do {
+            let state = try (convertibleMedia as! ConvertibleMedia).convert(logger)
+            logger.verbose("Completed '\(convertibleMedia.path)' media file conversion with state: \(state)")
+            return state
+        } catch {
+            logger.error("Error while converting \(M.self) media: \(error)")
+        }
+        return .failed(.converting, convertibleMedia)
+    }
 
     /// Whether or not media is currently being migrated to Plex. Automatically
     ///   runs a new again if new media has been added since the run routine began
@@ -82,9 +92,11 @@ final class Monitr<M> where M: Media & Equatable {
         // Get all the media in the downloads directory
         var media = getAllMedia(from: config.downloadDirectories)
         let homeMedia = getAllMedia(from: config.homeVideoDownloadDirectories)
+        for m in homeMedia {
+            m.isHomeMedia = true
+        }
         for m in homeMedia where m is Video {
             let media = m as! Video
-            media.isHomeMedia = true
             media.subtitles.forEach { subtitle in
                 subtitle.isHomeMedia = true
             }
@@ -92,11 +104,11 @@ final class Monitr<M> where M: Media & Equatable {
         media += homeMedia
 
         guard media.count > 0 else {
-            config.logger.info("No \(M.self) media found.")
+            config.logger.info("No new \(M.self) media found.")
             return
         }
 
-        config.logger.info("Found \(media.count) \(M.self) files in the download directories!")
+        config.logger.info("Found \(media.count) new \(M.self) files in the download directories!")
         config.logger.verbose(media.map { $0.path })
 
         if media is [ConvertibleMedia] && config.convert {
@@ -165,22 +177,7 @@ final class Monitr<M> where M: Media & Equatable {
         })
 
         if conversionQueue == nil {
-            conversionQueue = AutoAsyncQueue<M, MediaState>(maxSimultaneous: config.convertThreads, logger: config.logger) { convertibleMedia in
-                do {
-                    let state = try (convertibleMedia as! ConvertibleMedia).convert(self.config.logger)
-                    switch state {
-                    case .success:
-                        self.config.logger.info("Finished converting media! Moving now")
-                        return try (convertibleMedia as! ConvertibleMedia).move(to: self.config.plexDirectory, logger: self.config.logger)
-                    default:
-                        self.config.logger.info("Failed converting media! \(state)")
-                        return state
-                    }
-                } catch {
-                    self.config.logger.error("Error while converting \(M.self) media: \(error)")
-                    return .failed(.converting, convertibleMedia)
-                }
-            }
+            conversionQueue = AutoAsyncQueue<M, MediaState>(maxSimultaneous: config.convertThreads, logger: config.logger, callback: self.conversionCallback)
         }
 
         if config.convertImmediately {
@@ -307,19 +304,7 @@ extension Monitr where M: ConvertibleMedia {
 
         let conversionQueueFile = config.configFile.parent + conversionQueueFilename
         if conversionQueueFile.exists && conversionQueueFile.isFile {
-            conversionQueue = try AutoAsyncQueue<M, MediaState>(fromFile: conversionQueueFile, with: logger) { convertibleMedia in
-                do {
-                    let state = try convertibleMedia.convert(self.config.logger)
-                    switch state {
-                    case .success:
-                        return try (convertibleMedia as! ConvertibleMedia).move(to: self.config.plexDirectory, logger: self.config.logger)
-                    default: return state
-                    }
-                } catch {
-                    self.config.logger.error("Error while converting \(M.self) media: \(error)")
-                    return .failed(.converting, convertibleMedia)
-                }
-            }
+            conversionQueue = try AutoAsyncQueue<M, MediaState>(fromFile: conversionQueueFile, with: config.logger, callback: self.conversionCallback)
         }
 
         if config.convert && !config.convertImmediately {

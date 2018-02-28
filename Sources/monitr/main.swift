@@ -27,6 +27,9 @@ let logger = SwiftyBeaver.self
 var arguments = CommandLine.arguments
 var argParser = ArgumentParser("\(arguments.remove(at: 0)) [Options]", cliArguments: arguments)
 
+// Disable the line_length linting since just about all of these surpass the limit
+// swiftlint:disable line_length
+
 // Args/Flags to configure this program from the CLI
 let configOption = try Option<Path>("f", alternateNames: ["config"], default: Path("~/.config/monitr/settings.json"), description: "The file from which to read configuration options", required: true, parser: &argParser)
 let plexDirectoryOption = try Option<Path>("p", alternateNames: ["plex-dir"], description: "The directory where the Plex libraries reside", parser: &argParser)
@@ -50,6 +53,9 @@ let deleteSubtitlesFlag = try Flag("q", alternateNames: ["delete-subtitles"], de
 let saveFlag = try Flag("s", alternateNames: ["save-settings"], default: false, description: "Whether or not the configured settings should be saved to the config options file", required: true, parser: &argParser)
 let logLevelOption = try Option<Int>("d", alternateNames: ["log-level"], description: "The logging level to use. Higher numbers mean more logging. Valid number range is 0-4.", parser: &argParser)
 let logFileOption = try Option<Path>("l", alternateNames: ["log-file"], description: "Where to write the log file.", parser: &argParser)
+
+// Re-enable the line_length checks now
+// swiftlint:enable line_length
 
 // Prints the help/usage text if -h or --help was used
 guard !argParser.needsHelp else {
@@ -99,77 +105,84 @@ if configPath.isFile && ext == "json" {
     config = Config(logger)
 }
 
+let commonMsg: String
+if !saveConfig {
+    commonMsg = "is temporarily changing from"
+} else {
+    commonMsg = "is being modified from"
+}
+
 // If an optional arg was specified, change it in the config
 if let p = plexDirectoryOption.value, config.plexDirectory != p {
-    logger.info("Plex Directory is changing from '\(config.plexDirectory)' to '\(p)'.")
+    logger.info("PlexDirectory \(commonMsg) \(config.plexDirectory) to \(p)")
     config.plexDirectory = p
 }
 if let t = downloadDirectoryOption.value, config.downloadDirectories != t.values {
-    logger.info("Download Directory is changing from '\(config.downloadDirectories)' to '\(t.values)'.")
+    logger.info("Download Directory \(commonMsg) '\(config.downloadDirectories)' to '\(t.values)'.")
     config.downloadDirectories = t.values
 }
 if let c = convertFlag.value, config.convert != c {
-    logger.info("Convert is changing from '\(config.convert)' to '\(c)'.")
+    logger.info("Convert \(commonMsg) '\(config.convert)' to '\(c)'.")
     config.convert = c
 }
 if let cI = convertImmediatelyFlag.value, config.convertImmediately != cI {
-    logger.info("Convert Immediately is changing from '\(config.convertImmediately)' to '\(cI)'.")
+    logger.info("Convert Immediately \(commonMsg) '\(config.convertImmediately)' to '\(cI)'.")
     config.convertImmediately = cI
 }
 if let cCS = convertCronStartOption.value, config.convertCronStart != cCS {
-    logger.info("Convert Cron Start is changing from '\(config.convertCronStart)' to '\(cCS)'.")
+    logger.info("Convert Cron Start \(commonMsg) '\(config.convertCronStart)' to '\(cCS)'.")
     config.convertCronStart = cCS
 }
 if let cCE = convertCronEndOption.value, config.convertCronEnd != cCE {
-    logger.info("Convert Cron End is changing from '\(config.convertCronEnd)' to '\(cCE)'.")
+    logger.info("Convert Cron End \(commonMsg) '\(config.convertCronEnd)' to '\(cCE)'.")
     config.convertCronEnd = cCE
 }
 if let cT = convertThreadsOption.value, config.convertThreads != cT {
-    logger.info("Convert Threads is changing from '\(config.convertThreads)' to '\(cT)'.")
+    logger.info("Convert Threads \(commonMsg) '\(config.convertThreads)' to '\(cT)'.")
     config.convertThreads = cT
 }
 if let dO = deleteOriginalFlag.value, config.deleteOriginal != dO {
-    logger.info("Delete Original is changing from '\(config.deleteOriginal)' to '\(dO)'.")
+    logger.info("Delete Original \(commonMsg) '\(config.deleteOriginal)' to '\(dO)'.")
     config.deleteOriginal = dO
 }
 if let cVC = convertVideoContainerOption.value, config.convertVideoContainer != cVC {
-    logger.info("Convert Video Container is changing from '\(config.convertVideoContainer)' to '\(cVC)'.")
+    logger.info("Convert Video Container \(commonMsg) '\(config.convertVideoContainer)' to '\(cVC)'.")
     config.convertVideoContainer = cVC
 }
 if let cVC = convertVideoCodecOption.value, config.convertVideoCodec != cVC {
-    logger.info("Convert Video Codec is changing from '\(config.convertVideoCodec)' to '\(cVC)'.")
+    logger.info("Convert Video Codec \(commonMsg) '\(config.convertVideoCodec)' to '\(cVC)'.")
     config.convertVideoCodec = cVC
 }
 if let cAC = convertAudioContainerOption.value, config.convertAudioContainer != cAC {
-    logger.info("Convert Audio Container is changing from '\(config.convertAudioContainer)' to '\(cAC)'.")
+    logger.info("Convert Audio Container \(commonMsg) '\(config.convertAudioContainer)' to '\(cAC)'.")
     config.convertAudioContainer = cAC
 }
 if let cAC = convertAudioCodecOption.value, config.convertAudioCodec != cAC {
-    logger.info("Convert Audio Codec is changing from '\(config.convertAudioCodec)' to '\(cAC)'.")
+    logger.info("Convert Audio Codec \(commonMsg) '\(config.convertAudioCodec)' to '\(cAC)'.")
     config.convertAudioCodec = cAC
 }
 if let cVSS = convertVideoSubtitleScanFlag.value, config.convertVideoSubtitleScan != cVSS {
-    logger.info("Convert Video Subtitle Scan is changing from '\(config.convertVideoSubtitleScan)' to '\(cVSS)'.")
+    logger.info("Convert Video Subtitle Scan \(commonMsg) '\(config.convertVideoSubtitleScan)' to '\(cVSS)'.")
     config.convertVideoSubtitleScan = cVSS
 }
 if let cL = convertLanguageOption.value, config.convertLanguage != cL {
-    logger.info("Convert Language is changing from '\(config.convertLanguage)' to '\(cL)'.")
+    logger.info("Convert Language \(commonMsg) '\(config.convertLanguage)' to '\(cL)'.")
     config.convertLanguage = cL
 }
 if let cVMF = convertVideoMaxFramerateOption.value, config.convertVideoMaxFramerate != cVMF {
-    logger.info("Convert Video Max Framerate is changing from '\(config.convertVideoMaxFramerate)' to '\(cVMF)'.")
+    logger.info("Convert Video Max Framerate \(commonMsg) '\(config.convertVideoMaxFramerate)' to '\(cVMF)'.")
     config.convertVideoMaxFramerate = cVMF
 }
 if let cTD = convertTempDirectoryOption.value, config.convertTempDirectory != cTD {
-    logger.info("Convert Temp Directory is changing from '\(config.convertTempDirectory)' to '\(cTD)'.")
+    logger.info("Convert Temp Directory \(commonMsg) '\(config.convertTempDirectory)' to '\(cTD)'.")
     config.convertTempDirectory = cTD
 }
 if let dS = deleteSubtitlesFlag.value, config.deleteSubtitles != dS {
-    logger.info("Delete Subtitles is changing from '\(config.deleteSubtitles)' to '\(dS)'.")
+    logger.info("Delete Subtitles \(commonMsg) '\(config.deleteSubtitles)' to '\(dS)'.")
     config.deleteSubtitles = dS
 }
 if let b = homeVideoDownloadDirectoryOption.value, config.homeVideoDownloadDirectories != b.values {
-    logger.info("Home Video Download Directory is changing from '\(config.homeVideoDownloadDirectories)' to '\(b.values)'.")
+    logger.info("Home Video Download Directory \(commonMsg) '\(config.homeVideoDownloadDirectories)' to '\(b.values)'.")
     config.homeVideoDownloadDirectories = b.values
 }
 if var lL = logLevelOption.value, config.logLevel != lL {

@@ -12,7 +12,7 @@ import PathKit
 
 final class AutoAsyncQueue<T: Equatable & Codable, R>: Collection, Codable {
     typealias Index = Int
-    typealias AutoAsyncCallback = (T) -> R
+    typealias AutoAsyncCallback = (T, SwiftyBeaver.Type) -> R
 
     var startIndex: Index {
         return self.queue.startIndex
@@ -126,7 +126,7 @@ final class AutoAsyncQueue<T: Equatable & Codable, R>: Collection, Codable {
             logger?.info("Running the next item")
             active.append(item)
             dispatchQueue.async(group: group) {
-                let r = self.callback?(item)
+                let r = self.callback!(item, self.logger!)
                 self.logger?.info("Finished item callback")
                 guard let index = self.active.index(where: { (elem: T) -> Bool in
                     return elem == item

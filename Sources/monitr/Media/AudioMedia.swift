@@ -24,6 +24,7 @@ final class Audio: ConvertibleMedia, Equatable {
     var downpour: Downpour
     var unconvertedFile: Path?
     var conversionConfig: ConversionConfig?
+    var beenConverted: Bool = false
 
     var plexName: String {
         // Audio files are usually pretty simple
