@@ -1,3 +1,5 @@
+// swiftlint:disable identifier_name
+
 protocol Codec: Codable {}
 
 enum VideoCodec: String, Codec {

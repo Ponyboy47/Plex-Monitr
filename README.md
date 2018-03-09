@@ -160,7 +160,7 @@ NOTE: This is an experimental feature in the transcode_video tool. If it screws 
 
 #### Set the directory to use for conversion jobs when deleteOriginal is false:
 `-u` or `--convert-temp-dir`
-<p>default is /tmp/MonitrConversion</p>
+<p>default is /tmp/monitrConversions</p>
 
 #### Set whether or not subtitle files should be deleted or preserved for video media:
 `-q` or `--delete-subtitles`
@@ -206,7 +206,11 @@ NOTE: If set, and logging level >= 3 (debug or verbose), logs are written both t
 - [x] Watch a specific directory for Home Videos
 - [x] Make the entire program more asynchronous
   - [x] Continue execution while converting media (Just add new stuff to a queue)
-  - [ ] Finishing conversion automatically continues to moveMedia()
-- [ ] Improve the stability with large amounts of conversion jobs
+  - [x] Finishing conversion automatically continues to moveMedia()
+    - [x] Set up Operations for moving, converting, deleting, etc
+    - [x] Set up Operation dependency chains for automatic asynchronous behaviors
+- [x] Improve the stability with large amounts of conversion jobs
 - [x] Swift 4
 - [ ] Dynamically add paths to watch lists (such as an auto-generated directory inside users' home directories)
+- [ ] Remove configurable items that aren't actually configurable (if no CLI option, then no configuration)
+- [ ] Unit tests

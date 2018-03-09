@@ -27,8 +27,9 @@ final class Ignore: Media, Equatable {
     var path: Path
     var isHomeMedia: Bool = false
     var downpour: Downpour
+    weak var mainMonitr: MainMonitr!
 
-     var finalDirectory: Path {
+    var finalDirectory: Path {
         return "/dev/null"
     }
 

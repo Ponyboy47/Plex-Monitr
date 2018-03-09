@@ -55,12 +55,10 @@ struct MediaDuration: Codable, Comparable {
             hours = 0
             while seconds >= 60 {
                 minutes += 1
-                if minutes == 60 {
-                    hours += 1
-                    minutes = 0
-                }
                 seconds -= 60
             }
+            hours = minutes / 60
+            minutes %= 60
         } else {
             throw FFProbeError.DurationError.unknownDuration(durationString)
         }

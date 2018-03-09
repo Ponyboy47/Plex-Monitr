@@ -58,10 +58,18 @@ struct Config: Codable {
     var convert: Bool = false
     /// Whether media should be converted immediately, or during a configurable time when the server is less likely to be busy
     var convertImmediately: Bool = true
+
+    // We can safely ignore the force_try errors here because these values are
+    // validated to work always
+    // swiftlint:disable force_try
+
     /// The Cron string describing when scheduled media conversions may begin
     var convertCronStart: DatePattern = try! DatePattern("0 0 * * *")
     /// The Cron string describing when scheduled media conversions should be finished
     var convertCronEnd: DatePattern = try! DatePattern("0 8 * * *")
+
+    // swiftlint:enable force_try
+
     /// The number of simultaneous threads to convert media on
     var convertThreads: Int = 2
     /// Whether the original media file should be deleted after a successful conversion
@@ -202,8 +210,8 @@ struct Config: Codable {
             do {
                 try watcher?.startMonitoring()
             } catch {
-                logger.warning("Failed to start the directory watcher for '\(String(describing: watcher?.URL.path))'.")
-                logger.error(error)
+                logger.error("Failed to start the directory watcher for '\(String(describing: watcher?.URL.path))'.")
+                logger.debug(error)
                 return false
             }
         }

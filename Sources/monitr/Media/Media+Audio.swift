@@ -25,6 +25,7 @@ final class Audio: ConvertibleMedia, Equatable {
     var unconvertedFile: Path?
     var conversionConfig: ConversionConfig?
     var beenConverted: Bool = false
+    weak var mainMonitr: MainMonitr!
 
     var plexName: String {
         // Audio files are usually pretty simple
@@ -50,8 +51,8 @@ final class Audio: ConvertibleMedia, Equatable {
         self.downpour = Downpour(fullPath: path.absolute)
     }
 
-    func convert(_ logger: SwiftyBeaver.Type) throws -> MediaState {
-        return .failed(.converting, self)
+    func convertCommand(_ logger: SwiftyBeaver.Type) throws -> Command {
+        fatalError("Not Implemented")
     }
 
     func needsConversion(_ logger: SwiftyBeaver.Type) throws -> Bool {

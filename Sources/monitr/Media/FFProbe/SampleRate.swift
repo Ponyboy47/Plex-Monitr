@@ -1,3 +1,5 @@
+// swiftlint:disable identifier_name
+
 struct SampleRate: Codable, Comparable {
     enum SampleRateUnit: String {
         case hz

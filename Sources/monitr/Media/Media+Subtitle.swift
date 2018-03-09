@@ -13,7 +13,8 @@ extension Video {
         var path: Path
         var isHomeMedia: Bool = false
         var downpour: Downpour
-        var linkedVideo: Video?
+        weak var linkedVideo: Video?
+        weak var mainMonitr: MainMonitr!
 
         var plexName: String {
             if let lV = linkedVideo {

@@ -13,6 +13,7 @@ import PathKit
 import Downpour
 import SwiftyBeaver
 import SwiftShell
+import Async
 
 /// Management for Video files
 final class Video: ConvertibleMedia, Equatable {
@@ -27,6 +28,7 @@ final class Video: ConvertibleMedia, Equatable {
     var subtitles: [Subtitle]
     var conversionConfig: ConversionConfig?
     var beenConverted: Bool = false
+    weak var mainMonitr: MainMonitr!
 
     var plexName: String {
         guard !isHomeMedia else {
@@ -129,46 +131,9 @@ final class Video: ConvertibleMedia, Equatable {
             }
         }
 
-        if (self.conversionConfig != nil && !self.beenConverted), try self.needsConversion(logger) {
-            return .waiting(.converting)
-        }
-
-        // Get the location of the finalDirectory inside the plexPath
-        let mediaDirectory = plexPath + finalDirectory
-
-        // Create a path to the location where the file will RIP
-        let finalRestingPlace = mediaDirectory + plexFilename
-
-        guard path.absolute != finalRestingPlace.absolute else {
-            logger.info("Media file is already located at it's final resting place")
-            return .unconverted(try self.moveUnconverted(to: plexPath, logger: logger))
-        }
-
-        logger.verbose("Preparing to move file: \(path.string)")
-        // Create the directory
-        if !mediaDirectory.isDirectory {
-            logger.verbose("Creating the media file's directory: \(mediaDirectory.string)")
-            try mediaDirectory.mkpath()
-        }
-
-        // Ensure the finalRestingPlace doesn't already exist
-        guard !finalRestingPlace.isFile else {
-            throw MediaError.alreadyExists(finalRestingPlace)
-        }
-
-        logger.verbose("Moving media file '\(path.string)' => '\(finalRestingPlace.string)'")
-        // Move the file to the correct plex location
-        try path.move(finalRestingPlace)
-        logger.verbose("Successfully moved file to '\(finalRestingPlace.string)'")
-        // Change the path now to match
-        path = finalRestingPlace
-
-        guard path.isFile else {
-            logger.error("Successfully moved the file, but there is no file located at the final resting place '\(path.string)'")
-            return .failed(.moving, self)
-        }
-
-        return .unconverted(try self.moveUnconverted(to: plexPath, logger: logger))
+        // If we aren't configured to convert or don't need to convert, then
+        // just move the file like normal
+        return try commonMove(to: plexPath, logger: logger)
     }
 
     func deleteSubtitles() throws {
@@ -178,7 +143,7 @@ final class Video: ConvertibleMedia, Equatable {
         }
     }
 
-    func convert(_ logger: SwiftyBeaver.Type) throws -> MediaState {
+    func convertCommand(_ logger: SwiftyBeaver.Type) throws -> Command {
         let config = conversionConfig as! VideoConversionConfig
 
         // Build the arguments for the transcode_video command
@@ -203,21 +168,13 @@ final class Video: ConvertibleMedia, Equatable {
 
         // This is only set when deleteOriginal is false
         if let tempDir = config.tempDir {
-            logger.info("Using temporary directory to convert '\(path)'")
+            logger.verbose("Using temporary directory to convert '\(path)'")
             outputPath = tempDir
-            // If the current container is the same as the output container,
-            // rename the original file
-            if ext == outputExtension {
-                let filename = "\(plexName) - original.\(ext)"
-                logger.info("Input/output extensions are identical, renaming original file from '\(path.lastComponent)' to '\(filename)'")
-                try path.rename(filename)
-                path = path.parent + filename
-            }
         } else {
             deleteOriginal = true
             if ext == outputExtension {
                 let filename = "\(plexName) - original.\(ext)"
-                logger.info("Input/output extensions are identical, renaming original file from '\(path.lastComponent)' to '\(filename)'")
+                logger.verbose("Input/output extensions are identical, renaming original file from '\(path.lastComponent)' to '\(filename)'")
                 try path.rename(filename)
                 path = path.parent + filename
             }
@@ -231,36 +188,7 @@ final class Video: ConvertibleMedia, Equatable {
         // Add the input filepath to the args
         args += [path.absolute.string, "--output", outputPath.string]
 
-        logger.info("Beginning conversion of media file '\(path)'")
-        let transcodeVideoResponse = SwiftShell.run("transcode-video", args)
-        logger.info("Finished conversion of media file '\(path)'")
-
-        guard transcodeVideoResponse.succeeded else {
-            var error: String = "Error attempting to transcode: \(path)"
-            error += "\n\tCommand: transcode-video \(args.joined(separator: " "))\n\tResponse: \(transcodeVideoResponse.exitcode)"
-            if !transcodeVideoResponse.stdout.isEmpty {
-                error += "\n\tStandard Out: \(transcodeVideoResponse.stdout)"
-            }
-            if !transcodeVideoResponse.stderror.isEmpty {
-                error += "\n\tStandard Error: \(transcodeVideoResponse.stderror)"
-            }
-            throw MediaError.conversionError(error)
-        }
-
-        logger.info("Successfully converted media file '\(path)' to '\(outputPath)'")
-
-        if deleteOriginal {
-            try path.delete()
-            logger.info("Successfully deleted original media file '\(path)'")
-        } else {
-            unconvertedFile = path
-        }
-
-        // Update the media object's path
-        path = outputPath
-
-        self.beenConverted = true
-        return .success(.converting)
+        return ("transcode-video", args, outputPath, deleteOriginal)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -274,18 +202,20 @@ final class Video: ConvertibleMedia, Equatable {
         guard let config = conversionConfig as? VideoConversionConfig else {
             throw MediaError.VideoError.invalidConfig
         }
-        logger.info("Getting audio/video stream data for '\(path.absolute)'")
+        logger.verbose("Getting audio/video stream data for '\(path.absolute)'")
 
         // Get video file metadata using ffprobe (We must escape spaces or this
         // command fails to execute)
-        let ffprobeResponse = SwiftShell.run(bash: "ffprobe -hide_banner -of json -show_streams '\(path.absolute.string)'")
+        let ffprobeResponse = SwiftShell.run("ffprobe", ["-hide_banner", "-of", "json", "-show_streams", "\(path.absolute.string)"])
+
         guard ffprobeResponse.succeeded else {
             throw MediaError.FFProbeError.couldNotGetMetadata(ffprobeResponse.stderror)
         }
         guard !ffprobeResponse.stdout.isEmpty else {
             throw MediaError.FFProbeError.couldNotGetMetadata("File does not contain any metadata")
         }
-        logger.verbose("Got audio/video stream data for '\(path.absolute)' => '\(ffprobeResponse.stdout)'")
+        logger.verbose("Got audio/video stream data for '\(path.absolute)'")
+        logger.verbose("'\(path.absolute)' => '\(ffprobeResponse.stdout)'")
 
         let ffprobe = try JSONDecoder().decode(FFProbe.self, from: ffprobeResponse.stdout.data(using: .utf8)!)
 
@@ -295,95 +225,103 @@ final class Video: ConvertibleMedia, Equatable {
         let mainVideoStream: VideoStream
         let mainAudioStream: AudioStream
 
-        // I assume that this will probably never be used since pretty much
-        // everything is just gonna have one video stream, but just in case,
-        // choose the one with the longest duration since that should be the
-        // main feature. If the durations are the same, find the one with the
-        // largest dimensions since that should be the highest quality one. If
-        // multiple have the same dimensions, find the one with the highest bitrate.
-        // If multiple have the same bitrate, see if either has the right codec. If
-        // neither has the preferred codec, or they both do, then go for the lowest index
         if videoStreams.count > 1 {
-            logger.info("Multiple video streams found, trying to identify the main one...")
-            mainVideoStream = videoStreams.reduce(videoStreams[0]) { prevStream, nextStream in
-                if let prevDuration = prevStream.duration, let nextDuration = nextStream.duration {
-                    if prevDuration > nextDuration {
-                        return prevStream
-                    }
-                } else if prevStream.dimensions! != nextStream.dimensions! {
-                    if prevStream.dimensions! > nextStream.dimensions! {
-                        return prevStream
-                    }
-                } else if let prevBitRate = prevStream.bitRate, let nextBitRate = nextStream.bitRate {
-                    if prevBitRate > nextBitRate {
-                        return prevStream
-                    }
-                } else if prevStream.codec as! VideoCodec != nextStream.codec as! VideoCodec {
-                    if prevStream.codec as! VideoCodec == config.videoCodec {
-                        return prevStream
-                    } else if nextStream.codec as! VideoCodec != config.videoCodec && prevStream.index < nextStream.index {
-                        return prevStream
-                    }
-                } else if prevStream.index < nextStream.index {
-                    return prevStream
-                }
-                return nextStream
-            }
+            logger.warning("Multiple video streams found, trying to identify the main one...")
+            mainVideoStream = identifyMainVideoStream(videoStreams, using: config)
         } else if videoStreams.count == 1 {
             mainVideoStream = videoStreams[0]
         } else {
             throw MediaError.VideoError.noStreams
         }
 
-        // This is much more likely to occur than multiple video streams. So
-        // first we'll check to see if the language is the main language set up
-        // in the config, then we'll check the bit rates to see which is
-        // higher, then we'll check the sample rates, next the codecs, and
-        // finally their indexes
         if audioStreams.count > 1 {
-            logger.info("Multiple audio streams found, trying to identify the main one...")
-            mainAudioStream = audioStreams.reduce(audioStreams[0]) { prevStream, nextStream in
-                func followupComparisons(_ pStream: FFProbeAudioStreamProtocol, _ nStream: FFProbeAudioStreamProtocol) -> FFProbeAudioStreamProtocol {
-                    if let pBitRate = pStream.bitRate, let nBitRate = nStream.bitRate {
-                        if pBitRate > nBitRate {
-                            return pStream
-                        }
-                    } else if pStream.sampleRate != nStream.sampleRate {
-                        if pStream.sampleRate! > nStream.sampleRate! {
-                            return pStream
-                        }
-                    } else if pStream.codec as! AudioCodec != nStream.codec as! AudioCodec {
-                        if pStream.codec as! AudioCodec == config.audioCodec {
-                            return pStream
-                        } else if nStream.codec as! AudioCodec != config.audioCodec && pStream.index < nStream.index {
-                            return pStream
-                        }
-                    } else if pStream.index < nStream.index {
-                        return pStream
-                    }
-                    return nStream
-                }
-                if prevStream.language != nextStream.language {
-                    let pLang = prevStream.language
-                    let nLang = nextStream.language
-                    if pLang == config.mainLanguage {
-                        return prevStream
-                    } else if nLang != config.mainLanguage {
-                        return followupComparisons(prevStream, nextStream) as! AudioStream
-                    }
-                } else {
-                    return followupComparisons(prevStream, nextStream) as! AudioStream
-                }
-                return nextStream
-            }
+            logger.warning("Multiple audio streams found, trying to identify the main one...")
+            mainAudioStream = identifyMainAudioStream(audioStreams, using: config)
         } else if audioStreams.count == 1 {
             mainAudioStream = audioStreams[0]
         } else {
             throw MediaError.AudioError.noStreams
         }
 
-        logger.info("Got main audio/video streams. Checking if we need to convert them")
+        logger.verbose("Got main audio/video streams. Checking if we need to convert them")
         return try needToConvert(videoStream: mainVideoStream, audioStream: mainAudioStream, logger: logger)
+    }
+
+    // I assume that this will probably never be used since pretty much
+    // everything is just gonna have one video stream, but just in case,
+    // choose the one with the longest duration since that should be the
+    // main feature. If the durations are the same, find the one with the
+    // largest dimensions since that should be the highest quality one. If
+    // multiple have the same dimensions, find the one with the highest bitrate.
+    // If multiple have the same bitrate, see if either has the right codec. If
+    // neither has the preferred codec, or they both do, then go for the lowest index
+    private func identifyMainVideoStream(_ videoStreams: [VideoStream], using config: VideoConversionConfig) -> VideoStream {
+        return videoStreams.reduce(videoStreams[0]) { prevStream, nextStream in
+            if let prevDuration = prevStream.duration, let nextDuration = nextStream.duration {
+                if prevDuration > nextDuration {
+                    return prevStream
+                }
+            } else if prevStream.dimensions! != nextStream.dimensions! {
+                if prevStream.dimensions! > nextStream.dimensions! {
+                    return prevStream
+                }
+            } else if let prevBitRate = prevStream.bitRate, let nextBitRate = nextStream.bitRate {
+                if prevBitRate > nextBitRate {
+                    return prevStream
+                }
+            } else if prevStream.codec as! VideoCodec != nextStream.codec as! VideoCodec {
+                if prevStream.codec as! VideoCodec == config.videoCodec {
+                    return prevStream
+                } else if nextStream.codec as! VideoCodec != config.videoCodec && prevStream.index < nextStream.index {
+                    return prevStream
+                }
+            } else if prevStream.index < nextStream.index {
+                return prevStream
+            }
+            return nextStream
+        }
+    }
+
+    // This is much more likely to occur than multiple video streams. So
+    // first we'll check to see if the language is the main language set up
+    // in the config, then we'll check the bit rates to see which is
+    // higher, then we'll check the sample rates, next the codecs, and
+    // finally their indexes
+    private func identifyMainAudioStream(_ audioStreams: [AudioStream], using config: VideoConversionConfig) -> AudioStream {
+        return audioStreams.reduce(audioStreams[0]) { prevStream, nextStream in
+            func followupComparisons(_ pStream: FFProbeAudioStreamProtocol, _ nStream: FFProbeAudioStreamProtocol) -> FFProbeAudioStreamProtocol {
+                if let pBitRate = pStream.bitRate, let nBitRate = nStream.bitRate {
+                    if pBitRate > nBitRate {
+                        return pStream
+                    }
+                } else if pStream.sampleRate != nStream.sampleRate {
+                    if pStream.sampleRate! > nStream.sampleRate! {
+                        return pStream
+                    }
+                } else if pStream.codec as! AudioCodec != nStream.codec as! AudioCodec {
+                    if pStream.codec as! AudioCodec == config.audioCodec {
+                        return pStream
+                    } else if nStream.codec as! AudioCodec != config.audioCodec && pStream.index < nStream.index {
+                        return pStream
+                    }
+                } else if pStream.index < nStream.index {
+                    return pStream
+                }
+                return nStream
+            }
+            if prevStream.language != nextStream.language {
+                let pLang = prevStream.language
+                let nLang = nextStream.language
+                if pLang == config.mainLanguage {
+                    return prevStream
+                } else if nLang != config.mainLanguage {
+                    return followupComparisons(prevStream, nextStream) as! AudioStream
+                }
+            } else {
+                return followupComparisons(prevStream, nextStream) as! AudioStream
+            }
+            return nextStream
+        }
     }
 
     private func needToConvert(videoStream: VideoStream, audioStream: AudioStream, logger: SwiftyBeaver.Type) throws -> Bool {
@@ -396,6 +334,7 @@ final class Video: ConvertibleMedia, Equatable {
         guard let container = VideoContainer(rawValue: path.extension ?? "") else {
             throw MediaError.unknownContainer(path.extension ?? "")
         }
+
         guard container == config.container else { return true }
 
         guard let videoCodec = videoStream.codec as? VideoCodec, config.videoCodec == .any || videoCodec == config.videoCodec else { return true }
@@ -404,6 +343,7 @@ final class Video: ConvertibleMedia, Equatable {
 
         guard videoStream.framerate!.value <= config.maxFramerate else { return true }
 
+        logger.verbose("\(path) does not need to be converted")
         return false
     }
 
@@ -437,8 +377,8 @@ final class Video: ConvertibleMedia, Equatable {
                 }
             }
         } catch {
-            logger.warning("Failed to get children when trying to find a video file's subtitles")
-            logger.error(error)
+            logger.error("Failed to get children when trying to find a video file's subtitles")
+            logger.debug(error)
         }
     }
 

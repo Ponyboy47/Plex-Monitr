@@ -103,6 +103,7 @@ if configPath.isFile && ext == "json" {
     }
 } else {
     config = Config(logger)
+    logger.verbose("Creating new config from scratch using the defaults")
 }
 
 let commonMsg: String
@@ -114,75 +115,75 @@ if !saveConfig {
 
 // If an optional arg was specified, change it in the config
 if let p = plexDirectoryOption.value, config.plexDirectory != p {
-    logger.info("PlexDirectory \(commonMsg) \(config.plexDirectory) to \(p)")
+    logger.debug("PlexDirectory \(commonMsg) \(config.plexDirectory) to \(p)")
     config.plexDirectory = p
 }
 if let t = downloadDirectoryOption.value, config.downloadDirectories != t.values {
-    logger.info("Download Directory \(commonMsg) '\(config.downloadDirectories)' to '\(t.values)'.")
+    logger.debug("Download Directory \(commonMsg) '\(config.downloadDirectories)' to '\(t.values)'.")
     config.downloadDirectories = t.values
 }
 if let c = convertFlag.value, config.convert != c {
-    logger.info("Convert \(commonMsg) '\(config.convert)' to '\(c)'.")
+    logger.debug("Convert \(commonMsg) '\(config.convert)' to '\(c)'.")
     config.convert = c
 }
 if let cI = convertImmediatelyFlag.value, config.convertImmediately != cI {
-    logger.info("Convert Immediately \(commonMsg) '\(config.convertImmediately)' to '\(cI)'.")
+    logger.debug("Convert Immediately \(commonMsg) '\(config.convertImmediately)' to '\(cI)'.")
     config.convertImmediately = cI
 }
 if let cCS = convertCronStartOption.value, config.convertCronStart != cCS {
-    logger.info("Convert Cron Start \(commonMsg) '\(config.convertCronStart)' to '\(cCS)'.")
+    logger.debug("Convert Cron Start \(commonMsg) '\(config.convertCronStart)' to '\(cCS)'.")
     config.convertCronStart = cCS
 }
 if let cCE = convertCronEndOption.value, config.convertCronEnd != cCE {
-    logger.info("Convert Cron End \(commonMsg) '\(config.convertCronEnd)' to '\(cCE)'.")
+    logger.debug("Convert Cron End \(commonMsg) '\(config.convertCronEnd)' to '\(cCE)'.")
     config.convertCronEnd = cCE
 }
 if let cT = convertThreadsOption.value, config.convertThreads != cT {
-    logger.info("Convert Threads \(commonMsg) '\(config.convertThreads)' to '\(cT)'.")
+    logger.debug("Convert Threads \(commonMsg) '\(config.convertThreads)' to '\(cT)'.")
     config.convertThreads = cT
 }
 if let dO = deleteOriginalFlag.value, config.deleteOriginal != dO {
-    logger.info("Delete Original \(commonMsg) '\(config.deleteOriginal)' to '\(dO)'.")
+    logger.debug("Delete Original \(commonMsg) '\(config.deleteOriginal)' to '\(dO)'.")
     config.deleteOriginal = dO
 }
 if let cVC = convertVideoContainerOption.value, config.convertVideoContainer != cVC {
-    logger.info("Convert Video Container \(commonMsg) '\(config.convertVideoContainer)' to '\(cVC)'.")
+    logger.debug("Convert Video Container \(commonMsg) '\(config.convertVideoContainer)' to '\(cVC)'.")
     config.convertVideoContainer = cVC
 }
 if let cVC = convertVideoCodecOption.value, config.convertVideoCodec != cVC {
-    logger.info("Convert Video Codec \(commonMsg) '\(config.convertVideoCodec)' to '\(cVC)'.")
+    logger.debug("Convert Video Codec \(commonMsg) '\(config.convertVideoCodec)' to '\(cVC)'.")
     config.convertVideoCodec = cVC
 }
 if let cAC = convertAudioContainerOption.value, config.convertAudioContainer != cAC {
-    logger.info("Convert Audio Container \(commonMsg) '\(config.convertAudioContainer)' to '\(cAC)'.")
+    logger.debug("Convert Audio Container \(commonMsg) '\(config.convertAudioContainer)' to '\(cAC)'.")
     config.convertAudioContainer = cAC
 }
 if let cAC = convertAudioCodecOption.value, config.convertAudioCodec != cAC {
-    logger.info("Convert Audio Codec \(commonMsg) '\(config.convertAudioCodec)' to '\(cAC)'.")
+    logger.debug("Convert Audio Codec \(commonMsg) '\(config.convertAudioCodec)' to '\(cAC)'.")
     config.convertAudioCodec = cAC
 }
 if let cVSS = convertVideoSubtitleScanFlag.value, config.convertVideoSubtitleScan != cVSS {
-    logger.info("Convert Video Subtitle Scan \(commonMsg) '\(config.convertVideoSubtitleScan)' to '\(cVSS)'.")
+    logger.debug("Convert Video Subtitle Scan \(commonMsg) '\(config.convertVideoSubtitleScan)' to '\(cVSS)'.")
     config.convertVideoSubtitleScan = cVSS
 }
 if let cL = convertLanguageOption.value, config.convertLanguage != cL {
-    logger.info("Convert Language \(commonMsg) '\(config.convertLanguage)' to '\(cL)'.")
+    logger.debug("Convert Language \(commonMsg) '\(config.convertLanguage)' to '\(cL)'.")
     config.convertLanguage = cL
 }
 if let cVMF = convertVideoMaxFramerateOption.value, config.convertVideoMaxFramerate != cVMF {
-    logger.info("Convert Video Max Framerate \(commonMsg) '\(config.convertVideoMaxFramerate)' to '\(cVMF)'.")
+    logger.debug("Convert Video Max Framerate \(commonMsg) '\(config.convertVideoMaxFramerate)' to '\(cVMF)'.")
     config.convertVideoMaxFramerate = cVMF
 }
 if let cTD = convertTempDirectoryOption.value, config.convertTempDirectory != cTD {
-    logger.info("Convert Temp Directory \(commonMsg) '\(config.convertTempDirectory)' to '\(cTD)'.")
+    logger.debug("Convert Temp Directory \(commonMsg) '\(config.convertTempDirectory)' to '\(cTD)'.")
     config.convertTempDirectory = cTD
 }
 if let dS = deleteSubtitlesFlag.value, config.deleteSubtitles != dS {
-    logger.info("Delete Subtitles \(commonMsg) '\(config.deleteSubtitles)' to '\(dS)'.")
+    logger.debug("Delete Subtitles \(commonMsg) '\(config.deleteSubtitles)' to '\(dS)'.")
     config.deleteSubtitles = dS
 }
 if let b = homeVideoDownloadDirectoryOption.value, config.homeVideoDownloadDirectories != b.values {
-    logger.info("Home Video Download Directory \(commonMsg) '\(config.homeVideoDownloadDirectories)' to '\(b.values)'.")
+    logger.debug("Home Video Download Directory \(commonMsg) '\(config.homeVideoDownloadDirectories)' to '\(b.values)'.")
     config.homeVideoDownloadDirectories = b.values
 }
 if var lL = logLevelOption.value, config.logLevel != lL {
@@ -194,16 +195,16 @@ if var lL = logLevelOption.value, config.logLevel != lL {
     }
 
     if lL != config.logLevel {
-        logger.info("Log Level is changing from '\(config.logLevel)' to '\(lL)'.")
+        logger.debug("Log Level \(commonMsg) '\(config.logLevel)' to '\(lL)'.")
         config.logLevel = lL
     }
 }
 if let lF = logFileOption.value, config.logFile != lF {
-    logger.info("Log File is changing from '\(config.logFile ?? "nil")' to '\(lF)'.")
+    logger.debug("Log File \(commonMsg) '\(config.logFile ?? "nil")' to '\(lF)'.")
     config.logFile = lF
 }
 
-logger.verbose("Configuration:\n\(config.printable())")
+logger.info("Configuration:\n\(config.printable())")
 
 // Only log to console when we're not logging to a file or if the logLevel
 //   is debug/verbose
@@ -233,111 +234,30 @@ if saveConfig {
     }
 }
 
-class Main: DirectoryMonitorDelegate {
-    let videoMonitr: Monitr<Video>
-    let audioMonitr: Monitr<Audio>
-    let ignoreMonitr: Monitr<Ignore>
-    let config: Config
-
-    init(config: Config) throws {
-        self.config = config
-        videoMonitr = try Monitr<Video>(config)
-        audioMonitr = try Monitr<Audio>(config)
-        ignoreMonitr = try Monitr<Ignore>(config)
-    }
-
-    func run() {
-        Async.utility {
-            self.videoMonitr.run()
-        }
-        Async.utility {
-            self.audioMonitr.run()
-        }
-        Async.utility {
-            self.ignoreMonitr.run()
-        }
-    }
-
-    func setDelegate() {
-        self.config.setDelegate(self)
-    }
-
-    @discardableResult
-    func startMonitoring() -> Bool {
-        return self.config.startMonitoring()
-    }
-
-    func shutdown(now: Bool = false) {
-        self.config.stopMonitoring()
-        videoMonitr.shutdown(now: now)
-        audioMonitr.shutdown(now: now)
-        ignoreMonitr.shutdown(now: now)
-    }
-
-	// MARK: - DirectorMonitor delegate method(s)
-
-    /**
-     Called when an event is triggered by the directory monitor
-
-     - Parameter directoryMonitor: The DirectoryMonitor that triggered the event
-    */
-    func directoryMonitorDidObserveChange(_ directoryMonitor: DirectoryMonitor) {
-        // The FileSystem monitoring doesn't work on Linux yet, so only check
-        //   if a write occurred in the directory if we're not on Linux
-        #if !os(Linux)
-        // Check that a new write occured
-        guard directoryMonitor.directoryMonitorSource?.data == .write else {
-            videoMonitr.needsUpdate = false
-            audioMonitr.needsUpdate = false
-            ignoreMonitr.needsUpdate = false
-            return
-        }
-        #endif
-        // Make sure we're not already modifying media, otherwise just set the
-        //   needsUpdate variable so that it's run again once it finishes
-        if videoMonitr.isModifyingMedia {
-            videoMonitr.needsUpdate = true
-        } else {
-	        videoMonitr.run()
-		}
-        if audioMonitr.isModifyingMedia {
-            audioMonitr.needsUpdate = true
-        } else {
-	        audioMonitr.run()
-		}
-        if ignoreMonitr.isModifyingMedia {
-            ignoreMonitr.needsUpdate = true
-        } else {
-	        ignoreMonitr.run()
-		}
-    }
-}
-
-let main: Main
+let mainMonitr: MainMonitr
 
 // Create the monitrs
 do {
-    main = try Main(config: config)
+    mainMonitr = try MainMonitr(config: config)
     logger.verbose("Sucessfully created the Monitr objects from the config")
-
-    // Run once and then start monitoring regularly
-    logger.info("Running the Monitrs once for startup!")
-    main.run()
-    main.setDelegate()
-    logger.info("Monitoring '\((config.downloadDirectories + config.homeVideoDownloadDirectories).map({ $0.string }))' for new files.")
-    guard main.startMonitoring() else {
+    mainMonitr.setDelegate()
+    guard mainMonitr.startMonitoring() else {
         logger.error("Failed to start monitoring the download directories for new files")
         exit(EXIT_FAILURE)
     }
+    logger.info("Monitoring '\((config.downloadDirectories + config.homeVideoDownloadDirectories).map({ $0.string }))' for new files.")
 
     // Watch for signals so we can shut down properly
     Signals.trap(signals: [.int, .term, .kill, .quit]) { _ in
         logger.info("Received signal. Stopping monitr.")
-        main.shutdown()
+        mainMonitr.shutdown()
         // Sleep before exiting or else monitr may not finish shutting down before the program is exited
         sleep(1)
         exit(EXIT_SUCCESS)
     }
+
+    // Run once in case there are files already in the directories
+    mainMonitr.run()
 
     // This keeps the program alive until ctrl-c is pressed or a signal is sent to the process
     let keepalive = AsyncGroup()
