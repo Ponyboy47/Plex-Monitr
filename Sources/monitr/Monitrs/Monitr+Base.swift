@@ -17,9 +17,6 @@ import Dispatch
 
 /// Checks the downloads directory for new content to add to Plex
 class Monitr<M> where M: Media {
-    /// The current version of monitr
-    static var version: String { return "0.7.0" }
-
     /// The configuration to use for the monitor
     var config: Config
 

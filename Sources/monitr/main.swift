@@ -24,38 +24,40 @@ import Darwin
 
 let logger = SwiftyBeaver.self
 
-var arguments = CommandLine.arguments
-var argParser = ArgumentParser("\(arguments.remove(at: 0)) [Options]", cliArguments: arguments)
+var argParser = ArgumentParser.default
 
 // Disable the line_length linting since just about all of these surpass the limit
 // swiftlint:disable line_length
 
 // Args/Flags to configure this program from the CLI
-let configOption = try Option<Path>("f", alternateNames: ["config"], default: Path("~/.config/monitr/settings.json"), description: "The file from which to read configuration options", required: true, parser: &argParser)
-let plexDirectoryOption = try Option<Path>("p", alternateNames: ["plex-dir"], description: "The directory where the Plex libraries reside", parser: &argParser)
-let downloadDirectoryOption = try Option<ArgArray<Path>>("t", alternateNames: ["download-dirs"], description: "The directory where media downloads reside", parser: &argParser)
-let homeVideoDownloadDirectoryOption = try Option<ArgArray<Path>>("b", alternateNames: ["home-video-download-dirs"], description: "The directory where home video downloads reside", parser: &argParser)
-let convertFlag = try Flag("c", alternateNames: ["convert"], description: "Whether or not newly added files should be converted to a Plex DirectPlay format", parser: &argParser)
-let convertImmediatelyFlag = try Flag("i", alternateNames: ["convert-immediately"], description: "Whether to convert media before sending it to the Plex directory, or to convert it as a scheduled task when the CPU is more likely to be free", parser: &argParser)
-let convertCronStartOption = try Option<DatePattern>("a", alternateNames: ["convert-cron-start"], description: "A Cron string describing when conversion jobs should start running", parser: &argParser)
-let convertCronEndOption = try Option<DatePattern>("z", alternateNames: ["convert-cron-end"], description: "A Cron string describing when conversion jobs should stop running", parser: &argParser)
-let convertThreadsOption = try Option<Int>("r", alternateNames: ["convert-threads"], description: "The number of threads that can simultaneously be converting media", parser: &argParser)
-let deleteOriginalFlag = try Flag("o", alternateNames: ["delete-original"], description: "Whether the original media file should be deleted upon successful conversion to a Plex DirectPlay format", parser: &argParser)
-let convertVideoContainerOption = try Option<VideoContainer>("e", alternateNames: ["convert-video-container"], description: "The container to use when converting video files", parser: &argParser)
-let convertVideoCodecOption = try Option<VideoCodec>("g", alternateNames: ["convert-video-codec"], description: "The codec to use when converting video streams. Setting to 'any' will allow Plex to just use DirectStream instead of DirectPlay and only have to transcode the video stream on the fly", parser: &argParser)
-let convertAudioContainerOption = try Option<AudioContainer>("j", alternateNames: ["convert-audio-container"], description: "The container to use when converting audio files", parser: &argParser)
-let convertAudioCodecOption = try Option<AudioCodec>("k", alternateNames: ["convert-audio-codec"], description: "The codec to use when converting audio streams. Setting to 'any' will allow Plex to just use DirectStream instead of DirectPlay and only have to transcode the audio stream on the fly", parser: &argParser)
-let convertVideoSubtitleScanFlag = try Flag("n", alternateNames: ["convert-video-subtitle-scan"], description: "Whether to scan media file streams and forcefully burn subtitles for foreign audio.\n\t\tNOTE: This is experimental in transcode_video and is not guarenteed to work 100% of the time. In fact, when it doesn't work, it will probably burn in the wrong language. It is recomended to never use this in conjunction with the --delete-original option", parser: &argParser)
-let convertLanguageOption = try Option<Language>("l", alternateNames: ["convert-language"], description: "The main language to select when converting media with multiple languages available", parser: &argParser)
-let convertVideoMaxFramerateOption = try Option<Double>("m", alternateNames: ["convert-video-max-framerate"], description: "The maximum framerate limit to use when converting video files", parser: &argParser)
-let convertTempDirectoryOption = try Option<Path>("u", alternateNames: ["convert-temp-dir"], description: "The directory where converted media will go prior to being moved to plex", parser: &argParser)
-let deleteSubtitlesFlag = try Flag("q", alternateNames: ["delete-subtitles"], description: "Whether or not external subtitle files should be deleted upon import with Monitr", parser: &argParser)
-let saveFlag = try Flag("s", alternateNames: ["save-settings"], default: false, description: "Whether or not the configured settings should be saved to the config options file", required: true, parser: &argParser)
-let logLevelOption = try Option<Int>("d", alternateNames: ["log-level"], description: "The logging level to use. Higher numbers mean more logging. Valid number range is 0-4.", parser: &argParser)
-let logFileOption = try Option<Path>("l", alternateNames: ["log-file"], description: "Where to write the log file.", parser: &argParser)
+let configOption = try Option<Path>("f", "config", default: Path("~/.config/monitr/settings.json"), description: "The file from which to read configuration options", required: true, parser: &argParser)
+let plexDirectoryOption = try Option<Path>("p", "plex-dir", description: "The directory where the Plex libraries reside", parser: &argParser)
+let downloadDirectoryOption = try Option<ArgArray<Path>>("t", "download-dirs", description: "The directory where media downloads reside", parser: &argParser)
+let homeVideoDownloadDirectoryOption = try Option<ArgArray<Path>>("b", "home-video-download-dirs", description: "The directory where home video downloads reside", parser: &argParser)
+let convertFlag = try Flag("c", "convert", description: "Whether or not newly added files should be converted to a Plex DirectPlay format", parser: &argParser)
+let convertImmediatelyFlag = try Flag("i", "convert-immediately", description: "Whether to convert media before sending it to the Plex directory, or to convert it as a scheduled task when the CPU is more likely to be free", parser: &argParser)
+let convertCronStartOption = try Option<DatePattern>("a", "convert-cron-start", description: "A Cron string describing when conversion jobs should start running", parser: &argParser)
+let convertCronEndOption = try Option<DatePattern>("z", "convert-cron-end", description: "A Cron string describing when conversion jobs should stop running", parser: &argParser)
+let convertThreadsOption = try Option<Int>("r", "convert-threads", description: "The number of threads that can simultaneously be converting media", parser: &argParser)
+let deleteOriginalFlag = try Flag("o", "delete-original", description: "Whether the original media file should be deleted upon successful conversion to a Plex DirectPlay format", parser: &argParser)
+let convertVideoContainerOption = try Option<VideoContainer>("e", "convert-video-container", description: "The container to use when converting video files", parser: &argParser)
+let convertVideoCodecOption = try Option<VideoCodec>("g", "convert-video-codec", description: "The codec to use when converting video streams. Setting to 'any' will allow Plex to just use DirectStream instead of DirectPlay and only have to transcode the video stream on the fly", parser: &argParser)
+let convertAudioContainerOption = try Option<AudioContainer>("j", "convert-audio-container", description: "The container to use when converting audio files", parser: &argParser)
+let convertAudioCodecOption = try Option<AudioCodec>("k", "convert-audio-codec", description: "The codec to use when converting audio streams. Setting to 'any' will allow Plex to just use DirectStream instead of DirectPlay and only have to transcode the audio stream on the fly", parser: &argParser)
+let convertVideoSubtitleScanFlag = try Flag("n", "convert-video-subtitle-scan", description: "Whether to scan media file streams and forcefully burn subtitles for foreign audio.\n\t\tNOTE: This is experimental in transcode_video and is not guarenteed to work 100% of the time. In fact, when it doesn't work, it will probably burn in the wrong language. It is recomended to never use this in conjunction with the --delete-original option", parser: &argParser)
+let convertLanguageOption = try Option<Language>("l", "convert-language", description: "The main language to select when converting media with multiple languages available", parser: &argParser)
+let convertVideoMaxFramerateOption = try Option<Double>("m", "convert-video-max-framerate", description: "The maximum framerate limit to use when converting video files", parser: &argParser)
+let convertTempDirectoryOption = try Option<Path>("u", "convert-temp-dir", description: "The directory where converted media will go prior to being moved to plex", parser: &argParser)
+let deleteSubtitlesFlag = try Flag("q", "delete-subtitles", description: "Whether or not external subtitle files should be deleted upon import with Monitr", parser: &argParser)
+let saveFlag = try Flag("s", "save-settings", default: false, description: "Whether or not the configured settings should be saved to the config options file", required: true, parser: &argParser)
+let logLevelOption = try Option<Int>("d", "log-level", description: "The logging level to use. Higher numbers mean more logging. Valid number range is 0-4.", parser: &argParser)
+let logFileOption = try Option<Path>("l", "log-file", description: "Where to write the log file.", parser: &argParser)
 
 // Re-enable the line_length checks now
 // swiftlint:enable line_length
+
+// Sets the values of all the arguments
+try argParser.parseAll()
 
 // Prints the help/usage text if -h or --help was used
 guard !argParser.needsHelp else {
@@ -64,12 +66,9 @@ guard !argParser.needsHelp else {
 }
 
 guard !argParser.wantsVersion else {
-    print(Monitr<Video>.version)
+    print(MainMonitr.version)
     exit(EXIT_SUCCESS)
 }
-
-// Sets the values of all the arguments
-try argParser.parse()
 
 guard let configPath: Path = configOption.value else {
     print("Something went wrong and the configPath option was not set")

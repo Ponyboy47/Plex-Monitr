@@ -4,6 +4,9 @@ import Async
 import PathKit
 
 final class MainMonitr: DirectoryMonitorDelegate {
+    /// The current version of monitr
+    static var version: String { return "0.7.0" }
+
     let videoMonitr: ConvertibleMonitr<Video>
     let audioMonitr: ConvertibleMonitr<Audio>
     let ignoreMonitr: Monitr<Ignore>
