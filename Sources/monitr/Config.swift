@@ -25,7 +25,7 @@ struct Config: Codable {
     /// The directory where the plex Libraries reside
     var plexDirectory: Path = "/var/lib/plexmediaserver/Library"
     /// Where new media is going to be downloaded
-    private var _downloadDirectories: [Path] = ["/var/lib/deluge/Downloads"]
+    private var _downloadDirectories: [Path] = ["~/Downloads"]
     var downloadDirectories: [Path] {
         set {
             // When this is set, update the DirectoryMonitor

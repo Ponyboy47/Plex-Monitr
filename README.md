@@ -55,7 +55,7 @@ git clone https://github.com/Ponyboy47/Plex-Monitr.git
 cd Plex-Monitr
 swiftenv install $(cat .swift-version)
 swift build
-.build/debug/monitr
+swift run monitr
 ```
 
 ### macOS (Tested on macOS High Sierra 10.13.2)
@@ -74,8 +74,22 @@ git clone https://github.com/Ponyboy47/Plex-Monitr.git
 cd Plex-Monitr
 swiftenv install $(cat .swift-version)
 swift build
-.build/debug/monitr
+swift run monitr
 ```
+
+---
+
+## Updating
+```bash
+cd ~/Plex-Monitr
+rm Package.{resolved,pins}
+git pull
+swiftenv install $(.swift-version)
+swift package update
+swift build
+swift run monitr
+```
+
 ---
 
 ## Usage:
@@ -99,11 +113,13 @@ There are a number of ways to configure your Monitr. Like any CLI application, a
 
 #### Set the Download directories to monitor:
 `-t` or `--download-dirs`
-<p>If left unspecified, then /var/lib/deluge/Downloads is used (Where I've kept my own downloads on Ubuntu).</p>
+<p>If left unspecified, then ~/Downloads is used (Where I've kept my own downloads on Ubuntu).<br />
+NOTE: This can be a comma separated list of paths to watch.</p>
 
 #### Set the Home Video directories to monitor
 `-b` or `--home-video-download-dirs`
-<p>If left unspecified, then ~/HomeVideos is used.</p>
+<p>If left unspecified, then ~/HomeVideos is used.<br />
+NOTE: This can be a comma separated list of paths to watch.</p>
 
 #### Set the Convert flag (whether to convert media to Direct Play formats for plex):
 `-c` or `--convert`
@@ -114,23 +130,26 @@ There are a number of ways to configure your Monitr. Like any CLI application, a
 <p>defaults to true<br />
 When true, files are converted before they are moved to their corresponding Plex directory</p>
 
-#### Set when scheduled media file conversion tasks should begin:
+#### Set when scheduled media file conversion tasks should begin (uses a cron string):
 `-a` or `--convert-cron-start`
-<p>default is "0 0 * * *" (midnight every day)</p>
+<p>default is "0 0 * * *" (midnight every day)<br />
+For information about the Cron format, see https://en.wikipedia.org/wiki/Cron</p>
 
-#### Set when scheduled media file conversion tasks should be finished:
+#### Set when scheduled media file conversion tasks stops (uses a cron string):
 `-z` `--convert-cron-end`
-<p>default is "0 8 * * *" (8am every day)</p>
+<p>default is "0 8 * * *" (8am every day)<br />
+For information about the Cron format, see https://en.wikipedia.org/wiki/Cron<br />
+NOTE: If a job is running at this time, it will run to completion, but no new conversions will be started</p>
 
 #### Set the number of simultaneous conversion threads we can have running at one time:
 `-r` or `--convert-threads`
 <p>default is 2<br />
-NOTE: Preliminary performance testing shows that using multiple threads will still convert the same number of files in the same amount of time. A single thread will convert one file faster, but multiple threads convert multiple files simultaneously, but slower. Overall, it tends to take the same amount of time to convert a batch of files.</p>
+NOTE: Preliminary performance testing shows that using multiple threads will still convert the same number of files in the same amount of time. A single thread will convert one file very fast and multiple threads convert multiple files simultaneously, but each file is converted slower. Overall, it tends to take the same amount of time to convert a batch of files.</p>
 
 #### Set whether of not to delete the original media file after converting it:
 `-o` or `--delete-original`
 <p>defaults to false<br />
-NOTE: If false, unconverted media files will be placed in the plex location along with the converted media file. The original file will have '.original' appended to the end of the filepath</p>
+NOTE: If false, unconverted media files will be placed in the plex location along with the converted media file. The original file will have ' - original' appended to the end of the filename, but before the file's extension.</p>
 
 #### Set the container to use when converting video files:
 `-e` or `--convert-video-container`
@@ -142,7 +161,7 @@ NOTE: If false, unconverted media files will be placed in the plex location alon
 
 #### Set the container to use when converting audio files:
 `-j` or `--convert-audio-container`
-<p>defaults to aac right now<br />
+<p>defaults to aac (for now)<br />
 NOTE: I don't have plans for a lot of audio file conversion support. I know Plex generally supports streaming aac, which is why I use aac, but I haven't looked into the Plex audio streaming stuff as much as I have it's video streaming requirements.</p>
 
 #### Set the codec to use when converting audio streams:
@@ -152,7 +171,12 @@ NOTE: I don't have plans for a lot of audio file conversion support. I know Plex
 #### Set whether to scan for foreign audio subtitles and burn them into a video stream:
 `-n` or `--convert-video-subtitle-scan`
 <p>defaults to false<br />
-NOTE: This is an experimental feature in the transcode_video tool. If it screws up, you could end up with the wrong subtitle track burned into your video. [See @donmelton's own documentation on this feature](https://github.com/donmelton/video_transcoding#understanding-subtitles) in his transcode_video.
+NOTE: This is an experimental feature in the transcode_video tool. If it screws up, you could end up with the wrong subtitle track burned into your video. [See @donmelton's own documentation on this feature](https://github.com/donmelton/video_transcoding#understanding-subtitles) in his transcode_video. If you are going to use this, it is HIGHLY RECOMMENDED that you do not use the `--delete-original` flag, just to be safe.</p>
+
+#### Set the preferred language to use when converting media:
+`-l` or `--convert-language`
+<p>defaults to eng<br />
+NOTE: Uses the ISO 639-2 language codes, and I only included a handful in this project. If you need one added then file an issue</p>
 
 #### Set the maximum framerate to use when converting video streams:
 `-m` or `--convert-video-max-framerate`
@@ -169,10 +193,11 @@ NOTE: This is an experimental feature in the transcode_video tool. If it screws 
 #### Set whether or not to save these config settings to the config file:
 `-s` or `--save-settings`
 <p>defaults to false<br />
-NOTE: If true, subsequent monitr instances can be run and will load in the settings file and use it's config values.</p>
+The current settings are saved at the `--config-file` path (defaults to ~/.config/monitr/settings.json)<br />
+NOTE: If true, subsequent monitr instances will load the settings file from the `--config-file` option and use its config values instead of the usual defaults.</p>
 
 #### Set the default logging level to use:
-`-d`
+`-d` or `--log-level`
 <p>default value is 0 (Errors only). Valid values range from 0-4.</p>
 
 ##### Logging levels:
@@ -194,7 +219,7 @@ NOTE: If set, and logging level >= 3 (debug or verbose), logs are written both t
 - [x] Logging
 - [x] The CLI boolean flags with a default value of true cannot be set to false. Fix it.
 - [ ] Do something with files that failed to be moved
-- [x] Don't register downloads with x264 as a TV show of Season 2 Episode 64
+- [x] Don't register downloads with x264 as a TV show of Season 2 Episode 64 (Downpour)
 - [x] Better subtitle file support
 - [x] Make an option for deleting subtitle files upon import
 - [ ] Get show name/season from parent directory? (Useful when there is an organized directory structure, but file names do not contain all the relevant info)
@@ -207,7 +232,7 @@ NOTE: If set, and logging level >= 3 (debug or verbose), logs are written both t
 - [x] Make the entire program more asynchronous
   - [x] Continue execution while converting media (Just add new stuff to a queue)
   - [x] Finishing conversion automatically continues to moveMedia()
-    - [x] Set up Operations for moving, converting, deleting, etc
+    - [x] Set up Operations for moving & converting
     - [x] Set up Operation dependency chains for automatic asynchronous behaviors
 - [x] Improve the stability with large amounts of conversion jobs
 - [x] Swift 4
