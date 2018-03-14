@@ -10,12 +10,14 @@
 */
 
 import Foundation
+import Dispatch
 import SwiftyBeaver
 import PathKit
 import Signals
 import Cron
 import CLI
-import Async
+
+// For sleep() and exit()
 #if os(Linux)
 import Glibc
 #else
@@ -259,7 +261,7 @@ do {
     mainMonitr.run()
 
     // This keeps the program alive until ctrl-c is pressed or a signal is sent to the process
-    let keepalive = AsyncGroup()
+    let keepalive = DispatchGroup()
     keepalive.enter()
     keepalive.wait()
 } catch {

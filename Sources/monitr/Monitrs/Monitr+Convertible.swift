@@ -9,9 +9,6 @@
 
 */
 
-import Foundation
-import PathKit
-import Cron
 import SwiftShell
 import Dispatch
 
@@ -30,25 +27,17 @@ enum Dependency: String {
 }
 
 class ConvertibleMonitr<M>: Monitr<M> where M: ConvertibleMedia {
-    override init(_ config: Config, moveOperationQueue: MediaOperationQueue, convertOperationQueue: MediaOperationQueue) throws {
-        try super.init(config, moveOperationQueue: moveOperationQueue, convertOperationQueue: convertOperationQueue)
+    var convertOperationQueue: MediaOperationQueue
+
+    init(_ config: Config, moveOperationQueue: MediaOperationQueue, convertOperationQueue: MediaOperationQueue) throws {
+        self.convertOperationQueue = convertOperationQueue
+
+        try super.init(config, moveOperationQueue: moveOperationQueue)
+
         self.config.convert = config.convert
 
         if config.convert {
             try checkConversionDependencies()
-        }
-
-        if config.convert && !config.convertImmediately {
-            self.convertOperationQueue.isSuspended = true
-            logger.verbose("Setting up the \(M.self) conversion queue cron jobs")
-            cronStart = CronJob(pattern: config.convertCronStart, queue: .global(qos: .background)) {
-                self.convertOperationQueue.isSuspended = false
-            }
-            cronEnd = CronJob(pattern: config.convertCronEnd, queue: .global(qos: .background)) {
-                self.convertOperationQueue.isSuspended = true
-            }
-            let next = MediaDuration(double: cronStart!.pattern.next(Date())!.date!.timeIntervalSinceNow)
-            logger.verbose("Set up the \(M.self) conversion cron jobs! It will begin in \(next.description)")
         }
     }
 

@@ -239,3 +239,4 @@ NOTE: If set, and logging level >= 3 (debug or verbose), logs are written both t
 - [ ] Dynamically add paths to watch lists (such as an auto-generated directory inside users' home directories)
 - [ ] Remove configurable items that aren't actually configurable (if no CLI option, then no configuration)
 - [ ] Unit tests
+- [ ] Only allow one running instance of monitr

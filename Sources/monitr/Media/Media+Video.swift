@@ -13,7 +13,6 @@ import PathKit
 import Downpour
 import SwiftyBeaver
 import SwiftShell
-import Async
 
 /// Management for Video files
 final class Video: ConvertibleMedia, Equatable {

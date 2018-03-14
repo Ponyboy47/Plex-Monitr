@@ -17,6 +17,7 @@
 // swiftlint:disable identifier_name
 
 import Foundation
+
 #if os(Linux)
 import Dispatch
 import Inotify

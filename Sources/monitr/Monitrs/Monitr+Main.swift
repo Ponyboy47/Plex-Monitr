@@ -1,7 +1,6 @@
-import Foundation
 import Dispatch
-import Async
 import PathKit
+import Cron
 
 final class MainMonitr: DirectoryMonitorDelegate {
     /// The current version of monitr
@@ -10,10 +9,15 @@ final class MainMonitr: DirectoryMonitorDelegate {
     let videoMonitr: ConvertibleMonitr<Video>
     let audioMonitr: ConvertibleMonitr<Audio>
     let ignoreMonitr: Monitr<Ignore>
+
     let config: Config
+
     let queue: DispatchQueue = DispatchQueue(label: "MainMonitrQueue", qos: .userInitiated, attributes: .concurrent)
     let moveOperationQueue: MediaOperationQueue
     let convertOperationQueue: MediaOperationQueue
+
+    var cronStart: CronJob!
+    var cronEnd: CronJob!
 
     var currentMedia: [Media] = []
 
@@ -33,9 +37,23 @@ final class MainMonitr: DirectoryMonitorDelegate {
         }
 
         self.config = config
+
         videoMonitr = try ConvertibleMonitr<Video>(config, moveOperationQueue: moveOperationQueue, convertOperationQueue: convertOperationQueue)
         audioMonitr = try ConvertibleMonitr<Audio>(config, moveOperationQueue: moveOperationQueue, convertOperationQueue: convertOperationQueue)
-        ignoreMonitr = try Monitr<Ignore>(config, moveOperationQueue: moveOperationQueue, convertOperationQueue: convertOperationQueue)
+        ignoreMonitr = try Monitr<Ignore>(config, moveOperationQueue: moveOperationQueue)
+
+        if config.convert && !config.convertImmediately {
+            convertOperationQueue.isSuspended = true
+            logger.verbose("Setting up the conversion queue cron jobs")
+            cronStart = CronJob(pattern: config.convertCronStart, queue: .global(qos: .background)) {
+                self.convertOperationQueue.isSuspended = false
+            }
+            cronEnd = CronJob(pattern: config.convertCronEnd, queue: .global(qos: .background)) {
+                self.convertOperationQueue.isSuspended = true
+            }
+            let next = MediaDuration(double: cronStart!.pattern.next(Date())!.date!.timeIntervalSinceNow)
+            logger.verbose("Set up the conversion cron jobs! It will begin in \(next.description)")
+        }
     }
 
     private func setHomeMedia(_ homeMedia: [Media]) {
@@ -74,15 +92,15 @@ final class MainMonitr: DirectoryMonitorDelegate {
         let audioMedia = media.filter { $0 is Audio }.map { $0 as! Audio }
         let ignoredMedia = media.filter { $0 is Ignore }.map { $0 as! Ignore }
 
-        Async.custom(queue: queue) {
+        queue.async {
             self.videoMonitr.run(videoMedia)
         }
 
-        Async.custom(queue: queue) {
+        queue.async {
             self.audioMonitr.run(audioMedia)
         }
 
-        Async.custom(queue: queue) {
+        queue.async {
             self.ignoreMonitr.run(ignoredMedia)
         }
     }
@@ -167,11 +185,26 @@ final class MainMonitr: DirectoryMonitorDelegate {
         return self.config.startMonitoring()
     }
 
+    /**
+     Stop watching the downloads directory
+
+     - Parameter now: If true, kills any active media management. Defaults to false
+    */
     func shutdown() {
-        self.config.stopMonitoring()
-        videoMonitr.shutdown()
-        audioMonitr.shutdown()
-        ignoreMonitr.shutdown()
+        config.logger.info("Shutting down monitrs.")
+        config.stopMonitoring()
+        moveOperationQueue.isSuspended = true
+        convertOperationQueue.isSuspended = true
+        if moveOperationQueue.operationCount > 0 {
+            config.logger.info("Saving conversion queue")
+            try? moveOperationQueue.save(to: config.configFile.parent + "moveOperationQueue.json")
+        }
+        if convertOperationQueue.operationCount > 0 {
+            config.logger.info("Saving conversion queue")
+            try? convertOperationQueue.save(to: config.configFile.parent + "convertOperationQueue.json")
+        }
+        moveOperationQueue.cancelAllOperations()
+        convertOperationQueue.cancelAllOperations()
     }
 
 	// MARK: - DirectorMonitor delegate method(s)

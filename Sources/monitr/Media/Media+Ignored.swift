@@ -8,7 +8,6 @@
 
  */
 
-import Foundation
 import PathKit
 import Downpour
 import SwiftyBeaver
@@ -50,7 +49,7 @@ final class Ignore: Media, Equatable {
         guard path.isDeletable else {
             throw MediaError.fileNotDeletable
         }
-        logger.verbose("Deleting ignorable file: \(path.string)")
+        logger.debug("Deleting ignorable file: \(path.string)")
         try path.delete()
         path = ""
         return .success(.deleting)
