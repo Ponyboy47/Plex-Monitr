@@ -23,7 +23,10 @@ final class Audio: ConvertibleMedia, Equatable {
     var isHomeMedia: Bool = false
     var downpour: Downpour
     var unconvertedFile: Path?
-    var conversionConfig: ConversionConfig?
+    var conversionConfig: ConversionConfig!
+    lazy var audioConversionConfig: AudioConversionConfig? = {
+        conversionConfig as? AudioConversionConfig
+    }()
     var beenConverted: Bool = false
     weak var mainMonitr: MainMonitr!
 
@@ -57,7 +60,7 @@ final class Audio: ConvertibleMedia, Equatable {
 
     func needsConversion(_ logger: SwiftyBeaver.Type) throws -> Bool {
         // Use the Handbrake CLI to convert to Plex DirectPlay capable audio (if necessary)
-        guard let config = conversionConfig as? AudioConversionConfig else {
+        guard let config = audioConversionConfig else {
             throw MediaError.AudioError.invalidConfig
         }
         return false

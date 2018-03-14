@@ -312,17 +312,26 @@ struct Config: Codable {
     }
 }
 
-protocol ConversionConfig {}
+protocol ConversionConfig {
+    var container: Container { get }
+    var plexDir: Path { get }
+    var tempDir: Path { get }
+    var deleteOriginal: Bool { get }
+}
 
 struct VideoConversionConfig: ConversionConfig {
-    var container: VideoContainer
-    var videoCodec: VideoCodec
-    var audioCodec: AudioCodec
-    var subtitleScan: Bool
-    var mainLanguage: Language
-    var maxFramerate: Double
-    var plexDir: Path
-    var tempDir: Path?
+    let container: Container
+    var videoContainer: VideoContainer! {
+        return container as? VideoContainer
+    }
+    let videoCodec: VideoCodec
+    let audioCodec: AudioCodec
+    let subtitleScan: Bool
+    let mainLanguage: Language
+    let maxFramerate: Double
+    let plexDir: Path
+    let tempDir: Path
+    let deleteOriginal: Bool
 
     init(config: Config) {
         container = config.convertVideoContainer
@@ -332,20 +341,26 @@ struct VideoConversionConfig: ConversionConfig {
         mainLanguage =  config.convertLanguage
         maxFramerate = config.convertVideoMaxFramerate
         plexDir = config.plexDirectory
-        tempDir = config.deleteOriginal ? config.convertTempDirectory : nil
+        tempDir = config.convertTempDirectory
+        deleteOriginal = config.deleteOriginal
     }
 }
 
 struct AudioConversionConfig: ConversionConfig {
-    var container: AudioContainer
-    var codec: AudioCodec
-    var plexDir: Path
-    var tempDir: Path?
+    let container: Container
+    var audioContainer: AudioContainer! {
+        return container as? AudioContainer
+    }
+    let codec: AudioCodec
+    let plexDir: Path
+    let tempDir: Path
+    let deleteOriginal: Bool
 
     init(config: Config) {
         container = config.convertAudioContainer
         codec = config.convertAudioCodec
         plexDir = config.plexDirectory
-        tempDir = config.deleteOriginal ? config.convertTempDirectory : nil
+        tempDir = config.convertTempDirectory
+        deleteOriginal = config.deleteOriginal
     }
 }

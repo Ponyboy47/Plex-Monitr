@@ -160,7 +160,7 @@ protocol ConvertibleMedia: Media {
     /// The path to the original media file (before it was converted). Only set when the original file is not to be deleted
     var unconvertedFile: Path? { get set }
     /// The config to use when converting the media
-    var conversionConfig: ConversionConfig? { get set }
+    var conversionConfig: ConversionConfig! { get set }
     /// Whether the media file has already been converted or not
     var beenConverted: Bool { get set }
     /// Moves the original media file to the finalDirectory

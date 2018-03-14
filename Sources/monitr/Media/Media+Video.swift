@@ -26,7 +26,10 @@ final class Video: ConvertibleMedia, Equatable {
     var downpour: Downpour
     var unconvertedFile: Path?
     var subtitles: [Subtitle]
-    var conversionConfig: ConversionConfig?
+    var conversionConfig: ConversionConfig!
+    lazy var videoConversionConfig: VideoConversionConfig? = {
+        conversionConfig as? VideoConversionConfig
+    }()
     var beenConverted: Bool = false
     weak var mainMonitr: MainMonitr!
 
@@ -144,7 +147,9 @@ final class Video: ConvertibleMedia, Equatable {
     }
 
     func convertCommand(_ logger: SwiftyBeaver.Type) throws -> Command {
-        let config = conversionConfig as! VideoConversionConfig
+        guard let config = videoConversionConfig else {
+            throw MediaError.VideoError.invalidConfig
+        }
 
         // Build the arguments for the transcode_video command
         var args: [String] = ["--target", "big", "--quick", "--preset", "fast", "--verbose", "--main-audio", config.mainLanguage.rawValue, "--limit-rate", "\(config.maxFramerate)"]
@@ -153,8 +158,7 @@ final class Video: ConvertibleMedia, Equatable {
             args += ["--burn-subtitle", "scan"]
         }
 
-        let outputExtension = config.container.rawValue
-        switch config.container {
+        switch config.videoContainer {
         case .mp4:
             args.append("--mp4")
         case .m4v:
@@ -163,32 +167,24 @@ final class Video: ConvertibleMedia, Equatable {
         }
 
         let ext = path.extension ?? ""
-        var deleteOriginal = false
-        var outputPath: Path
+        var outputPath: Path = config.tempDir
 
-        // This is only set when deleteOriginal is false
-        if let tempDir = config.tempDir {
-            logger.verbose("Using temporary directory to convert '\(path)'")
-            outputPath = tempDir
-        } else {
-            deleteOriginal = true
-            if ext == outputExtension {
-                let filename = "\(plexName) - original.\(ext)"
-                logger.verbose("Input/output extensions are identical, renaming original file from '\(path.lastComponent)' to '\(filename)'")
-                try path.rename(filename)
-                path = path.parent + filename
-            }
-            outputPath = path.parent
+        let filename = "\(plexName) - original.\(ext)"
+        if !(path.parent + filename).exists {
+            try path.rename(filename)
+            logger.debug("Renamed file from '\(path)' to '\(path.parent + filename)'")
+            path = path.parent + filename
         }
+
         // We need the full outputPath of the transcoded file so that we can
         // update the path of this media object, and move it to plex if it
         // isn't already there
-        outputPath += "\(Path.separator)\(plexName).\(outputExtension)"
+        outputPath += "\(Path.separator)\(plexName).\(config.videoContainer.rawValue)"
 
         // Add the input filepath to the args
         args += [path.absolute.string, "--output", outputPath.string]
 
-        return ("transcode-video", args, outputPath, deleteOriginal)
+        return ("transcode-video", args, outputPath, config.deleteOriginal)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -199,7 +195,7 @@ final class Video: ConvertibleMedia, Equatable {
     }
 
     func needsConversion(_ logger: SwiftyBeaver.Type) throws -> Bool {
-        guard let config = conversionConfig as? VideoConversionConfig else {
+        guard let config = videoConversionConfig else {
             throw MediaError.VideoError.invalidConfig
         }
         logger.verbose("Getting audio/video stream data for '\(path.absolute)'")
@@ -325,7 +321,7 @@ final class Video: ConvertibleMedia, Equatable {
     }
 
     private func needToConvert(videoStream: VideoStream, audioStream: AudioStream, logger: SwiftyBeaver.Type) throws -> Bool {
-        guard let config = conversionConfig as? VideoConversionConfig else {
+        guard let config = videoConversionConfig else {
             throw MediaError.VideoError.invalidConfig
         }
 
@@ -335,7 +331,7 @@ final class Video: ConvertibleMedia, Equatable {
             throw MediaError.unknownContainer(path.extension ?? "")
         }
 
-        guard container == config.container else { return true }
+        guard container == config.videoContainer else { return true }
 
         guard let videoCodec = videoStream.codec as? VideoCodec, config.videoCodec == .any || videoCodec == config.videoCodec else { return true }
 

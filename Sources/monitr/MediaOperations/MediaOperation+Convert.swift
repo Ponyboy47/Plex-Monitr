@@ -54,12 +54,14 @@ class ConvertOperation<MediaType: ConvertibleMedia>: MediaOperation<MediaType> {
     }
 
     override var isExecuting: Bool {
-        return command.isRunning
+        return isRunning
     }
+    var isRunning: Bool = false
 
     override var isFinished: Bool {
-        return !command.isRunning
+        return isDone
     }
+    var isDone: Bool = false
 
     override var isCancelled: Bool {
         return wasCancelled
@@ -74,31 +76,34 @@ class ConvertOperation<MediaType: ConvertibleMedia>: MediaOperation<MediaType> {
             media = (dependencies.first! as! MediaOperation).media
         }
 
+        isRunning = true
+        self.didChangeValue(forKey: "isExecuting")
         command = SwiftShell.runAsync(commandName, commandArgs)
         main()
     }
 
     override func main() {
-        command.stdout.read()
-        self.didChangeValue(forKey: "isExecuting")
-        self.didChangeValue(forKey: "isFinished")
+        command.stdout.readData()
         logger.debug("Finished conversion of media file '\(media.path)'")
 
+        guard command.exitcode() == 0 else {
+            var error: String = "Error attempting to convert: \(media.path)"
+            error += "\n\tCommand: \(commandName) \(commandArgs.joined(separator: " "))\n\tResponse: \(command.exitcode())"
+            if !command.stdout.read().isEmpty {
+                error += "\n\tStandard Out: \(command.stdout.read())"
+            }
+            if !command.stderror.read().isEmpty {
+                error += "\n\tStandard Error: \(command.stderror.read())"
+            }
+            logger.error("Error converting \(MediaType.self) media")
+            logger.debug(MediaError.conversionError(error))
+
+            return self.finish()
+        }
+
+        logger.verbose("Successfully converted media file '\(media.path)' to '\(outputPath)'")
+
         do {
-			guard command.exitcode() == 0 else {
-				var error: String = "Error attempting to convert: \(media.path)"
-				error += "\n\tCommand: \(commandName) \(commandArgs.joined(separator: " "))\n\tResponse: \(command.exitcode())"
-				if !command.stdout.read().isEmpty {
-					error += "\n\tStandard Out: \(command.stdout.read())"
-				}
-				if !command.stderror.read().isEmpty {
-					error += "\n\tStandard Error: \(command.stderror.read())"
-				}
-				throw MediaError.conversionError(error)
-			}
-
-			logger.verbose("Successfully converted media file '\(media.path)' to '\(outputPath)'")
-
 			if deleteOriginal {
                 logger.debug("Deleting original file '\(media.path)'")
 				try media.path.delete()
@@ -112,14 +117,28 @@ class ConvertOperation<MediaType: ConvertibleMedia>: MediaOperation<MediaType> {
 
 			media.beenConverted = true
         } catch {
-            logger.error("Error while converting \(MediaType.self) media")
+            logger.error("Error deleting the original file '\(media.path)'")
             logger.debug(error)
         }
+
+        self.finish()
+    }
+
+    func finish() {
+        isRunning = false
+        isDone = true
+
+        self.didChangeValue(forKey: "isExecuting")
+        self.didChangeValue(forKey: "isFinished")
     }
 
     override func cancel() {
         command.stop()
+
         wasCancelled = true
+        isDone = true
+        isRunning = false
+
         self.didChangeValue(forKey: "isExecuting")
         self.didChangeValue(forKey: "isCancelled")
     }
