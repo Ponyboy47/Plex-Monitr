@@ -15,7 +15,7 @@ var dependencies: [Package.Dependency] = [
 var namedDependencies: [Target.Dependency] = ["Signals", "CLI", "Cron", "Downpour", "PathKit", "SwiftShell", "SwiftyBeaver", "LockSmith"]
 
 #if os(Linux)
-dependencies.append(.package(url: "https://github.com/Ponyboy47/inotify.git", .upToNextMinor(from: "0.4.1")))
+dependencies.append(.package(url: "https://github.com/Ponyboy47/inotify.git", .upToNextMinor(from: "0.4.3")))
 namedDependencies.append("Inotify")
 #endif
 
