@@ -10,12 +10,12 @@ var dependencies: [Package.Dependency] = [
     .package(url: "https://github.com/Ponyboy47/PathKit.git", .upToNextMajor(from: "0.9.0")),
     // .package(url: "https://github.com/kareman/SwiftShell.git", .upToNextMinor(from: "4.0.0")),
     .package(url: "https://github.com/SwiftyBeaver/SwiftyBeaver.git", .upToNextMinor(from: "1.4.0")),
-    .package(url: "https://github.com/Ponyboy47/LockSmith.git", from: "0.1.0")
+    .package(url: "https://github.com/Ponyboy47/LockSmith.git", from: "0.1.1")
 ]
 var namedDependencies: [Target.Dependency] = ["Signals", "CLI", "Cron", "Downpour", "PathKit", /*"SwiftShell",*/ "SwiftyBeaver", "LockSmith"]
 
 #if os(Linux)
-dependencies.append(.package(url: "https://github.com/Ponyboy47/inotify.git", .upToNextMinor(from: "0.4.1")))
+dependencies.append(.package(url: "https://github.com/Ponyboy47/inotify.git", .upToNextMinor(from: "0.4.3")))
 namedDependencies.append("Inotify")
 #endif
 
