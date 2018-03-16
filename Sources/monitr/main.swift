@@ -16,6 +16,7 @@ import PathKit
 import Signals
 import Cron
 import CLI
+import LockSmith
 
 // For sleep() and exit()
 #if os(Linux)
@@ -23,6 +24,15 @@ import Glibc
 #else
 import Darwin
 #endif
+
+// Locks the current swift process
+var processLock = LockSmith.singleton
+
+// Makes sure LockSmith succeeded at locking the process
+guard processLock != nil else {
+    print("Failed to lock process. Does another instance of \(ProcessInfo.processInfo.processName) already exist?")
+    exit(EXIT_FAILURE)
+}
 
 let logger = SwiftyBeaver.self
 
@@ -251,6 +261,8 @@ do {
     // Watch for signals so we can shut down properly
     Signals.trap(signals: [.int, .term, .kill, .quit]) { _ in
         logger.info("Received signal. Stopping monitr.")
+        // deinitializes the processLock, which unlocks any and all locks
+        processLock = nil
         mainMonitr.shutdown()
         // Sleep before exiting or else monitr may not finish shutting down before the program is exited
         sleep(1)
