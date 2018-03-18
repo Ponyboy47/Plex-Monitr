@@ -6,15 +6,18 @@
     Description: This file contains the class that monitors a directory for
                    write events and notifies a delegate when a new write occurs. This was
                    originally taken from an Apple website, but I updated it to work with the
-                   latest swift...and to semi-work on Linux. (Currently
-                   DispatchSourceFileSystemObject is not available on Linux).
+                   latest swift...and am using the Inotify module to make this work with linux
+                   as well.
                    Here is the link to the original file:
                        https://developer.apple.com/library/content/samplecode/Lister/Listings/ListerKit_DirectoryMonitor_swift.html
     License: Apple License (See DirectoryMonitor_LICENSE.txt)
 
 */
 
+// swiftlint:disable identifier_name
+
 import Foundation
+
 #if os(Linux)
 import Dispatch
 import Inotify
@@ -56,8 +59,12 @@ final class DirectoryMonitor {
     init(URL: URL) {
         self.URL = URL
         #if os(Linux)
-        self.inotify = try? Inotify(eventWatcher: SelectEventWatcher.self, qos: .background, watching: self.URL.path, for: .movedTo) { _ in
-            self.delegate?.directoryMonitorDidObserveChange(self)
+        do {
+            self.inotify = try Inotify(eventWatcher: SelectEventWatcher.self, qos: .background, watching: self.URL.path.replacingOccurrences(of: "file://", with: ""), for: .movedTo) { _ in
+                self.delegate?.directoryMonitorDidObserveChange(self)
+            }
+        } catch {
+            fatalError("Error creating inotify: \(error)")
         }
         #endif
     }

@@ -12,10 +12,9 @@ import Foundation
 import PathKit
 import Downpour
 import SwiftyBeaver
-import JSON
 
 /// Management for Audio files
-final class Audio: ConvertibleMedia {
+final class Audio: ConvertibleMedia, Equatable {
     /// The supported extensions
     static var supportedExtensions: [String] = ["mp3", "m4a", "alac", "flac",
                                                 "aac", "wav"]
@@ -24,6 +23,12 @@ final class Audio: ConvertibleMedia {
     var isHomeMedia: Bool = false
     var downpour: Downpour
     var unconvertedFile: Path?
+    var conversionConfig: ConversionConfig!
+    lazy var audioConversionConfig: AudioConversionConfig? = {
+        conversionConfig as? AudioConversionConfig
+    }()
+    var beenConverted: Bool = false
+    weak var mainMonitr: MainMonitr!
 
     var plexName: String {
         // Audio files are usually pretty simple
@@ -49,20 +54,25 @@ final class Audio: ConvertibleMedia {
         self.downpour = Downpour(fullPath: path.absolute)
     }
 
-    func convert(_ conversionConfig: ConversionConfig?, _ log: SwiftyBeaver.Type) throws -> ConvertibleMedia {
+    func convertCommand(_ logger: SwiftyBeaver.Type) throws -> Command {
+        fatalError("Not Implemented")
+    }
+
+    func needsConversion(_ logger: SwiftyBeaver.Type) throws -> Bool {
         // Use the Handbrake CLI to convert to Plex DirectPlay capable audio (if necessary)
-        guard let config = conversionConfig as? AudioConversionConfig else {
+        guard let config = audioConversionConfig else {
             throw MediaError.AudioError.invalidConfig
         }
-        return try convert(config, log)
-    }
-
-    func convert(_ conversionConfig: AudioConversionConfig, _ log: SwiftyBeaver.Type) throws -> ConvertibleMedia {
-        // Use the Handbrake CLI to convert to Plex DirectPlay capable audio (if necessary)
-        return self
-    }
-
-    class func needsConversion(file: Path, with config: ConversionConfig, log: SwiftyBeaver.Type) throws -> Bool {
         return false
+    }
+
+    static func == (lhs: Audio, rhs: Audio) -> Bool {
+        return lhs.path == rhs.path
+    }
+    static func == <T: Media>(lhs: Audio, rhs: T) -> Bool {
+        return lhs.path == rhs.path
+    }
+    static func == <T: Media>(lhs: T, rhs: Audio) -> Bool {
+        return lhs.path == rhs.path
     }
 }
