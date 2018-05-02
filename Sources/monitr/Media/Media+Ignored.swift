@@ -13,7 +13,7 @@ import Downpour
 import SwiftyBeaver
 
 /// Management for media types that we don't care about and can just delete
-final class Ignore: Media, Equatable {
+final class Ignore: Media {
     var plexName: String = ""
 
     static var supportedExtensions: [String] = ["txt", "png", "jpg", "jpeg",
@@ -53,15 +53,5 @@ final class Ignore: Media, Equatable {
         try path.delete()
         path = ""
         return .success(.deleting)
-    }
-
-    static func == (lhs: Ignore, rhs: Ignore) -> Bool {
-        return lhs.path == rhs.path
-    }
-    static func == <T: Media>(lhs: Ignore, rhs: T) -> Bool {
-        return lhs.path == rhs.path
-    }
-    static func == <T: Media>(lhs: T, rhs: Ignore) -> Bool {
-        return lhs.path == rhs.path
     }
 }

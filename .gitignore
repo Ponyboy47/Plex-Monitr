@@ -2,7 +2,8 @@
 /.build
 /Packages
 /*.xcodeproj
-.*.sw[po]
+*.sw[po]
+*.vimsession
 Package.pins
 Package.resolved
 .AppleDouble

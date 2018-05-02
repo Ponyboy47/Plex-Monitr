@@ -240,3 +240,4 @@ NOTE: If set, and logging level >= 3 (debug or verbose), logs are written both t
 - [ ] Remove configurable items that aren't actually configurable (if no CLI option, then no configuration)
 - [ ] Unit tests
 - [x] Only allow one running instance of monitr
+- [ ] Moving batches of files at a time into the downloads directories causes issues

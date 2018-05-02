@@ -14,7 +14,7 @@ import Downpour
 import SwiftyBeaver
 
 /// Management for Audio files
-final class Audio: ConvertibleMedia, Equatable {
+final class Audio: ConvertibleMedia {
     /// The supported extensions
     static var supportedExtensions: [String] = ["mp3", "m4a", "alac", "flac",
                                                 "aac", "wav"]
@@ -64,15 +64,5 @@ final class Audio: ConvertibleMedia, Equatable {
             throw MediaError.AudioError.invalidConfig
         }
         return false
-    }
-
-    static func == (lhs: Audio, rhs: Audio) -> Bool {
-        return lhs.path == rhs.path
-    }
-    static func == <T: Media>(lhs: Audio, rhs: T) -> Bool {
-        return lhs.path == rhs.path
-    }
-    static func == <T: Media>(lhs: T, rhs: Audio) -> Bool {
-        return lhs.path == rhs.path
     }
 }

@@ -79,7 +79,7 @@ final class MainMonitr: DirectoryMonitorDelegate {
         // swiftlint:disable identifier_name
         media = media.filter { m in
             !currentMedia.contains(where: { c in
-                return m.path == c.path
+                return m.plexFilename == c.plexFilename
             })
         }
         // swiftlint:enable identifier_name
@@ -125,6 +125,7 @@ final class MainMonitr: DirectoryMonitorDelegate {
 
                 // Iterate of the children paths
                 // Skips the directories and just checks for files
+                // swiftlint:disable identifier_name
                 for childFile in children where childFile.isFile {
                     if let m = self.getMedia(with: childFile) {
                         m.mainMonitr = self
@@ -135,6 +136,7 @@ final class MainMonitr: DirectoryMonitorDelegate {
                         self.config.logger.warning("Unknown/unsupported file found: \(childFile)")
                     }
                 }
+                // swiftlint:enable identifier_name
             } catch {
                 config.logger.error("Failed to get files from the downloads directories.")
                 config.logger.debug(error)

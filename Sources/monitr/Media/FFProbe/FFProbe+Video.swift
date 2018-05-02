@@ -86,8 +86,9 @@ struct VideoStream: FFProbeVideoStreamProtocol {
 
         framerate = try values.decode(FrameRate.self, forKey: .framerate)
 
-       let bD = try values.decode(String.self, forKey: .bitDepth)
-       bitDepth = Int(bD)
+       if let bD = try values.decodeIfPresent(String.self, forKey: .bitDepth) {
+           bitDepth = Int(bD)
+       }
 
        tags = try values.decodeIfPresent(Tags.self, forKey: .tags)
     }

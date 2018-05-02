@@ -43,22 +43,22 @@ struct BitRate: Codable, Comparable {
 
         if bitRateString.hasSuffix("Mbit/s") {
             unit = .mbps
-            guard let v = Double(bitRateString.components(separatedBy: " ")[0]) else {
+            guard let val = Double(bitRateString.components(separatedBy: " ")[0]) else {
                 throw FFProbeError.BitRateError.unableToConvertStringToDouble(bitRateString.components(separatedBy: " ")[0])
             }
-            value = v
+            value = val
         } else if bitRateString.hasSuffix("Kbit/s") {
             unit = .kbps
-            guard let v = Double(bitRateString.components(separatedBy: " ")[0]) else {
+            guard let val = Double(bitRateString.components(separatedBy: " ")[0]) else {
                 throw FFProbeError.BitRateError.unableToConvertStringToDouble(bitRateString.components(separatedBy: " ")[0])
             }
-            value = v
+            value = val
         } else {
             unit = .bps
-            guard let v = Double(bitRateString.components(separatedBy: " ")[0]) else {
+            guard let val = Double(bitRateString.components(separatedBy: " ")[0]) else {
                 throw FFProbeError.BitRateError.unableToConvertStringToDouble(bitRateString.components(separatedBy: " ")[0])
             }
-            value = v
+            value = val
         }
     }
 
@@ -70,14 +70,14 @@ struct BitRate: Codable, Comparable {
     }
 
     static func == (lhs: BitRate, rhs: BitRate) -> Bool {
-        var l = lhs
-        var r = rhs
-        return l.bps == r.bps
+        var left = lhs
+        var right = rhs
+        return left.bps == right.bps
     }
 
     static func < (lhs: BitRate, rhs: BitRate) -> Bool {
-        var l = lhs
-        var r = rhs
-        return l.bps < r.bps
+        var left = lhs
+        var right = rhs
+        return left.bps < right.bps
     }
 }

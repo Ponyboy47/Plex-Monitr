@@ -24,10 +24,12 @@ class ConvertOperation<MediaType: ConvertibleMedia>: MediaOperation<MediaType> {
         case deleteOriginal
     }
 
+    @available(*, unavailable)
     override init(_ media: MediaType, logger: SwiftyBeaver.Type) {
         fatalError("Use the throwable initializer init(_ media:logger:prepareConversion:)")
     }
 
+    // swiftlint:disable identifier_name
     init(_ media: MediaType, logger: SwiftyBeaver.Type, prepareConversion: Bool) throws {
         let (cmd, args, oP, dO) = try media.convertCommand(logger)
         commandName = cmd
@@ -37,6 +39,7 @@ class ConvertOperation<MediaType: ConvertibleMedia>: MediaOperation<MediaType> {
         super.init(media, logger: logger)
         self.qualityOfService = .utility
     }
+    // swiftlint:enable identifier_name
 
     required init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: ConvertCodingKeys.self)

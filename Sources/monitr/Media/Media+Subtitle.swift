@@ -9,7 +9,7 @@ import PathKit
 import Downpour
 
 extension Video {
-    final class Subtitle: Media, Equatable {
+    final class Subtitle: Media {
         var path: Path
         var isHomeMedia: Bool = false
         var downpour: Downpour
@@ -122,16 +122,6 @@ extension Video {
 
         func delete() throws {
             try self.path.delete()
-        }
-
-        static func == (lhs: Subtitle, rhs: Subtitle) -> Bool {
-            return lhs.path == rhs.path
-        }
-        static func == <T: Media>(lhs: Subtitle, rhs: T) -> Bool {
-            return lhs.path == rhs.path
-        }
-        static func == <T: Media>(lhs: T, rhs: Subtitle) -> Bool {
-            return lhs.path == rhs.path
         }
     }
 }

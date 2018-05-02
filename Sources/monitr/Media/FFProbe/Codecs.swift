@@ -6,6 +6,9 @@ enum VideoCodec: String, Codec {
     case h264
     case mpeg4
     case mjpeg
+    case mpeg2video
+    case vc1
+    case msmpeg4v2
     case any
 
     init?(rawValue: String?) throws {
@@ -21,6 +24,9 @@ enum AudioCodec: String, Codec {
     case ac3
     case eac3
     case mp3
+    case truehd
+    case dca
+    case any
 
     init?(rawValue: String?) throws {
         if let rV = rawValue {
@@ -29,11 +35,13 @@ enum AudioCodec: String, Codec {
             return nil
         }
     }
-    case any
 }
 enum SubtitleCodec: String, Codec {
     case srt
     case mov_text
+    case dvdsub
+    case pgssub
+    case any
 
     init?(rawValue: String?) throws {
         if let rV = rawValue {
@@ -42,5 +50,4 @@ enum SubtitleCodec: String, Codec {
             return nil
         }
     }
-    case any
 }

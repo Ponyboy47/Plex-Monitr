@@ -15,7 +15,7 @@ import SwiftyBeaver
 import SwiftShell
 
 /// Management for Video files
-final class Video: ConvertibleMedia, Equatable {
+final class Video: ConvertibleMedia {
     /// The supported extensions
     static var supportedExtensions: [String] = ["mp4", "mkv", "m4v", "avi",
                                                 "wmv", "mpg"]
@@ -82,10 +82,12 @@ final class Video: ConvertibleMedia, Equatable {
             throw MediaError.VideoError.sampleMedia
         }
 
+        // swiftlint:disable identifier_name
         guard let c = VideoContainer(rawValue: path.extension ?? "") else {
             throw MediaError.unknownContainer(path.extension ?? "")
         }
         container = c
+        // swiftlint:enable identifier_name
 
         // Set the media file's path to the absolute path
         self.path = path.absolute
@@ -251,27 +253,21 @@ final class Video: ConvertibleMedia, Equatable {
     // If multiple have the same bitrate, see if either has the right codec. If
     // neither has the preferred codec, or they both do, then go for the lowest index
     private func identifyMainVideoStream(_ videoStreams: [VideoStream], using config: VideoConversionConfig) -> VideoStream {
-        return videoStreams.reduce(videoStreams[0]) { prevStream, nextStream in
-            if let prevDuration = prevStream.duration, let nextDuration = nextStream.duration {
-                if prevDuration > nextDuration {
-                    return prevStream
+        return videoStreams.reduce(videoStreams[0]) { mainStream, nextStream in
+            if mainStream.duration > nextStream.duration {
+                return mainStream
+            } else if mainStream.dimensions! > nextStream.dimensions! {
+                return mainStream
+            } else if mainStream.bitRate > nextStream.bitRate {
+                return mainStream
+            } else if mainStream.codec as? VideoCodec != nextStream.codec as? VideoCodec {
+                if mainStream.codec as? VideoCodec == config.videoCodec {
+                    return mainStream
+                } else if nextStream.codec as? VideoCodec != config.videoCodec && mainStream.index < nextStream.index {
+                    return mainStream
                 }
-            } else if prevStream.dimensions! != nextStream.dimensions! {
-                if prevStream.dimensions! > nextStream.dimensions! {
-                    return prevStream
-                }
-            } else if let prevBitRate = prevStream.bitRate, let nextBitRate = nextStream.bitRate {
-                if prevBitRate > nextBitRate {
-                    return prevStream
-                }
-            } else if prevStream.codec as! VideoCodec != nextStream.codec as! VideoCodec {
-                if prevStream.codec as! VideoCodec == config.videoCodec {
-                    return prevStream
-                } else if nextStream.codec as! VideoCodec != config.videoCodec && prevStream.index < nextStream.index {
-                    return prevStream
-                }
-            } else if prevStream.index < nextStream.index {
-                return prevStream
+            } else if mainStream.index < nextStream.index {
+                return mainStream
             }
             return nextStream
         }
@@ -283,37 +279,27 @@ final class Video: ConvertibleMedia, Equatable {
     // higher, then we'll check the sample rates, next the codecs, and
     // finally their indexes
     private func identifyMainAudioStream(_ audioStreams: [AudioStream], using config: VideoConversionConfig) -> AudioStream {
-        return audioStreams.reduce(audioStreams[0]) { prevStream, nextStream in
-            func followupComparisons(_ pStream: FFProbeAudioStreamProtocol, _ nStream: FFProbeAudioStreamProtocol) -> FFProbeAudioStreamProtocol {
-                if let pBitRate = pStream.bitRate, let nBitRate = nStream.bitRate {
-                    if pBitRate > nBitRate {
-                        return pStream
-                    }
-                } else if pStream.sampleRate != nStream.sampleRate {
-                    if pStream.sampleRate! > nStream.sampleRate! {
-                        return pStream
-                    }
-                } else if pStream.codec as! AudioCodec != nStream.codec as! AudioCodec {
-                    if pStream.codec as! AudioCodec == config.audioCodec {
-                        return pStream
-                    } else if nStream.codec as! AudioCodec != config.audioCodec && pStream.index < nStream.index {
-                        return pStream
-                    }
-                } else if pStream.index < nStream.index {
-                    return pStream
+        return audioStreams.reduce(audioStreams[0]) { mainStream, nextStream in
+            if mainStream.language != nextStream.language {
+                if mainStream.language == config.mainLanguage {
+                    return mainStream
                 }
-                return nStream
-            }
-            if prevStream.language != nextStream.language {
-                let pLang = prevStream.language
-                let nLang = nextStream.language
-                if pLang == config.mainLanguage {
-                    return prevStream
-                } else if nLang != config.mainLanguage {
-                    return followupComparisons(prevStream, nextStream) as! AudioStream
+            } else if mainStream.channels > nextStream.channels {
+                return mainStream
+            } else if mainStream.channelLayout > nextStream.channelLayout {
+                return mainStream
+            } else if mainStream.bitRate > nextStream.bitRate {
+                return mainStream
+            } else if mainStream.sampleRate > nextStream.sampleRate {
+                return mainStream
+            } else if mainStream.codec as? AudioCodec != nextStream.codec as? AudioCodec {
+                if mainStream.codec as? AudioCodec == config.audioCodec {
+                    return mainStream
+                } else if nextStream.codec as? AudioCodec != config.audioCodec && mainStream.index < nextStream.index {
+                    return mainStream
                 }
-            } else {
-                return followupComparisons(prevStream, nextStream) as! AudioStream
+            } else if mainStream.index < nextStream.index {
+                return mainStream
             }
             return nextStream
         }
@@ -376,14 +362,13 @@ final class Video: ConvertibleMedia, Equatable {
             logger.debug(error)
         }
     }
+}
 
-    static func == (lhs: Video, rhs: Video) -> Bool {
-        return lhs.path == rhs.path
-    }
-    static func == <T: Media>(lhs: Video, rhs: T) -> Bool {
-        return lhs.path == rhs.path
-    }
-    static func == <T: Media>(lhs: T, rhs: Video) -> Bool {
-        return lhs.path == rhs.path
+fileprivate extension Optional where Wrapped: Comparable {
+    static func > (lhs: Wrapped?, rhs: Wrapped?) -> Bool {
+        if let left = lhs, let right = rhs {
+            return left > right
+        }
+        return false
     }
 }
