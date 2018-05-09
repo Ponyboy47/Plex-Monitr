@@ -77,7 +77,7 @@ protocol Media: class, Codable {
     /// The directory where the media should be placed within plex
     var finalDirectory: Path { get }
     /// The MainMonitr to notify when processing of a file has finished
-    weak var mainMonitr: MainMonitr! { get set }
+    var mainMonitr: MainMonitr! { get set }
     /// an array of the supported extensions by the media type
     static var supportedExtensions: [String] { get }
 

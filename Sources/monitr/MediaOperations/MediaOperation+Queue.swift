@@ -54,7 +54,7 @@ final class MediaOperationQueue: OperationQueue, Codable {
         try container.encode(maxConcurrentOperationCount, forKey: .maxConcurrentOperationCount)
         try container.encode(qualityOfService, forKey: .qualityOfService)
         try container.encode(isSuspended, forKey: .isSuspended)
-        try container.encode(operations, forKey: .operations)
+        // try container.encode(operations, forKey: .operations)
     }
 
     func save(to file: Path) throws {
