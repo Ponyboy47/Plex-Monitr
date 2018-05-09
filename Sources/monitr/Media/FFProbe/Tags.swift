@@ -5,6 +5,7 @@ enum Language: String, Codable {
     case spa // Spanish
     case ita // Italian
     case fre // French
+    case fin // Finnish
     case ger // German
     case por // Portuguese
     case dut // Dutch

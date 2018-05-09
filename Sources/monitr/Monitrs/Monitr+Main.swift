@@ -21,6 +21,17 @@ final class MainMonitr: DirectoryMonitorDelegate {
 
     var currentMedia: [Media] = []
 
+    var isRunning: Bool = false {
+        didSet {
+            // If we went from running to not running and needsUpdate is true, then we should run again just in case
+            if oldValue && !isRunning && needsUpdate {
+                needsUpdate = false
+                self.run()
+            }
+        }
+    }
+    var needsUpdate: Bool = false
+
     init(config: Config) throws {
         let moveOperationQueueFile = config.configFile.parent + "moveOperationQueue.json"
         if moveOperationQueueFile.exists && moveOperationQueueFile.isFile {
@@ -66,6 +77,10 @@ final class MainMonitr: DirectoryMonitorDelegate {
     }
 
     func run() {
+        isRunning = true
+
+        defer { isRunning = false }
+
         var media = getAllMedia(from: config.downloadDirectories)
         let homeMedia = getAllMedia(from: config.homeVideoDownloadDirectories)
 
@@ -83,6 +98,9 @@ final class MainMonitr: DirectoryMonitorDelegate {
             })
         }
         // swiftlint:enable identifier_name
+
+        // If there's no new media, don't continue
+        guard !media.isEmpty else { return }
 
         currentMedia += media
 
@@ -217,6 +235,10 @@ final class MainMonitr: DirectoryMonitorDelegate {
      - Parameter directoryMonitor: The DirectoryMonitor that triggered the event
     */
     func directoryMonitorDidObserveChange(_ directoryMonitor: DirectoryMonitor) {
+        guard !isRunning else {
+            needsUpdate = true
+            return
+        }
         // The FileSystem monitoring doesn't work on Linux yet, so only check
         //   if a write occurred in the directory if we're not on Linux
         #if !os(Linux)
