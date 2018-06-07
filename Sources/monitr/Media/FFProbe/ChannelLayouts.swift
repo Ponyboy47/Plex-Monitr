@@ -3,6 +3,7 @@ enum ChannelLayout: String, Codable, Comparable {
         switch self {
         case .mono: return 0
         case .stereo: return 2
+        case .four: return 4
         case .five: return 6
         case .five_side: return 6
         case .seven: return 8
@@ -11,6 +12,7 @@ enum ChannelLayout: String, Codable, Comparable {
 
     case mono
     case stereo
+    case four = "4.0"
     case five_side = "5.1(side)"
     case five = "5.1"
     case seven = "7.1"

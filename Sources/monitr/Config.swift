@@ -71,9 +71,19 @@ struct Config: Codable {
     // swiftlint:enable force_try
 
     /// The number of simultaneous threads to convert media on
-    var convertThreads: Int = 2
+    var convertThreads: Int = 1
     /// Whether the original media file should be deleted after a successful conversion
     var deleteOriginal: Bool = false
+    /// Whether to use the default ratecontrol system or the ABR system
+    var convertABR: Bool = false
+    /// Whether to use the default encoder or the h265 encoder
+    var convertH265: Bool = false
+    /// The --target options to use when running transcode_video
+    var convertTargets: [Target] = []
+    /// The speed preset to use in transcode_video
+    var convertSpeed: TranscodeSpeed = .`default`
+    /// The x264 speed preset to use
+    var convertX264Preset: X264Preset = .`default`
     /// The container to use when converting video media files
     var convertVideoContainer: VideoContainer = .mp4
     /// The video encoding to use when converting media files
@@ -94,7 +104,7 @@ struct Config: Codable {
     var deleteSubtitles: Bool = false
 
     var logFile: Path?
-    var logLevel: Int = 0
+    var logLevel: SwiftyBeaver.Level = .error
     var logger: SwiftyBeaver.Type
 
     /// Watches the download directory for new files
@@ -114,6 +124,11 @@ struct Config: Codable {
         case convertCronEnd
         case convertThreads
         case deleteOriginal
+        case convertABR
+        case convertH265
+        case convertTargets
+        case convertSpeed
+        case convertX264Preset
         case convertVideoContainer
         case convertVideoCodec
         case convertAudioContainer
@@ -152,6 +167,11 @@ struct Config: Codable {
         self.convertCronEnd = try values.decode(DatePattern.self, forKey: .convertCronEnd)
         self.convertThreads = try values.decode(Int.self, forKey: .convertThreads)
         self.deleteOriginal = try values.decode(Bool.self, forKey: .deleteOriginal)
+        self.convertABR = try values.decode(Bool.self, forKey: .convertABR)
+        self.convertH265 = try values.decode(Bool.self, forKey: .convertH265)
+        self.convertTargets = try values.decode([Target].self, forKey: .convertTargets)
+        self.convertSpeed = try values.decode(TranscodeSpeed.self, forKey: .convertSpeed)
+        self.convertX264Preset = try values.decode(X264Preset.self, forKey: .convertX264Preset)
         self.convertVideoContainer = try values.decode(VideoContainer.self, forKey: .convertVideoContainer)
         self.convertVideoCodec = try values.decode(VideoCodec.self, forKey: .convertVideoCodec)
         self.convertAudioContainer = try values.decode(AudioContainer.self, forKey: .convertAudioContainer)
@@ -161,7 +181,7 @@ struct Config: Codable {
         self.convertVideoMaxFramerate = try values.decode(Double.self, forKey: .convertVideoMaxFramerate)
         self.deleteSubtitles = try values.decode(Bool.self, forKey: .deleteSubtitles)
 
-        self.logLevel = try values.decode(Int.self, forKey: .logLevel)
+        self.logLevel = try values.decode(SwiftyBeaver.Level.self, forKey: .logLevel)
         self.logFile = try values.decode(Path?.self, forKey: .logFile)
 
         downloadDirectories = try values.decode([Path].self, forKey: .downloadDirectories)
@@ -173,8 +193,8 @@ struct Config: Codable {
 
         try createAndValidate(path: self.plexDirectory, isDirectory: true)
 
-        for d in self.downloadDirectories + self.homeVideoDownloadDirectories {
-            try createAndValidate(path: d, isDirectory: true)
+        for dir in self.downloadDirectories + self.homeVideoDownloadDirectories {
+            try createAndValidate(path: dir, isDirectory: true)
         }
 
         if self.convert {
@@ -248,6 +268,11 @@ struct Config: Codable {
         try container.encode(convertCronEnd, forKey: .convertCronEnd)
         try container.encode(convertThreads, forKey: .convertThreads)
         try container.encode(deleteOriginal, forKey: .deleteOriginal)
+        try container.encode(convertABR, forKey: .convertABR)
+        try container.encode(convertH265, forKey: .convertH265)
+        try container.encode(convertTargets, forKey: .convertTargets)
+        try container.encode(convertSpeed, forKey: .convertSpeed)
+        try container.encode(convertX264Preset, forKey: .convertX264Preset)
         try container.encode(convertVideoContainer, forKey: .convertVideoContainer)
         try container.encode(convertVideoCodec, forKey: .convertVideoCodec)
         try container.encode(convertAudioContainer, forKey: .convertAudioContainer)
@@ -266,12 +291,12 @@ struct Config: Codable {
     */
     func printable() -> String {
         var download: [String] = []
-        for d in downloadDirectories {
-            download.append(d.string)
+        for dir in downloadDirectories {
+            download.append(dir.string)
         }
         var home: [String] = []
-        for h in homeVideoDownloadDirectories {
-            home.append(h.string)
+        for homeDir in homeVideoDownloadDirectories {
+            home.append(homeDir.string)
         }
         var dict: [String: Any] = [
             "plexDirectory": plexDirectory.string,
@@ -283,6 +308,11 @@ struct Config: Codable {
             "convertCronEnd": convertCronEnd.string,
             "convertThreads": convertThreads,
             "deleteOriginal": deleteOriginal,
+            "convertABR": convertABR,
+            "convertH265": convertH265,
+            "convertTargets": convertTargets.map { $0.description }.joined(separator: ", "),
+            "convertSpeed": convertSpeed.rawValue,
+            "convertX264Preset": convertX264Preset.rawValue,
             "convertVideoContainer": convertVideoContainer.rawValue,
             "convertVideoCodec": convertVideoCodec.rawValue,
             "convertAudioContainer": convertAudioContainer.rawValue,
@@ -306,7 +336,9 @@ struct Config: Codable {
 
     /// Writes the config to the configFile path
     func save() throws {
-        let data = try JSONEncoder().encode(self)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .prettyPrinted
+        let data = try encoder.encode(self)
         let str = String(data: data, encoding: .utf8)!
         try configFile.write(str, force: true)
     }
@@ -332,6 +364,11 @@ struct VideoConversionConfig: ConversionConfig {
     let plexDir: Path
     let tempDir: Path
     let deleteOriginal: Bool
+    let abr: Bool
+    let h265: Bool
+    let targets: [Target]
+    let speed: TranscodeSpeed
+    let x264Preset: X264Preset
 
     init(config: Config) {
         container = config.convertVideoContainer
@@ -343,6 +380,11 @@ struct VideoConversionConfig: ConversionConfig {
         plexDir = config.plexDirectory
         tempDir = config.convertTempDirectory
         deleteOriginal = config.deleteOriginal
+        abr = config.convertABR
+        h265 = config.convertH265
+        targets = config.convertTargets
+        speed = config.convertSpeed
+        x264Preset = config.convertX264Preset
     }
 }
 

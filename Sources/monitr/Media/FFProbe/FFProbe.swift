@@ -17,6 +17,7 @@ struct FFProbe: Codable {
         streams = try values.decode([FFProbeStream].self, forKey: .streams)
 
         let encoder = JSONEncoder()
+        encoder.outputFormatting = .prettyPrinted
         let decoder = JSONDecoder()
 
         let vStreams = streams.filter { $0.type == .video }

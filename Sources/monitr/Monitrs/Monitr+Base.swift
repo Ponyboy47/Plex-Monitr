@@ -8,24 +8,27 @@
     License: MIT License
 
 */
+import TaskKit
 
 /// Checks the downloads directory for new content to add to Plex
 class Monitr<M> where M: Media {
     /// The configuration to use for the monitor
     var config: Config
 
-    var moveOperationQueue: MediaOperationQueue
+    var moveTaskQueue: LinkedTaskQueue
+    var convertTaskQueue: LinkedTaskQueue
 
-    init(_ config: Config, moveOperationQueue: MediaOperationQueue) throws {
+    init(_ config: Config, moveTaskQueue: LinkedTaskQueue, convertTaskQueue: LinkedTaskQueue) throws {
         self.config = config
-        self.moveOperationQueue = moveOperationQueue
+        self.moveTaskQueue = moveTaskQueue
+        self.convertTaskQueue = convertTaskQueue
 
         // Since this media is not convertible, let's just set this false and not deal with it
         self.config.convert = false
     }
 
-    func setupOperation(for media: M) -> MediaOperation<M>? {
-        return MoveOperation(media, logger: config.logger, plexDirectory: config.plexDirectory, deleteSubtitles: config.deleteSubtitles)
+    func setupTask(for media: M) -> MediaTask<M>? {
+        return MoveTask(media, plexDirectory: config.plexDirectory, deleteSubtitles: config.deleteSubtitles, logger: config.logger)
     }
 
     /// Gets all media object and moves them to Plex then deletes all the empty
@@ -36,21 +39,21 @@ class Monitr<M> where M: Media {
         config.logger.verbose(media.map { $0.path })
 
         for media in media {
-            addToQueue(setupOperation(for: media))
+            addToQueue(setupTask(for: media))
         }
     }
 
-    func addToQueue(_ operation: MediaOperation<M>?) {
-        guard let operation = operation else { return }
+    func addToQueue(_ task: MediaTask<M>?) {
+        guard let task = task else { return }
 
-        if operation is MoveOperation<M> {
-            moveOperationQueue.addOperation(operation)
+        for dependency in task.dependencies {
+            addToQueue(dependency as? MediaTask<M>)
+        }
 
-            for dependency in operation.dependencies {
-                addToQueue(dependency as? MediaOperation<M>)
-            }
+        if task is MoveTask<M> {
+            moveTaskQueue.add(task: task)
         } else {
-            config.logger.warning("Unknown operation type '\(type(of: operation))'")
+            config.logger.warning("Unknown operation type '\(type(of: task))'")
         }
     }
 }

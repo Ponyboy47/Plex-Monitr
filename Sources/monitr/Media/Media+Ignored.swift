@@ -27,6 +27,7 @@ final class Ignore: Media {
     var isHomeMedia: Bool = false
     var downpour: Downpour
     weak var mainMonitr: MainMonitr!
+    var _info: FFProbe?
 
     var finalDirectory: Path {
         return "/dev/null"

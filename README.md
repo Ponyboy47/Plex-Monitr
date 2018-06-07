@@ -83,6 +83,8 @@ swift run monitr
 ```bash
 cd ~/Plex-Monitr
 rm Package.{resolved,pins}
+# If config changes have been made, you will need to regenerate and save your new config
+rm ~/.config/monitr/settings.json
 git pull
 swiftenv install $(.swift-version)
 swift package update
@@ -112,12 +114,12 @@ There are a number of ways to configure your Monitr. Like any CLI application, a
 <p>If this is not specified, then /var/lib/plexmediaserver/Library is used (the default location on Ubuntu).</p>
 
 #### Set the Download directories to monitor:
-`-t` or `--download-dirs`
+`-d` or `--download-dirs`
 <p>If left unspecified, then ~/Downloads is used (Where I've kept my own downloads on Ubuntu).<br />
 NOTE: This can be a comma separated list of paths to watch.</p>
 
 #### Set the Home Video directories to monitor
-`-b` or `--home-video-download-dirs`
+`--home-video-download-dirs`
 <p>If left unspecified, then ~/HomeVideos is used.<br />
 NOTE: This can be a comma separated list of paths to watch.</p>
 
@@ -142,52 +144,80 @@ For information about the Cron format, see https://en.wikipedia.org/wiki/Cron<br
 NOTE: If a job is running at this time, it will run to completion, but no new conversions will be started</p>
 
 #### Set the number of simultaneous conversion threads we can have running at one time:
-`-r` or `--convert-threads`
-<p>default is 2<br />
+`--convert-threads`
+<p>default is 1<br />
 NOTE: Preliminary performance testing shows that using multiple threads will still convert the same number of files in the same amount of time. A single thread will convert one file very fast and multiple threads convert multiple files simultaneously, but each file is converted slower. Overall, it tends to take the same amount of time to convert a batch of files.</p>
 
 #### Set whether of not to delete the original media file after converting it:
-`-o` or `--delete-original`
+`--delete-original`
 <p>defaults to false<br />
 NOTE: If false, unconverted media files will be placed in the plex location along with the converted media file. The original file will have ' - original' appended to the end of the filename, but before the file's extension.</p>
 
+#### Set the transcode-video command to use the Contrained Average Bitrate ratecontrol system:
+`--abr` or `--average-bitrate-rcs`
+<p>defaults to false<br />
+NOTE: To determine if you should use this option, run `transcode-video --help` and read the information about the --abr option.</p>
+
+#### Use the h265 encoder instead of the default handbrake encoder (h264):
+`--x265`
+<p>defaults to false<br />
+NOTE: To determine if you should use this option, you may want to check out [this link](https://github.com/donmelton/video_transcoding/issues/191) if you're trying to dramatically reduce file sizes when converting and can use the h265 converter.<br />
+      If you need me to expose additional options to the transcode-video command, create a new issue and I can do that pretty easily.</p>
+
+#### The targets to use in the transcode-video command:
+`-t` or `--target`
+<p>NOTE: To determine if/how to use this option, run `transcode-video --help` and read the information about the --target options.</p>
+
+#### The transcode speed to use:
+`--speed` or `--transcode-speed`
+<p>defaults to medium<br />
+NOTE: The valid options are default, quick, or veryquick. The faster the speed, the larger the file and potentially lower the quality.<br />
+The quick option generally will result in 70-80% faster transcodes, with barely perceptible changes in quality.<br />
+The veryquick option generally has a 100-120% faster transcode, with slightly noticeable quality differences and a noticeably larger file.</p>
+
+#### The x264 speed preset:
+`--x264-preset`
+<p>defaults to medium<br />
+NOTE: The valid options are veryslow, slower, slow, default, fast, faster, veryfast.<br />
+The faster the preset, the lower the quality and larger the file size.</p>
+
 #### Set the container to use when converting video files:
-`-e` or `--convert-video-container`
+`--convert-video-container`
 <p>defaults to mp4 since that is the most commonly supported container for DirectPlay across the various Plex devices</p>
 
 #### Set the codec to use when converting video streams:
-`-g` or `--convert-video-codec`
+`--convert-video-codec`
 <p>default is h264 since that is the most commonly supported codec for DirectPlay in Plex</p>
 
 #### Set the container to use when converting audio files:
-`-j` or `--convert-audio-container`
+`--convert-audio-container`
 <p>defaults to aac (for now)<br />
 NOTE: I don't have plans for a lot of audio file conversion support. I know Plex generally supports streaming aac, which is why I use aac, but I haven't looked into the Plex audio streaming stuff as much as I have it's video streaming requirements.</p>
 
 #### Set the codec to use when converting audio streams:
-`-k` or `--convert-audio-codec`
+`--convert-audio-codec`
 <p>default is aac since that is the most commonly supported codec for DirectPlay in Plex</p>
 
 #### Set whether to scan for foreign audio subtitles and burn them into a video stream:
-`-n` or `--convert-video-subtitle-scan`
+`--convert-video-subtitle-scan`
 <p>defaults to false<br />
 NOTE: This is an experimental feature in the transcode_video tool. If it screws up, you could end up with the wrong subtitle track burned into your video. [See @donmelton's own documentation on this feature](https://github.com/donmelton/video_transcoding#understanding-subtitles) in his transcode_video. If you are going to use this, it is HIGHLY RECOMMENDED that you do not use the `--delete-original` flag, just to be safe.</p>
 
 #### Set the preferred language to use when converting media:
-`-l` or `--convert-language`
+`--convert-language`
 <p>defaults to eng<br />
 NOTE: Uses the ISO 639-2 language codes, and I only included a handful in this project. If you need one added then file an issue</p>
 
 #### Set the maximum framerate to use when converting video streams:
-`-m` or `--convert-video-max-framerate`
+`--convert-video-max-framerate`
 <p>defaults to 30.0</p>
 
 #### Set the directory to use for conversion jobs when deleteOriginal is false:
-`-u` or `--convert-temp-dir`
+`--convert-temp-dir`
 <p>default is /tmp/monitrConversions</p>
 
 #### Set whether or not subtitle files should be deleted or preserved for video media:
-`-q` or `--delete-subtitles`
+`--delete-subtitles`
 <p>default is false</p>
 
 #### Set whether or not to save these config settings to the config file:
@@ -197,20 +227,14 @@ The current settings are saved at the `--config-file` path (defaults to ~/.confi
 NOTE: If true, subsequent monitr instances will load the settings file from the `--config-file` option and use its config values instead of the usual defaults.</p>
 
 #### Set the default logging level to use:
-`-d` or `--log-level`
-<p>default value is 0 (Errors only). Valid values range from 0-4.</p>
-
-##### Logging levels:
-0. Error
-1. Warning
-2. Info
-3. Debug
-4. Verbose
+`--level` or `--log-level`
+<p>default value is error<br />
+NOTE: Valid options are error, warn, warning, info, debug, verbose.</p>
 
 #### Set the log file to use:
-`-l` or `--log-file`
+`-o` or `--log-file`
 <p>Default is nil, which means logs are only written to stdout.<br />
-NOTE: If set, and logging level >= 3 (debug or verbose), logs are written both to the file specified, and also to stdout.</p>
+NOTE: If set, and logging level is debug or verbose, logs are written both to the file specified and also to stdout.</p>
 
 ---
 
@@ -240,4 +264,4 @@ NOTE: If set, and logging level >= 3 (debug or verbose), logs are written both t
 - [ ] Remove configurable items that aren't actually configurable (if no CLI option, then no configuration)
 - [ ] Unit tests
 - [x] Only allow one running instance of monitr
-- [ ] Moving batches of files at a time into the downloads directories causes issues
+- [x] Moving batches of files at a time into the downloads directories causes issues

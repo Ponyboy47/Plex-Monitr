@@ -1,7 +1,8 @@
-struct MediaDuration: Codable, Comparable {
+struct MediaDuration: Codable, Comparable, CustomStringConvertible {
     var hours: UInt
     var minutes: UInt
     var seconds: UInt
+
     var description: String {
         var d = ""
         if hours > 0 {

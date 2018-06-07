@@ -1,4 +1,4 @@
-protocol FFProbeStreamProtocol: Codable {
+protocol FFProbeStreamProtocol: Codable, CustomStringConvertible {
     var index: Int { get set }
     var type: CodecType { get set }
     var duration: MediaDuration? { get set }

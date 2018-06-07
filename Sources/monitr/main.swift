@@ -40,30 +40,36 @@ var argParser = ArgumentParser.default
 
 // Disable the line_length linting since just about all of these surpass the limit
 // swiftlint:disable line_length
+// swiftlint:disable identifier_name
 
 // Args/Flags to configure this program from the CLI
 let configOption = try Option<Path>("f", "config", default: Path("~/.config/monitr/settings.json"), description: "The file from which to read configuration options", required: true, parser: &argParser)
 let plexDirectoryOption = try Option<Path>("p", "plex-dir", description: "The directory where the Plex libraries reside", parser: &argParser)
-let downloadDirectoryOption = try Option<ArgArray<Path>>("t", "download-dirs", description: "The directory where media downloads reside", parser: &argParser)
-let homeVideoDownloadDirectoryOption = try Option<ArgArray<Path>>("b", "home-video-download-dirs", description: "The directory where home video downloads reside", parser: &argParser)
+let downloadDirectoryOption = try Option<ArgArray<Path>>("d", "download-dirs", description: "The directory where media downloads reside", parser: &argParser)
+let homeVideoDownloadDirectoryOption = try Option<ArgArray<Path>>("home-video-download-dirs", description: "The directory where home video downloads reside", parser: &argParser)
 let convertFlag = try Flag("c", "convert", description: "Whether or not newly added files should be converted to a Plex DirectPlay format", parser: &argParser)
 let convertImmediatelyFlag = try Flag("i", "convert-immediately", description: "Whether to convert media before sending it to the Plex directory, or to convert it as a scheduled task when the CPU is more likely to be free", parser: &argParser)
 let convertCronStartOption = try Option<DatePattern>("a", "convert-cron-start", description: "A Cron string describing when conversion jobs should start running", parser: &argParser)
 let convertCronEndOption = try Option<DatePattern>("z", "convert-cron-end", description: "A Cron string describing when conversion jobs should stop running", parser: &argParser)
-let convertThreadsOption = try Option<Int>("r", "convert-threads", description: "The number of threads that can simultaneously be converting media", parser: &argParser)
-let deleteOriginalFlag = try Flag("o", "delete-original", description: "Whether the original media file should be deleted upon successful conversion to a Plex DirectPlay format", parser: &argParser)
-let convertVideoContainerOption = try Option<VideoContainer>("e", "convert-video-container", description: "The container to use when converting video files", parser: &argParser)
-let convertVideoCodecOption = try Option<VideoCodec>("g", "convert-video-codec", description: "The codec to use when converting video streams. Setting to 'any' will allow Plex to just use DirectStream instead of DirectPlay and only have to transcode the video stream on the fly", parser: &argParser)
-let convertAudioContainerOption = try Option<AudioContainer>("j", "convert-audio-container", description: "The container to use when converting audio files", parser: &argParser)
-let convertAudioCodecOption = try Option<AudioCodec>("k", "convert-audio-codec", description: "The codec to use when converting audio streams. Setting to 'any' will allow Plex to just use DirectStream instead of DirectPlay and only have to transcode the audio stream on the fly", parser: &argParser)
-let convertVideoSubtitleScanFlag = try Flag("n", "convert-video-subtitle-scan", description: "Whether to scan media file streams and forcefully burn subtitles for foreign audio.\n\t\tNOTE: This is experimental in transcode_video and is not guarenteed to work 100% of the time. In fact, when it doesn't work, it will probably burn in the wrong language. It is recomended to never use this in conjunction with the --delete-original option", parser: &argParser)
-let convertLanguageOption = try Option<Language>("l", "convert-language", description: "The main language to select when converting media with multiple languages available", parser: &argParser)
-let convertVideoMaxFramerateOption = try Option<Double>("m", "convert-video-max-framerate", description: "The maximum framerate limit to use when converting video files", parser: &argParser)
-let convertTempDirectoryOption = try Option<Path>("u", "convert-temp-dir", description: "The directory where converted media will go prior to being moved to plex", parser: &argParser)
-let deleteSubtitlesFlag = try Flag("q", "delete-subtitles", description: "Whether or not external subtitle files should be deleted upon import with Monitr", parser: &argParser)
+let convertThreadsOption = try Option<Int>("convert-threads", description: "The number of threads that can simultaneously be converting media", parser: &argParser)
+let deleteOriginalFlag = try Flag("delete-original", description: "Whether the original media file should be deleted upon successful conversion to a Plex DirectPlay format", parser: &argParser)
+let convertABRFlag = try Flag("abr", "average-bitrate-rcs", description: "Whether to use the default or the Constrained Average Bitrate (ABR) ratecontrol system in transcode_video", parser: &argParser)
+let convertH265Flag = try Flag("h265", description: "Whether to use the h265 encoder instead of the h264 encoder", parser: &argParser)
+let convertTargetOption = try MultiOption<Target>("t", "target", description: "The transcode_video target to use when converting video", parser: &argParser)
+let convertSpeedOption = try Option<TranscodeSpeed>("speed", "transcode-speed", description: "Which speed to use when transcoding media", parser: &argParser)
+let convertX264PresetOption = try Option<X264Preset>("x264-preset", description: "Which x264 codec speed preset to use when transcoding media", parser: &argParser)
+let convertVideoContainerOption = try Option<VideoContainer>("convert-video-container", description: "The container to use when converting video files", parser: &argParser)
+let convertVideoCodecOption = try Option<VideoCodec>("convert-video-codec", description: "The codec to use when converting video streams. Setting to 'any' will allow Plex to just use DirectStream instead of DirectPlay and only have to transcode the video stream on the fly", parser: &argParser)
+let convertAudioContainerOption = try Option<AudioContainer>("convert-audio-container", description: "The container to use when converting audio files", parser: &argParser)
+let convertAudioCodecOption = try Option<AudioCodec>("convert-audio-codec", description: "The codec to use when converting audio streams. Setting to 'any' will allow Plex to just use DirectStream instead of DirectPlay and only have to transcode the audio stream on the fly", parser: &argParser)
+let convertVideoSubtitleScanFlag = try Flag("convert-video-subtitle-scan", description: "Whether to scan media file streams and forcefully burn subtitles for foreign audio.\n\t\tNOTE: This is experimental in transcode_video and is not guarenteed to work 100% of the time. In fact, when it doesn't work, it will probably burn in the wrong language. It is recomended to never use this in conjunction with the --delete-original option", parser: &argParser)
+let convertLanguageOption = try Option<Language>("convert-language", description: "The main language to select when converting media with multiple languages available", parser: &argParser)
+let convertVideoMaxFramerateOption = try Option<Double>("convert-video-max-framerate", description: "The maximum framerate limit to use when converting video files", parser: &argParser)
+let convertTempDirectoryOption = try Option<Path>("convert-temp-dir", description: "The directory where converted media will go prior to being moved to plex", parser: &argParser)
+let deleteSubtitlesFlag = try Flag("delete-subtitles", description: "Whether or not external subtitle files should be deleted upon import with Monitr", parser: &argParser)
 let saveFlag = try Flag("s", "save-settings", default: false, description: "Whether or not the configured settings should be saved to the config options file", required: true, parser: &argParser)
-let logLevelOption = try Option<Int>("d", "log-level", description: "The logging level to use. Higher numbers mean more logging. Valid number range is 0-4.", parser: &argParser)
-let logFileOption = try Option<Path>("l", "log-file", description: "Where to write the log file.", parser: &argParser)
+let logLevelOption = try Option<SwiftyBeaver.Level>("level", "log-level", description: "The logging level to use (verbose, debug, info, warn, error)", parser: &argParser)
+let logFileOption = try Option<Path>("o", "log-file", description: "Where to write the log file.", parser: &argParser)
 
 // Re-enable the line_length checks now
 // swiftlint:enable line_length
@@ -157,6 +163,32 @@ if let dO = deleteOriginalFlag.value, config.deleteOriginal != dO {
     logger.debug("Delete Original \(commonMsg) '\(config.deleteOriginal)' to '\(dO)'.")
     config.deleteOriginal = dO
 }
+if let abr = convertABRFlag.value, config.convertABR != abr {
+    logger.debug("Convert ABR \(commonMsg) '\(config.convertABR)' to '\(abr)'.")
+    config.convertABR = abr
+}
+if let h265 = convertH265Flag.value, config.convertH265 != h265 {
+    logger.debug("Convert 265 \(commonMsg) '\(config.convertH265)' to '\(h265)'.")
+    config.convertH265 = h265
+}
+do {
+    repeat {
+        if let cT = convertTargetOption.value {
+            if !config.convertTargets.contains(cT) {
+                logger.debug("Appending Convert Target \(cT) to config")
+                config.convertTargets.append(cT)
+            }
+        } else { break }
+    } while true
+}
+if let speed = convertSpeedOption.value, config.convertSpeed != speed {
+    logger.debug("Convert Speed \(commonMsg) '\(config.convertSpeed)' to '\(speed)'.")
+    config.convertSpeed = speed
+}
+if let preset = convertX264PresetOption.value, config.convertX264Preset != preset {
+    logger.debug("Convert X264 Preset \(commonMsg) '\(config.convertX264Preset)' to '\(preset)'.")
+    config.convertX264Preset = preset
+}
 if let cVC = convertVideoContainerOption.value, config.convertVideoContainer != cVC {
     logger.debug("Convert Video Container \(commonMsg) '\(config.convertVideoContainer)' to '\(cVC)'.")
     config.convertVideoContainer = cVC
@@ -197,14 +229,7 @@ if let b = homeVideoDownloadDirectoryOption.value, config.homeVideoDownloadDirec
     logger.debug("Home Video Download Directory \(commonMsg) '\(config.homeVideoDownloadDirectories)' to '\(b.values)'.")
     config.homeVideoDownloadDirectories = b.values
 }
-if var lL = logLevelOption.value, config.logLevel != lL {
-    // Caps logLevel to the maximum/minimum level
-    if lL > 4 {
-        lL = 4
-    } else if lL < 0 {
-        lL = 0
-    }
-
+if let lL = logLevelOption.value, config.logLevel != lL {
     if lL != config.logLevel {
         logger.debug("Log Level \(commonMsg) '\(config.logLevel)' to '\(lL)'.")
         config.logLevel = lL
@@ -219,7 +244,7 @@ logger.info("Configuration:\n\(config.printable())")
 
 // Only log to console when we're not logging to a file or if the logLevel
 //   is debug/verbose
-if config.logLevel < 3 && config.logFile != nil {
+if config.logLevel > 1 && config.logFile != nil {
     logger.removeDestination(console)
 }
 
@@ -229,9 +254,8 @@ if let lF = config.logFile {
     logger.addDestination(file)
 }
 
-let minLevel = SwiftyBeaver.Level(rawValue: 4 - config.logLevel)!
 for dest in logger.destinations {
-    dest.minLevel = minLevel
+    dest.minLevel = config.logLevel
 }
 
 // Try and save the config (if the flag is set to true)
@@ -256,6 +280,7 @@ do {
         logger.error("Failed to start monitoring the download directories for new files")
         exit(EXIT_FAILURE)
     }
+
     logger.info("Monitoring '\((config.downloadDirectories + config.homeVideoDownloadDirectories).map({ $0.string }))' for new files.")
 
     // Watch for signals so we can shut down properly

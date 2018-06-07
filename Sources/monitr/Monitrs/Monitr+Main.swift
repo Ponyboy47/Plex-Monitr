@@ -1,10 +1,11 @@
 import Dispatch
 import PathKit
 import Cron
+import TaskKit
 
 final class MainMonitr: DirectoryMonitorDelegate {
     /// The current version of monitr
-    static var version: String { return "0.7.0" }
+    static var version: String { return "0.8.0" }
 
     let videoMonitr: ConvertibleMonitr<Video>
     let audioMonitr: ConvertibleMonitr<Audio>
@@ -12,9 +13,9 @@ final class MainMonitr: DirectoryMonitorDelegate {
 
     let config: Config
 
-    let queue: DispatchQueue = DispatchQueue(label: "MainMonitrQueue", qos: .userInitiated, attributes: .concurrent)
-    let moveOperationQueue: MediaOperationQueue
-    let convertOperationQueue: MediaOperationQueue
+    let queue: DispatchQueue = DispatchQueue(label: "com.monitr.main", qos: .userInitiated, attributes: .concurrent)
+    let moveTaskQueue: LinkedTaskQueue
+    let convertTaskQueue: LinkedTaskQueue
 
     var cronStart: CronJob!
     var cronEnd: CronJob!
@@ -33,37 +34,30 @@ final class MainMonitr: DirectoryMonitorDelegate {
     var needsUpdate: Bool = false
 
     init(config: Config) throws {
-        let moveOperationQueueFile = config.configFile.parent + "moveOperationQueue.json"
-        if moveOperationQueueFile.exists && moveOperationQueueFile.isFile {
-            moveOperationQueue = try MediaOperationQueue(from: moveOperationQueueFile)
-        } else {
-            moveOperationQueue = MediaOperationQueue(1)
-        }
-
-        let convertOperationQueueFile = config.configFile.parent + "convertOperationQueue.json"
-        if convertOperationQueueFile.exists && convertOperationQueueFile.isFile {
-            convertOperationQueue = try MediaOperationQueue(from: convertOperationQueueFile)
-        } else {
-            convertOperationQueue = MediaOperationQueue(config.convertThreads)
-        }
+        self.moveTaskQueue = LinkedTaskQueue(name: "com.monitr.move", maxSimultaneous: 5)
+        self.convertTaskQueue = LinkedTaskQueue(name: "com.monitr.convert", maxSimultaneous: config.convertThreads, linkedTo: self.moveTaskQueue)
 
         self.config = config
 
-        videoMonitr = try ConvertibleMonitr<Video>(config, moveOperationQueue: moveOperationQueue, convertOperationQueue: convertOperationQueue)
-        audioMonitr = try ConvertibleMonitr<Audio>(config, moveOperationQueue: moveOperationQueue, convertOperationQueue: convertOperationQueue)
-        ignoreMonitr = try Monitr<Ignore>(config, moveOperationQueue: moveOperationQueue)
+        videoMonitr = try ConvertibleMonitr<Video>(config, moveTaskQueue: moveTaskQueue, convertTaskQueue: convertTaskQueue)
+        audioMonitr = try ConvertibleMonitr<Audio>(config, moveTaskQueue: moveTaskQueue, convertTaskQueue: convertTaskQueue)
+        ignoreMonitr = try Monitr<Ignore>(config, moveTaskQueue: moveTaskQueue, convertTaskQueue: convertTaskQueue)
 
-        if config.convert && !config.convertImmediately {
-            convertOperationQueue.isSuspended = true
-            logger.verbose("Setting up the conversion queue cron jobs")
-            cronStart = CronJob(pattern: config.convertCronStart, queue: .global(qos: .background)) {
-                self.convertOperationQueue.isSuspended = false
+        moveTaskQueue.start()
+        if config.convert {
+            convertTaskQueue.start()
+            if !config.convertImmediately {
+                convertTaskQueue.pause()
+                logger.verbose("Setting up the conversion queue cron jobs")
+                cronStart = CronJob(pattern: config.convertCronStart, queue: .global(qos: .background)) {
+                    self.convertTaskQueue.resume()
+                }
+                cronEnd = CronJob(pattern: config.convertCronEnd, queue: .global(qos: .background)) {
+                    self.convertTaskQueue.pause()
+                }
+                let next = MediaDuration(double: cronStart!.pattern.next(Date())!.date!.timeIntervalSinceNow)
+                logger.verbose("Set up the conversion cron jobs! It will begin in \(next.description)")
             }
-            cronEnd = CronJob(pattern: config.convertCronEnd, queue: .global(qos: .background)) {
-                self.convertOperationQueue.isSuspended = true
-            }
-            let next = MediaDuration(double: cronStart!.pattern.next(Date())!.date!.timeIntervalSinceNow)
-            logger.verbose("Set up the conversion cron jobs! It will begin in \(next.description)")
         }
     }
 
@@ -88,27 +82,36 @@ final class MainMonitr: DirectoryMonitorDelegate {
         setHomeMedia(homeMedia)
         media += homeMedia
 
-        config.logger.debug("Found \(media.count) total media files in the downloads directories")
-
         // Remove items that we're currently processing
         // swiftlint:disable identifier_name
         media = media.filter { m in
             !currentMedia.contains(where: { c in
-                return m.plexFilename == c.plexFilename
+                var isEqual = false
+                let mUnconverted = (m as? ConvertibleMedia)?.unconvertedFile?.absolute
+                let cUnconverted = (c as? ConvertibleMedia)?.unconvertedFile?.absolute
+                if let mU = mUnconverted, let cU = cUnconverted {
+                    isEqual = mU == cU
+                } else if let mU = mUnconverted {
+                    isEqual = mU == c.path.absolute
+                } else if let cU = cUnconverted {
+                    isEqual = cU == m.path.absolute
+                }
+                return isEqual || m.path.absolute == c.path.absolute || m.plexName == c.plexName
             })
         }
         // swiftlint:enable identifier_name
 
         // If there's no new media, don't continue
         guard !media.isEmpty else { return }
+        config.logger.debug("Found \(media.count) total media files in the downloads directories")
 
         currentMedia += media
 
         config.logger.info("Found \(media.count) new media files to process")
 
-        let videoMedia = media.filter { $0 is Video }.map { $0 as! Video }
-        let audioMedia = media.filter { $0 is Audio }.map { $0 as! Audio }
-        let ignoredMedia = media.filter { $0 is Ignore }.map { $0 as! Ignore }
+        let videoMedia = media.compactMap { $0 as? Video }
+        let audioMedia = media.compactMap { $0 as? Audio }
+        let ignoredMedia = media.compactMap { $0 as? Ignore }
 
         queue.async {
             self.videoMonitr.run(videoMedia)
@@ -213,18 +216,9 @@ final class MainMonitr: DirectoryMonitorDelegate {
     func shutdown() {
         config.logger.info("Shutting down monitrs.")
         config.stopMonitoring()
-        moveOperationQueue.isSuspended = true
-        convertOperationQueue.isSuspended = true
-        if moveOperationQueue.operationCount > 0 {
-            config.logger.info("Saving conversion queue")
-            try? moveOperationQueue.save(to: config.configFile.parent + "moveOperationQueue.json")
+        if !convertTaskQueue.isDone {
+            convertTaskQueue.cancel()
         }
-        if convertOperationQueue.operationCount > 0 {
-            config.logger.info("Saving conversion queue")
-            try? convertOperationQueue.save(to: config.configFile.parent + "convertOperationQueue.json")
-        }
-        moveOperationQueue.cancelAllOperations()
-        convertOperationQueue.cancelAllOperations()
     }
 
 	// MARK: - DirectorMonitor delegate method(s)

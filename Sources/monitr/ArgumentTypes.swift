@@ -9,6 +9,7 @@
 import CLI
 import PathKit
 import Cron
+import SwiftyBeaver
 
 extension Path: ArgumentType {
     public static func from(string value: String) throws -> Path {
@@ -97,5 +98,99 @@ extension Language: ArgumentType {
             throw ArgumentError.conversionError("Cannot convert '\(value)' to a valid Language")
         }
         return lang
+    }
+}
+
+/// Allows transcode_video --target option to be used as a cli argument in Monitr
+extension Target: ArgumentType {
+    static func from(string value: String) throws -> Target {
+        guard value.count > 0 else {
+            throw ArgumentError.emptyString
+        }
+        guard let target = Target(rawValue: value) else {
+            throw ArgumentError.conversionError("Cannot convert '\(value)' to a valid Target")
+        }
+        return target
+    }
+}
+
+/// Allow transcode_video speed presets to be used as a cli argument through Monitr
+extension TranscodeSpeed: ArgumentType {
+    static func from(string value: String) throws -> TranscodeSpeed {
+        guard value.count > 0 else {
+            throw ArgumentError.emptyString
+        }
+        guard let speed = TranscodeSpeed(rawValue: value) else {
+            throw ArgumentError.conversionError("Cannot convert '\(value)' to a valid TranscodeSpeed")
+        }
+        return speed
+    }
+}
+
+/// Allow x264 speed presets to be used as a cli argument through Monitr
+extension X264Preset: ArgumentType {
+    static func from(string value: String) throws -> X264Preset {
+        guard value.count > 0 else {
+            throw ArgumentError.emptyString
+        }
+        guard let preset = X264Preset(rawValue: value) else {
+            throw ArgumentError.conversionError("Cannot convert '\(value)' to a valid X264Preset")
+        }
+        return preset
+    }
+}
+
+/// Allows SwiftyBeaver log levels to be used as a cli argument in Monitr
+extension SwiftyBeaver.Level: ArgumentType, Comparable {
+    private enum _Level: String {
+        case verbose
+        case debug
+        case info
+        case warning
+        case warn
+        case error
+    }
+
+    public static func from(string value: String) throws -> SwiftyBeaver.Level {
+        guard value.count > 0 else {
+            throw ArgumentError.emptyString
+        }
+        if let intValue = Int(value) {
+            guard let level = SwiftyBeaver.Level(rawValue: intValue) else {
+                throw ArgumentError.conversionError("Cannot convert '\(value)' to a valid SwiftyBeaver.Level")
+            }
+            return level
+        }
+
+        guard let level = _Level(rawValue: value) else {
+            throw ArgumentError.conversionError("Cannot convert '\(value)' to a valid SwiftyBeaver.Level")
+        }
+        switch level {
+        case .verbose: return .verbose
+        case .debug: return .debug
+        case .info: return .info
+        case .warn, .warning: return .warning
+        case .error: return .error
+        }
+    }
+
+    public static func == (lhs: SwiftyBeaver.Level, rhs: SwiftyBeaver.Level) -> Bool {
+        return lhs.rawValue == rhs.rawValue
+    }
+    public static func == (lhs: SwiftyBeaver.Level, rhs: Int) -> Bool {
+        return lhs.rawValue == rhs
+    }
+    public static func == (lhs: Int, rhs: SwiftyBeaver.Level) -> Bool {
+        return lhs == rhs.rawValue
+    }
+
+    public static func < (lhs: SwiftyBeaver.Level, rhs: SwiftyBeaver.Level) -> Bool {
+        return lhs.rawValue < rhs.rawValue
+    }
+    public static func < (lhs: SwiftyBeaver.Level, rhs: Int) -> Bool {
+        return lhs.rawValue < rhs
+    }
+    public static func < (lhs: Int, rhs: SwiftyBeaver.Level) -> Bool {
+        return lhs < rhs.rawValue
     }
 }

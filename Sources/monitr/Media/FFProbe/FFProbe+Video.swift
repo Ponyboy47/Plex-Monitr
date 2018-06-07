@@ -1,6 +1,6 @@
 protocol FFProbeVideoStreamProtocol: FFProbeCodecStreamProtocol {
-    var dimensions: (Int, Int)? { get set }
-    var aspectRatio: String? { get set }
+    var dimensions: (width: Int, height: Int)? { get set }
+    var aspectRatio: AspectRatio? { get set }
     var framerate: FrameRate? { get set }
     var bitDepth: Int? { get set }
 }
@@ -13,8 +13,8 @@ struct VideoStream: FFProbeVideoStreamProtocol {
     var duration: MediaDuration?
     var bitRate: BitRate?
     var tags: Tags?
-    var dimensions: (Int, Int)?
-    var aspectRatio: String?
+    var dimensions: (width: Int, height: Int)?
+    var aspectRatio: AspectRatio?
     var framerate: FrameRate?
     var bitDepth: Int?
 
@@ -28,7 +28,7 @@ struct VideoStream: FFProbeVideoStreamProtocol {
         if let d = duration {
             str += "\n\(self.indent)Duration: \(d.description)"
         }
-        str += "\n\(self.indent)Dimensions: \(dimensions!.0)x\(dimensions!.1)"
+        str += "\n\(self.indent)Dimensions: \(dimensions!.width)x\(dimensions!.height)"
         str += "\n\(self.indent)Aspect Ratio: \(aspectRatio!)"
         str += "\n\(self.indent)Framerate: \(framerate!.value) fps"
         if let b = bitDepth {
@@ -80,9 +80,9 @@ struct VideoStream: FFProbeVideoStreamProtocol {
 
         let width = try values.decode(Int.self, forKey: .width)
         let height = try values.decode(Int.self, forKey: .height)
-        dimensions = (width, height)
+        dimensions = (width: width, height: height)
 
-        aspectRatio = try values.decode(String.self, forKey: .aspectRatio)
+        aspectRatio = try values.decode(AspectRatio.self, forKey: .aspectRatio)
 
         framerate = try values.decode(FrameRate.self, forKey: .framerate)
 

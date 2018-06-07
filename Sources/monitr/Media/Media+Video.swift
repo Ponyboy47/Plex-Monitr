@@ -14,6 +14,8 @@ import Downpour
 import SwiftyBeaver
 import SwiftShell
 
+// swiftlint:disable type_body_length
+
 /// Management for Video files
 final class Video: ConvertibleMedia {
     /// The supported extensions
@@ -31,6 +33,9 @@ final class Video: ConvertibleMedia {
     }()
     var beenConverted: Bool = false
     weak var mainMonitr: MainMonitr!
+    // swiftlint:disable identifier_name
+    var _info: FFProbe?
+    // swiftlint:enable identifier_name
 
     var plexName: String {
         guard !isHomeMedia else {
@@ -56,15 +61,15 @@ final class Video: ConvertibleMedia {
     }
     var finalDirectory: Path {
         guard !isHomeMedia else {
-            return Path("Home Videos\(Path.separator)\(plexName)")
+            return Path("Home Videos")
         }
 
         var base: Path
         switch downpour.type {
         case .movie:
-            base = Path("Movies\(Path.separator)\(plexName)")
+            base = Path("Movies")
         case .tv:
-            base = Path("TV Shows\(Path.separator)\(downpour.title.wordCased)\(Path.separator)Season \(String(format: "%02d", Int(downpour.season!)!))\(Path.separator)\(plexName)")
+            base = Path("TV Shows\(Path.separator)\(downpour.title.wordCased)\(Path.separator)Season \(String(format: "%02d", Int(downpour.season!)!))")
         default:
             base = ""
         }
@@ -91,6 +96,7 @@ final class Video: ConvertibleMedia {
 
         // Set the media file's path to the absolute path
         self.path = path.absolute
+        self.unconvertedFile = path.absolute
         // Create the downpour object
         self.downpour = Downpour(fullPath: path.absolute)
 
@@ -147,14 +153,28 @@ final class Video: ConvertibleMedia {
         }
     }
 
-    func convertCommand(_ logger: SwiftyBeaver.Type) throws -> Command {
-        guard let config = videoConversionConfig else {
-            throw MediaError.VideoError.invalidConfig
+    func buildArgs(_ config: VideoConversionConfig) -> [String] {
+        var args: [String] = ["--verbose", "--main-audio", config.mainLanguage.rawValue, "--limit-rate", "\(config.maxFramerate)"]
+
+        for target in config.targets {
+            switch target.rawValue {
+            case .size(let size): args += ["--target", "\(size)"]
+            case .bitRate(let profile, let bitRate): args += ["--target", "\(profile)=\(bitRate)"]
+            }
         }
 
-        // Build the arguments for the transcode_video command
-        var args: [String] = ["--target", "big", "--quick", "--preset", "fast", "--verbose", "--main-audio", config.mainLanguage.rawValue, "--limit-rate", "\(config.maxFramerate)"]
-
+        if config.abr {
+            args.append("--abr")
+        }
+        if config.h265 {
+            args += ["--handbrake-option", "encoder=x265"]
+        }
+        if config.speed != .`default` {
+            args.append("--\(config.speed)")
+        }
+        if config.x264Preset != .`default` {
+            args.append("--\(config.x264Preset)")
+        }
         if config.subtitleScan {
             args += ["--burn-subtitle", "scan"]
         }
@@ -166,6 +186,16 @@ final class Video: ConvertibleMedia {
             args.append("--m4v")
         default: break
         }
+
+        return args
+    }
+
+    func convertCommand(_ logger: SwiftyBeaver.Type) throws -> Command {
+        guard let config = videoConversionConfig else {
+            throw MediaError.VideoError.invalidConfig
+        }
+
+        var args = buildArgs(config)
 
         let ext = path.extension ?? ""
         var outputPath: Path = config.tempDir
@@ -201,20 +231,7 @@ final class Video: ConvertibleMedia {
         }
         logger.verbose("Getting audio/video stream data for '\(path.absolute)'")
 
-        // Get video file metadata using ffprobe (We must escape spaces or this
-        // command fails to execute)
-        let ffprobeResponse = SwiftShell.run("ffprobe", ["-hide_banner", "-of", "json", "-show_streams", "\(path.absolute.string)"])
-
-        guard ffprobeResponse.succeeded else {
-            throw MediaError.FFProbeError.couldNotGetMetadata(ffprobeResponse.stderror)
-        }
-        guard !ffprobeResponse.stdout.isEmpty else {
-            throw MediaError.FFProbeError.couldNotGetMetadata("File does not contain any metadata")
-        }
-        logger.verbose("Got audio/video stream data for '\(path.absolute)'")
-        logger.verbose("'\(path.absolute)' => '\(ffprobeResponse.stdout)'")
-
-        let ffprobe = try JSONDecoder().decode(FFProbe.self, from: ffprobeResponse.stdout.data(using: .utf8)!)
+        let ffprobe = try info()
 
         var videoStreams = ffprobe.videoStreams
         var audioStreams = ffprobe.audioStreams

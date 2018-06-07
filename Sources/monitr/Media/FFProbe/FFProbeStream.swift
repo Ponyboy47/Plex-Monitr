@@ -7,8 +7,8 @@ struct FFProbeStream: FFProbeAllStreamsProtocol {
     var codec: Codec?
     var duration: MediaDuration?
     var bitRate: BitRate?
-    var dimensions: (Int, Int)?
-    var aspectRatio: String?
+    var dimensions: (width: Int, height: Int)?
+    var aspectRatio: AspectRatio?
     var framerate: FrameRate?
     var bitDepth: Int?
     var sampleRate: SampleRate?
@@ -55,9 +55,9 @@ struct FFProbeStream: FFProbeAllStreamsProtocol {
         let width = try values.decodeIfPresent(Int.self, forKey: .width)
         let height = try values.decodeIfPresent(Int.self, forKey: .height)
         if let w = width, let h = height {
-            dimensions = (w, h)
+            dimensions = (width: w, height: h)
         }
-        aspectRatio = try values.decodeIfPresent(String.self, forKey: .aspectRatio)
+        aspectRatio = try values.decodeIfPresent(AspectRatio.self, forKey: .aspectRatio)
         framerate = try values.decodeIfPresent(FrameRate.self, forKey: .framerate)
         if let bD = try values.decodeIfPresent(String.self, forKey: .bitDepth) {
             bitDepth = Int(bD)

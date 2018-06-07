@@ -15,6 +15,7 @@ extension Video {
         var downpour: Downpour
         weak var linkedVideo: Video?
         weak var mainMonitr: MainMonitr!
+        var _info: FFProbe?
 
         var plexName: String {
             if let lV = linkedVideo {

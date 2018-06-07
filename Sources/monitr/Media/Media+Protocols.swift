@@ -12,6 +12,7 @@ import Foundation
 import PathKit
 import Downpour
 import SwiftyBeaver
+import SwiftShell
 
 typealias Command = (command: String, args: [String], outputPath: Path, deleteOriginal: Bool)
 
@@ -63,7 +64,7 @@ enum MediaState {
 }
 
 /// Protocol for the common implementation of Media types
-protocol Media: class, Codable {
+protocol Media: class, Codable, CustomStringConvertible {
     /// The path to the media file
     var path: Path { get set }
     /// Whether the media file is home media or comercial
@@ -80,6 +81,9 @@ protocol Media: class, Codable {
     var mainMonitr: MainMonitr! { get set }
     /// an array of the supported extensions by the media type
     static var supportedExtensions: [String] { get }
+    // swiftlint:disable identifier_name
+    var _info: FFProbe? { get set }
+    // swiftlint:enable identifier_name
 
     /// Initializer
     init(_ path: Path) throws
@@ -87,12 +91,35 @@ protocol Media: class, Codable {
     func move(to plexPath: Path, logger: SwiftyBeaver.Type) throws -> MediaState
     /// Returns whether or not the Media type supports the given format
     static func isSupported(ext: String) -> Bool
+    func info() throws -> FFProbe
 }
 
 extension Media {
+    func info() throws -> FFProbe {
+        if _info == nil {
+            let ffprobeResponse = SwiftShell.run("ffprobe", ["-hide_banner", "-of", "json", "-show_streams", "\(path.absolute.string)"])
+
+            guard ffprobeResponse.succeeded else {
+                throw MediaError.FFProbeError.couldNotGetMetadata(ffprobeResponse.stderror)
+            }
+            guard !ffprobeResponse.stdout.isEmpty else {
+                throw MediaError.FFProbeError.couldNotGetMetadata("File does not contain any metadata")
+            }
+            logger.verbose("Got audio/video stream data for '\(path.absolute)'")
+            logger.verbose("'\(path.absolute)' => '\(ffprobeResponse.stdout)'")
+
+            _info = try JSONDecoder().decode(FFProbe.self, from: ffprobeResponse.stdout.data(using: .utf8)!)
+        }
+        return _info!
+    }
+
     var plexFilename: String {
         // Return the plexified name + it's extension
         return plexName + "." + (path.extension ?? "")
+    }
+
+    var description: String {
+        return "\(type(of: self))(path: \(path), plexName: \(plexName))"
     }
 
     init(from decoder: Decoder) throws {
@@ -131,17 +158,16 @@ extension Media {
             try mediaDirectory.mkpath()
         }
 
-        // Ensure the finalRestingPlace doesn't already exist
         guard !finalRestingPlace.isFile else {
             throw MediaError.alreadyExists(finalRestingPlace)
         }
 
-        logger.debug("Moving media file '\(path.string)' => '\(finalRestingPlace.string)'")
+        logger.debug("Moving media file '\(path.string)' => '\(finalRestingPlace)'")
         // Move the file to the correct plex location
         try path.move(finalRestingPlace)
-        logger.verbose("Successfully moved file to '\(finalRestingPlace.string)'")
         // Change the path now to match
         path = finalRestingPlace
+        logger.verbose("Successfully moved file to '\(finalRestingPlace.string)'")
 
         guard path.isFile else {
             logger.error("Successfully moved the file, but there is no file located at the final resting place '\(path.string)'")
@@ -157,7 +183,7 @@ extension Media {
 }
 
 protocol ConvertibleMedia: Media {
-    /// The path to the original media file (before it was converted). Only set when the original file is not to be deleted
+    /// The path to the original media file (before it was converted)
     var unconvertedFile: Path? { get set }
     /// The config to use when converting the media
     var conversionConfig: ConversionConfig! { get set }

@@ -11,6 +11,7 @@
 
 import SwiftShell
 import Dispatch
+import TaskKit
 
 enum MonitrError: Error {
     case missingDependencies([Dependency])
@@ -27,12 +28,8 @@ enum Dependency: String {
 }
 
 class ConvertibleMonitr<M>: Monitr<M> where M: ConvertibleMedia {
-    var convertOperationQueue: MediaOperationQueue
-
-    init(_ config: Config, moveOperationQueue: MediaOperationQueue, convertOperationQueue: MediaOperationQueue) throws {
-        self.convertOperationQueue = convertOperationQueue
-
-        try super.init(config, moveOperationQueue: moveOperationQueue)
+    override init(_ config: Config, moveTaskQueue: LinkedTaskQueue, convertTaskQueue: LinkedTaskQueue) throws {
+        try super.init(config, moveTaskQueue: moveTaskQueue, convertTaskQueue: convertTaskQueue)
 
         self.config.convert = config.convert
 
@@ -41,14 +38,14 @@ class ConvertibleMonitr<M>: Monitr<M> where M: ConvertibleMedia {
         }
     }
 
-    override func setupOperation(for media: M) -> MediaOperation<M>? {
+    override func setupTask(for media: M) -> MediaTask<M>? {
         guard config.convert else {
-            return super.setupOperation(for: media)
+            return super.setupTask(for: media)
         }
 
         setupConversionConfig(media)
 
-        let move = MoveOperation(media, logger: config.logger, plexDirectory: config.plexDirectory, deleteSubtitles: config.deleteSubtitles)
+        let move = MoveTask(media, plexDirectory: config.plexDirectory, deleteSubtitles: config.deleteSubtitles, logger: config.logger)
 
         guard !media.beenConverted else {
             return move
@@ -57,37 +54,34 @@ class ConvertibleMonitr<M>: Monitr<M> where M: ConvertibleMedia {
         do {
             if try media.needsConversion(logger) {
                 config.logger.verbose("Need to convert: \(media.path)")
-                let convert = try ConvertOperation(media, logger: config.logger, prepareConversion: true)
+                var convert: ConversionTask<M>
                 if config.convertImmediately {
-                    convert.queuePriority = .veryHigh
+                    convert = ConversionTask(media, priority: .high, logger: config.logger)
                     move.addDependency(convert)
                 } else {
+                    convert = ConversionTask(media, logger: config.logger)
                     convert.addDependency(move)
-                    move.completionBlock = {
-                        self.convertOperationQueue.addOperation(convert)
-                    }
                     return convert
                 }
             }
-            return move
         } catch {
             config.logger.error("Could not determine if '\(media.path)' needs to be converted")
             config.logger.debug(error)
         }
-        return nil
+        return move
     }
 
-    override func addToQueue(_ operation: MediaOperation<M>?) {
-        guard let operation = operation else { return }
+    override func addToQueue(_ task: MediaTask<M>?) {
+        guard let task = task else { return }
 
-        if operation is ConvertOperation<M> {
-            convertOperationQueue.addOperation(operation)
+        for dependency in task.dependencies {
+            addToQueue(dependency as? MediaTask<M>)
+        }
 
-            for dependency in operation.dependencies {
-                addToQueue(dependency as? MediaOperation<M>)
-            }
+        if task is ConversionTask<M> {
+            convertTaskQueue.add(task: task)
         } else {
-            super.addToQueue(operation)
+            super.addToQueue(task)
         }
     }
 

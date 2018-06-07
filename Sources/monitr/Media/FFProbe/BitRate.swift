@@ -1,11 +1,18 @@
-struct BitRate: Codable, Comparable {
+struct BitRate: Codable, Comparable, CustomStringConvertible {
     enum BitRateUnit: String {
         case bps
         case kbps
         case mbps
     }
+
     private var value: Double
     private var unit: BitRateUnit
+
+    var description: String {
+        var this = self
+        return "\(this.kbps) Kbit/s"
+    }
+
     lazy var bps: Double = {
         switch self.unit {
         case .bps:

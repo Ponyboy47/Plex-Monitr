@@ -1,13 +1,20 @@
 // swiftlint:disable identifier_name
 
-struct SampleRate: Codable, Comparable {
+struct SampleRate: Codable, Comparable, CustomStringConvertible {
     enum SampleRateUnit: String {
         case hz
         case khz
         case mhz
     }
+
     private var value: Double
     private var unit: SampleRateUnit
+
+    var description: String {
+        var this = self
+        return "\(this.khz) kHz"
+    }
+
     lazy var hz: Double = {
         switch self.unit {
         case .hz:
