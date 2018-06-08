@@ -154,19 +154,20 @@ NOTE: Preliminary performance testing shows that using multiple threads will sti
 NOTE: If false, unconverted media files will be placed in the plex location along with the converted media file. The original file will have ' - original' appended to the end of the filename, but before the file's extension.</p>
 
 #### Set the transcode-video command to use the Contrained Average Bitrate ratecontrol system:
-`--abr` or `--average-bitrate-rcs`
-<p>defaults to false<br />
-NOTE: To determine if you should use this option, run `transcode-video --help` and read the information about the --abr option.</p>
+`--abr` or `--average-bitrate-rcs`<br />
+defaults to false<br />
+NOTE: To determine if you should use this option, run `transcode-video --help` and read the information about the --abr option.<br />
 
 #### Use the h265 encoder instead of the default handbrake encoder (h264):
-`--x265`
-<p>defaults to false<br />
+`--x265`<br />
+defaults to false<br />
 NOTE: To determine if you should use this option, you may want to check out [this link](https://github.com/donmelton/video_transcoding/issues/191) if you're trying to dramatically reduce file sizes when converting and can use the h265 converter.<br />
-      If you need me to expose additional options to the transcode-video command, create a new issue and I can do that pretty easily.</p>
+      If you need me to expose additional options to the transcode-video command, create a new issue and I can do that pretty easily.<br />
 
 #### The targets to use in the transcode-video command:
-`-t` or `--target`
-<p>NOTE: To determine if/how to use this option, run `transcode-video --help` and read the information about the --target options.</p>
+`-t` or `--target`<br />
+May be used multiple times<br />
+NOTE: To determine if/how to use this option, run `transcode-video --help` and read the information about the --target options.<br />
 
 #### The transcode speed to use:
 `--speed` or `--transcode-speed`
@@ -199,9 +200,9 @@ NOTE: I don't have plans for a lot of audio file conversion support. I know Plex
 <p>default is aac since that is the most commonly supported codec for DirectPlay in Plex</p>
 
 #### Set whether to scan for foreign audio subtitles and burn them into a video stream:
-`--convert-video-subtitle-scan`
-<p>defaults to false<br />
-NOTE: This is an experimental feature in the transcode_video tool. If it screws up, you could end up with the wrong subtitle track burned into your video. [See @donmelton's own documentation on this feature](https://github.com/donmelton/video_transcoding#understanding-subtitles) in his transcode_video. If you are going to use this, it is HIGHLY RECOMMENDED that you do not use the `--delete-original` flag, just to be safe.</p>
+`--convert-video-subtitle-scan`<br />
+defaults to false<br />
+NOTE: This is an experimental feature in the transcode_video tool. If it screws up, you could end up with the wrong subtitle track burned into your video. [See @donmelton's own documentation on this feature](https://github.com/donmelton/video_transcoding#understanding-subtitles) in his transcode_video. If you are going to use this, it is HIGHLY RECOMMENDED that you do not use the `--delete-original` flag, just to be safe.<br />
 
 #### Set the preferred language to use when converting media:
 `--convert-language`
@@ -221,10 +222,10 @@ NOTE: Uses the ISO 639-2 language codes, and I only included a handful in this p
 <p>default is false</p>
 
 #### Set whether or not to save these config settings to the config file:
-`-s` or `--save-settings`
-<p>defaults to false<br />
+`-s` or `--save-settings`<br />
+defaults to false<br />
 The current settings are saved at the `--config-file` path (defaults to ~/.config/monitr/settings.json)<br />
-NOTE: If true, subsequent monitr instances will load the settings file from the `--config-file` option and use its config values instead of the usual defaults.</p>
+NOTE: If true, subsequent monitr instances will load the settings file from the `--config-file` option and use its config values instead of the usual defaults.<br />
 
 #### Set the default logging level to use:
 `--level` or `--log-level`
