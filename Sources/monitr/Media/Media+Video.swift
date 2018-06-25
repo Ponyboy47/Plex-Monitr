@@ -154,7 +154,7 @@ final class Video: ConvertibleMedia {
     }
 
     func buildArgs(_ config: VideoConversionConfig) -> [String] {
-        var args: [String] = ["--verbose", "--main-audio", config.mainLanguage.rawValue, "--limit-rate", "\(config.maxFramerate)"]
+        var args: [String] = ["--handbrake-option", "optimize", "--verbose", "--main-audio", config.mainLanguage.rawValue, "--limit-rate", "\(config.maxFramerate)"]
 
         for target in config.targets {
             switch target.rawValue {

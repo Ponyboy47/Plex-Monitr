@@ -6,6 +6,7 @@ enum ChannelLayout: String, Codable, Comparable {
         case .four: return 4
         case .five: return 6
         case .five_side: return 6
+        case .six: return 7
         case .seven: return 8
         }
     }
@@ -15,6 +16,7 @@ enum ChannelLayout: String, Codable, Comparable {
     case four = "4.0"
     case five_side = "5.1(side)"
     case five = "5.1"
+    case six = "6.1"
     case seven = "7.1"
 
     static func == (lhs: ChannelLayout, rhs: ChannelLayout) -> Bool {
