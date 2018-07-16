@@ -4,7 +4,6 @@ import SwiftyBeaver
 
 class MediaTask<MediaType: Media>: DependentTask, CustomStringConvertible {
     var media: MediaType
-    var logger: SwiftyBeaver.Type!
     var status: TaskStatus = .ready
     var qos: DispatchQoS
     var priority: TaskPriority
@@ -20,11 +19,10 @@ class MediaTask<MediaType: Media>: DependentTask, CustomStringConvertible {
         return "\(type(of: self))(id: \(id), media: \(media), state: \(status.state))"
     }
 
-    init(_ media: MediaType, qos: DispatchQoS = .utility, priority: TaskPriority = .minimal, logger: SwiftyBeaver.Type) {
+    init(_ media: MediaType, qos: DispatchQoS = .utility, priority: TaskPriority = .minimal) {
         self.media = media
         self.qos = qos
         self.priority = priority
-        self.logger = logger
     }
 
     func execute() -> Bool {

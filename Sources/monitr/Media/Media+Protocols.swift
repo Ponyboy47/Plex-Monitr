@@ -11,7 +11,6 @@
 import Foundation
 import PathKit
 import Downpour
-import SwiftyBeaver
 import SwiftShell
 
 typealias Command = (command: String, args: [String], outputPath: Path, deleteOriginal: Bool)
@@ -88,7 +87,7 @@ protocol Media: class, Codable, CustomStringConvertible {
     /// Initializer
     init(_ path: Path) throws
     /// Moves the media file to the finalDirectory
-    func move(to plexPath: Path, logger: SwiftyBeaver.Type) throws -> MediaState
+    func move(to plexPath: Path) throws -> MediaState
     /// Returns whether or not the Media type supports the given format
     static func isSupported(ext: String) -> Bool
     func info() throws -> FFProbe
@@ -105,8 +104,10 @@ extension Media {
             guard !ffprobeResponse.stdout.isEmpty else {
                 throw MediaError.FFProbeError.couldNotGetMetadata("File does not contain any metadata")
             }
-            logger.verbose("Got audio/video stream data for '\(path.absolute)'")
-            logger.verbose("'\(path.absolute)' => '\(ffprobeResponse.stdout)'")
+            loggerQueue.async {
+                logger.verbose("Got audio/video stream data for '\(self.path.absolute)'")
+                logger.verbose("'\(self.path.absolute)' => '\(ffprobeResponse.stdout)'")
+            }
 
             _info = try JSONDecoder().decode(FFProbe.self, from: ffprobeResponse.stdout.data(using: .utf8)!)
         }
@@ -139,7 +140,7 @@ extension Media {
         try container.encode(isHomeMedia, forKey: .isHomeMedia)
     }
 
-    internal func commonMove(to plexPath: Path, logger: SwiftyBeaver.Type) throws -> MediaState {
+    internal func commonMove(to plexPath: Path) throws -> MediaState {
         // Get the location of the finalDirectory inside the plexPath
         let mediaDirectory = plexPath + finalDirectory
 
@@ -147,14 +148,20 @@ extension Media {
         let finalRestingPlace = mediaDirectory + plexFilename
 
         guard path.absolute != finalRestingPlace.absolute else {
-            logger.warning("Media file is already located at it's final resting place")
+            loggerQueue.async {
+                logger.warning("Media file is already located at it's final resting place")
+            }
             return .success(.moving)
         }
 
-        logger.verbose("Preparing to move file: \(path.string)")
+        loggerQueue.async {
+            logger.verbose("Preparing to move file: \(self.path.string)")
+        }
         // Create the directory
         if !mediaDirectory.isDirectory {
-            logger.debug("Creating the media file's directory: \(mediaDirectory.string)")
+            loggerQueue.async {
+                logger.debug("Creating the media file's directory: \(mediaDirectory.string)")
+            }
             try mediaDirectory.mkpath()
         }
 
@@ -162,23 +169,29 @@ extension Media {
             throw MediaError.alreadyExists(finalRestingPlace)
         }
 
-        logger.debug("Moving media file '\(path.string)' => '\(finalRestingPlace)'")
+        loggerQueue.async {
+            logger.debug("Moving media file '\(self.path.string)' => '\(finalRestingPlace)'")
+        }
         // Move the file to the correct plex location
         try path.move(finalRestingPlace)
         // Change the path now to match
         path = finalRestingPlace
-        logger.verbose("Successfully moved file to '\(finalRestingPlace.string)'")
+        loggerQueue.async {
+            logger.verbose("Successfully moved file to '\(finalRestingPlace.string)'")
+        }
 
         guard path.isFile else {
-            logger.error("Successfully moved the file, but there is no file located at the final resting place '\(path.string)'")
+            loggerQueue.async {
+                logger.error("Successfully moved the file, but there is no file located at the final resting place '\(self.path.string)'")
+            }
             return .failed(.moving, self)
         }
 
         return .success(.moving)
     }
 
-    func move(to plexPath: Path, logger: SwiftyBeaver.Type) throws -> MediaState {
-        return try commonMove(to: plexPath, logger: logger)
+    func move(to plexPath: Path) throws -> MediaState {
+        return try commonMove(to: plexPath)
     }
 }
 
@@ -190,12 +203,12 @@ protocol ConvertibleMedia: Media {
     /// Whether the media file has already been converted or not
     var beenConverted: Bool { get set }
     /// Moves the original media file to the finalDirectory
-    func moveUnconverted(to plexPath: Path, logger: SwiftyBeaver.Type) throws -> MediaState
+    func moveUnconverted(to plexPath: Path) throws -> MediaState
     /// Returns the command to be used for converting the media
-    func convertCommand(_ logger: SwiftyBeaver.Type) throws -> Command
+    func convertCommand() throws -> Command
     /// Returns whether or not the Media type needs to be converted for Plex
     ///   DirectPlay capabilities to be enabled
-    func needsConversion(_ logger: SwiftyBeaver.Type) throws -> Bool
+    func needsConversion() throws -> Bool
 }
 
 extension ConvertibleMedia {
@@ -214,19 +227,21 @@ extension ConvertibleMedia {
         try container.encode(unconvertedFile, forKey: .unconvertedFile)
     }
 
-    func move(to plexPath: Path, logger: SwiftyBeaver.Type) throws -> MediaState {
-        let convertedMediaState = try (self as Media).move(to: plexPath, logger: logger)
+    func move(to plexPath: Path) throws -> MediaState {
+        let convertedMediaState = try (self as Media).move(to: plexPath)
         switch convertedMediaState {
         case .success:
-            return .unconverted(try self.moveUnconverted(to: plexPath, logger: logger))
+            return .unconverted(try self.moveUnconverted(to: plexPath))
         default:
             return convertedMediaState
         }
     }
 
-    func moveUnconverted(to plexPath: Path, logger: SwiftyBeaver.Type) throws -> MediaState {
+    func moveUnconverted(to plexPath: Path) throws -> MediaState {
         guard let unconvertedPath = unconvertedFile else {
-            logger.verbose("No unconverted file to move")
+            loggerQueue.async {
+                logger.verbose("No unconverted file to move")
+            }
             return .success(.moving)
         }
         // Get the location of the finalDirectory inside the plexPath
@@ -236,15 +251,21 @@ extension ConvertibleMedia {
         let finalRestingPlace = mediaDirectory + "\(plexName) - original.\(unconvertedPath.extension ?? "")"
 
         guard path.absolute != finalRestingPlace.absolute else {
-            logger.warning("Unconverted media file is already located at it's final resting place")
+            loggerQueue.async {
+                logger.warning("Unconverted media file is already located at it's final resting place")
+            }
             return .success(.moving)
         }
 
-        logger.verbose("Preparing to move file: \(unconvertedPath.string)")
+        loggerQueue.async {
+            logger.verbose("Preparing to move file: \(unconvertedPath.string)")
+        }
 
         // Create the directory
         if !mediaDirectory.isDirectory {
-            logger.debug("Creating the media file's directory: \(mediaDirectory.string)")
+            loggerQueue.async {
+                logger.debug("Creating the media file's directory: \(mediaDirectory.string)")
+            }
             try mediaDirectory.mkpath()
         }
 
@@ -253,15 +274,21 @@ extension ConvertibleMedia {
             throw MediaError.alreadyExists(finalRestingPlace)
         }
 
-        logger.debug("Moving media file '\(unconvertedPath.string)' => '\(finalRestingPlace.string)'")
+        loggerQueue.async {
+            logger.debug("Moving media file '\(unconvertedPath.string)' => '\(finalRestingPlace.string)'")
+        }
         // Move the file to the correct plex location
         try unconvertedPath.move(finalRestingPlace)
-        logger.verbose("Successfully moved file to '\(finalRestingPlace.string)'")
+        loggerQueue.async {
+            logger.verbose("Successfully moved file to '\(finalRestingPlace.string)'")
+        }
         // Change the path now to match
         unconvertedFile = finalRestingPlace
 
         guard unconvertedPath.isFile else {
-            logger.error("Successfully moved the file, but there is no file located at the final resting place '\(unconvertedPath.string)'")
+            loggerQueue.async {
+                logger.error("Successfully moved the file, but there is no file located at the final resting place '\(unconvertedPath.string)'")
+            }
             return .failed(.moving, self)
         }
 

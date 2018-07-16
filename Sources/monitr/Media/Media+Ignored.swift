@@ -46,11 +46,13 @@ final class Ignore: Media {
         downpour = Downpour(fullPath: path)
     }
 
-    func move(to plexPath: Path, logger: SwiftyBeaver.Type) throws -> MediaState {
+    func move(to plexPath: Path) throws -> MediaState {
         guard path.isDeletable else {
             throw MediaError.fileNotDeletable
         }
-        logger.debug("Deleting ignorable file: \(path.string)")
+        loggerQueue.async {
+            logger.debug("Deleting ignorable file: \(self.path.string)")
+        }
         try path.delete()
         path = ""
         return .success(.deleting)

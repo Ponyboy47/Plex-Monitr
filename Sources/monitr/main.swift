@@ -34,6 +34,7 @@ guard processLock != nil else {
     exit(EXIT_FAILURE)
 }
 
+let loggerQueue = DispatchQueue(label: "com.monitr.log", qos: .utility)
 let logger = SwiftyBeaver.self
 
 var argParser = ArgumentParser.default
@@ -98,9 +99,14 @@ guard let saveConfig: Bool = saveFlag.value else {
 }
 
 let console = ConsoleDestination()
-logger.addDestination(console)
 
-logger.verbose("Got minimum required arguments from the CLI.")
+loggerQueue.sync {
+    logger.addDestination(console)
+}
+
+loggerQueue.async {
+    logger.verbose("Got minimum required arguments from the CLI.")
+}
 
 // We'll use this in a minute to make sure the config is a json file (hopefully people use file extensions if creating their config manually)
 let ext = (configPath.extension ?? "").lowercased()
@@ -109,18 +115,24 @@ let ext = (configPath.extension ?? "").lowercased()
 var config: Config
 // Make sure it's a real file and it ahs the json extension
 if configPath.isFile && ext == "json" {
-    logger.verbose("Reading config from file: \(configPath)")
+    loggerQueue.async {
+        logger.verbose("Reading config from file: \(configPath)")
+    }
     // Try and read the config from it's file
     do {
-        config = try Config(fromFile: configPath, with: logger)
+        config = try Config(fromFile: configPath)
     } catch {
-        logger.warning("Failed to initialize config from JSON file.")
-        logger.error(error)
+        loggerQueue.async {
+            logger.warning("Failed to initialize config from JSON file.")
+            logger.error(error)
+        }
         exit(EXIT_FAILURE)
     }
 } else {
-    config = Config(logger)
-    logger.verbose("Creating new config from scratch using the defaults")
+    config = Config()
+    loggerQueue.async {
+        logger.verbose("Creating new config from scratch using the defaults")
+    }
 }
 
 let commonMsg: String
@@ -132,126 +144,182 @@ if !saveConfig {
 
 // If an optional arg was specified, change it in the config
 if let p = plexDirectoryOption.value, config.plexDirectory != p {
-    logger.debug("PlexDirectory \(commonMsg) \(config.plexDirectory) to \(p)")
+    loggerQueue.async {
+        logger.debug("PlexDirectory \(commonMsg) \(config.plexDirectory) to \(p)")
+    }
     config.plexDirectory = p
 }
 if let t = downloadDirectoryOption.value, config.downloadDirectories != t.values {
-    logger.debug("Download Directory \(commonMsg) '\(config.downloadDirectories)' to '\(t.values)'.")
+    loggerQueue.async {
+        logger.debug("Download Directory \(commonMsg) '\(config.downloadDirectories)' to '\(t.values)'.")
+    }
     config.downloadDirectories = t.values
 }
 if let c = convertFlag.value, config.convert != c {
-    logger.debug("Convert \(commonMsg) '\(config.convert)' to '\(c)'.")
+    loggerQueue.async {
+        logger.debug("Convert \(commonMsg) '\(config.convert)' to '\(c)'.")
+    }
     config.convert = c
 }
 if let cI = convertImmediatelyFlag.value, config.convertImmediately != cI {
-    logger.debug("Convert Immediately \(commonMsg) '\(config.convertImmediately)' to '\(cI)'.")
+    loggerQueue.async {
+        logger.debug("Convert Immediately \(commonMsg) '\(config.convertImmediately)' to '\(cI)'.")
+    }
     config.convertImmediately = cI
 }
 if let cCS = convertCronStartOption.value, config.convertCronStart != cCS {
-    logger.debug("Convert Cron Start \(commonMsg) '\(config.convertCronStart)' to '\(cCS)'.")
+    loggerQueue.async {
+        logger.debug("Convert Cron Start \(commonMsg) '\(config.convertCronStart)' to '\(cCS)'.")
+    }
     config.convertCronStart = cCS
 }
 if let cCE = convertCronEndOption.value, config.convertCronEnd != cCE {
-    logger.debug("Convert Cron End \(commonMsg) '\(config.convertCronEnd)' to '\(cCE)'.")
+    loggerQueue.async {
+        logger.debug("Convert Cron End \(commonMsg) '\(config.convertCronEnd)' to '\(cCE)'.")
+    }
     config.convertCronEnd = cCE
 }
 if let cT = convertThreadsOption.value, config.convertThreads != cT {
-    logger.debug("Convert Threads \(commonMsg) '\(config.convertThreads)' to '\(cT)'.")
+    loggerQueue.async {
+        logger.debug("Convert Threads \(commonMsg) '\(config.convertThreads)' to '\(cT)'.")
+    }
     config.convertThreads = cT
 }
 if let dO = deleteOriginalFlag.value, config.deleteOriginal != dO {
-    logger.debug("Delete Original \(commonMsg) '\(config.deleteOriginal)' to '\(dO)'.")
+    loggerQueue.async {
+        logger.debug("Delete Original \(commonMsg) '\(config.deleteOriginal)' to '\(dO)'.")
+    }
     config.deleteOriginal = dO
 }
 if let abr = convertABRFlag.value, config.convertABR != abr {
-    logger.debug("Convert ABR \(commonMsg) '\(config.convertABR)' to '\(abr)'.")
+    loggerQueue.async {
+        logger.debug("Convert ABR \(commonMsg) '\(config.convertABR)' to '\(abr)'.")
+    }
     config.convertABR = abr
 }
 if let h265 = convertH265Flag.value, config.convertH265 != h265 {
-    logger.debug("Convert 265 \(commonMsg) '\(config.convertH265)' to '\(h265)'.")
+    loggerQueue.async {
+        logger.debug("Convert 265 \(commonMsg) '\(config.convertH265)' to '\(h265)'.")
+    }
     config.convertH265 = h265
 }
 do {
     repeat {
         if let cT = convertTargetOption.value {
             if !config.convertTargets.contains(cT) {
-                logger.debug("Appending Convert Target \(cT) to config")
+                loggerQueue.async {
+                    logger.debug("Appending Convert Target \(cT) to config")
+                }
                 config.convertTargets.append(cT)
             }
         } else { break }
     } while true
 }
 if let speed = convertSpeedOption.value, config.convertSpeed != speed {
-    logger.debug("Convert Speed \(commonMsg) '\(config.convertSpeed)' to '\(speed)'.")
+    loggerQueue.async {
+        logger.debug("Convert Speed \(commonMsg) '\(config.convertSpeed)' to '\(speed)'.")
+    }
     config.convertSpeed = speed
 }
 if let preset = convertX264PresetOption.value, config.convertX264Preset != preset {
-    logger.debug("Convert X264 Preset \(commonMsg) '\(config.convertX264Preset)' to '\(preset)'.")
+    loggerQueue.async {
+        logger.debug("Convert X264 Preset \(commonMsg) '\(config.convertX264Preset)' to '\(preset)'.")
+    }
     config.convertX264Preset = preset
 }
 if let cVC = convertVideoContainerOption.value, config.convertVideoContainer != cVC {
-    logger.debug("Convert Video Container \(commonMsg) '\(config.convertVideoContainer)' to '\(cVC)'.")
+    loggerQueue.async {
+        logger.debug("Convert Video Container \(commonMsg) '\(config.convertVideoContainer)' to '\(cVC)'.")
+    }
     config.convertVideoContainer = cVC
 }
 if let cVC = convertVideoCodecOption.value, config.convertVideoCodec != cVC {
-    logger.debug("Convert Video Codec \(commonMsg) '\(config.convertVideoCodec)' to '\(cVC)'.")
+    loggerQueue.async {
+        logger.debug("Convert Video Codec \(commonMsg) '\(config.convertVideoCodec)' to '\(cVC)'.")
+    }
     config.convertVideoCodec = cVC
 }
 if let cAC = convertAudioContainerOption.value, config.convertAudioContainer != cAC {
-    logger.debug("Convert Audio Container \(commonMsg) '\(config.convertAudioContainer)' to '\(cAC)'.")
+    loggerQueue.async {
+        logger.debug("Convert Audio Container \(commonMsg) '\(config.convertAudioContainer)' to '\(cAC)'.")
+    }
     config.convertAudioContainer = cAC
 }
 if let cAC = convertAudioCodecOption.value, config.convertAudioCodec != cAC {
-    logger.debug("Convert Audio Codec \(commonMsg) '\(config.convertAudioCodec)' to '\(cAC)'.")
+    loggerQueue.async {
+        logger.debug("Convert Audio Codec \(commonMsg) '\(config.convertAudioCodec)' to '\(cAC)'.")
+    }
     config.convertAudioCodec = cAC
 }
 if let cVSS = convertVideoSubtitleScanFlag.value, config.convertVideoSubtitleScan != cVSS {
-    logger.debug("Convert Video Subtitle Scan \(commonMsg) '\(config.convertVideoSubtitleScan)' to '\(cVSS)'.")
+    loggerQueue.async {
+        logger.debug("Convert Video Subtitle Scan \(commonMsg) '\(config.convertVideoSubtitleScan)' to '\(cVSS)'.")
+    }
     config.convertVideoSubtitleScan = cVSS
 }
 if let cL = convertLanguageOption.value, config.convertLanguage != cL {
-    logger.debug("Convert Language \(commonMsg) '\(config.convertLanguage)' to '\(cL)'.")
+    loggerQueue.async {
+        logger.debug("Convert Language \(commonMsg) '\(config.convertLanguage)' to '\(cL)'.")
+    }
     config.convertLanguage = cL
 }
 if let cVMF = convertVideoMaxFramerateOption.value, config.convertVideoMaxFramerate != cVMF {
-    logger.debug("Convert Video Max Framerate \(commonMsg) '\(config.convertVideoMaxFramerate)' to '\(cVMF)'.")
+    loggerQueue.async {
+        logger.debug("Convert Video Max Framerate \(commonMsg) '\(config.convertVideoMaxFramerate)' to '\(cVMF)'.")
+    }
     config.convertVideoMaxFramerate = cVMF
 }
 if let cTD = convertTempDirectoryOption.value, config.convertTempDirectory != cTD {
-    logger.debug("Convert Temp Directory \(commonMsg) '\(config.convertTempDirectory)' to '\(cTD)'.")
+    loggerQueue.async {
+        logger.debug("Convert Temp Directory \(commonMsg) '\(config.convertTempDirectory)' to '\(cTD)'.")
+    }
     config.convertTempDirectory = cTD
 }
 if let dS = deleteSubtitlesFlag.value, config.deleteSubtitles != dS {
-    logger.debug("Delete Subtitles \(commonMsg) '\(config.deleteSubtitles)' to '\(dS)'.")
+    loggerQueue.async {
+        logger.debug("Delete Subtitles \(commonMsg) '\(config.deleteSubtitles)' to '\(dS)'.")
+    }
     config.deleteSubtitles = dS
 }
 if let b = homeVideoDownloadDirectoryOption.value, config.homeVideoDownloadDirectories != b.values {
-    logger.debug("Home Video Download Directory \(commonMsg) '\(config.homeVideoDownloadDirectories)' to '\(b.values)'.")
+    loggerQueue.async {
+        logger.debug("Home Video Download Directory \(commonMsg) '\(config.homeVideoDownloadDirectories)' to '\(b.values)'.")
+    }
     config.homeVideoDownloadDirectories = b.values
 }
 if let lL = logLevelOption.value, config.logLevel != lL {
     if lL != config.logLevel {
-        logger.debug("Log Level \(commonMsg) '\(config.logLevel)' to '\(lL)'.")
+        loggerQueue.async {
+            logger.debug("Log Level \(commonMsg) '\(config.logLevel)' to '\(lL)'.")
+        }
         config.logLevel = lL
     }
 }
 if let lF = logFileOption.value, config.logFile != lF {
-    logger.debug("Log File \(commonMsg) '\(config.logFile ?? "nil")' to '\(lF)'.")
+    loggerQueue.async {
+        logger.debug("Log File \(commonMsg) '\(config.logFile ?? "nil")' to '\(lF)'.")
+    }
     config.logFile = lF
 }
 
-logger.info("Configuration:\n\(config.printable())")
+loggerQueue.async {
+    logger.info("Configuration:\n\(config.printable())")
+}
 
 // Only log to console when we're not logging to a file or if the logLevel
 //   is debug/verbose
 if config.logLevel > 1 && config.logFile != nil {
-    logger.removeDestination(console)
+    loggerQueue.sync {
+        logger.removeDestination(console)
+    }
 }
 
 if let lF = config.logFile {
     let file = FileDestination()
     file.logFileURL = lF.url
-    logger.addDestination(file)
+    loggerQueue.sync {
+        logger.addDestination(file)
+    }
 }
 
 for dest in logger.destinations {
@@ -260,12 +328,16 @@ for dest in logger.destinations {
 
 // Try and save the config (if the flag is set to true)
 if saveConfig {
-    logger.verbose("Saving the configuration to file.")
+    loggerQueue.async {
+        logger.verbose("Saving the configuration to file.")
+    }
     do {
         try config.save()
     } catch {
-        logger.warning("Failed to save configuration to file.")
-        logger.error(error)
+        loggerQueue.async {
+            logger.warning("Failed to save configuration to file.")
+            logger.error(error)
+        }
     }
 }
 
@@ -274,18 +346,26 @@ let mainMonitr: MainMonitr
 // Create the monitrs
 do {
     mainMonitr = try MainMonitr(config: config)
-    logger.verbose("Sucessfully created the Monitr objects from the config")
+    loggerQueue.async {
+        logger.verbose("Sucessfully created the Monitr objects from the config")
+    }
     mainMonitr.setDelegate()
     guard mainMonitr.startMonitoring() else {
-        logger.error("Failed to start monitoring the download directories for new files")
+        loggerQueue.async {
+            logger.error("Failed to start monitoring the download directories for new files")
+        }
         exit(EXIT_FAILURE)
     }
 
-    logger.info("Monitoring '\((config.downloadDirectories + config.homeVideoDownloadDirectories).map({ $0.string }))' for new files.")
+    loggerQueue.async {
+        logger.info("Monitoring '\((config.downloadDirectories + config.homeVideoDownloadDirectories).map({ $0.string }))' for new files.")
+    }
 
     // Watch for signals so we can shut down properly
     Signals.trap(signals: [.int, .term, .kill, .quit]) { _ in
-        logger.info("Received signal. Stopping monitr.")
+        loggerQueue.async {
+            logger.info("Received signal. Stopping monitr.")
+        }
         // deinitializes the processLock, which unlocks any and all locks
         processLock = nil
         mainMonitr.shutdown()
@@ -302,7 +382,9 @@ do {
     keepalive.enter()
     keepalive.wait()
 } catch {
-    logger.error("Failed to create the monitrs with error '\(error)'. Correct the error and try again.")
+    loggerQueue.async {
+        logger.error("Failed to create the monitrs with error '\(error)'. Correct the error and try again.")
+    }
     // Sleep before exiting or else the log message is not written correctly
     sleep(1)
     exit(EXIT_FAILURE)

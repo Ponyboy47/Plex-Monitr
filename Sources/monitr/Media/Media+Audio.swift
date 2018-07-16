@@ -58,16 +58,18 @@ final class Audio: ConvertibleMedia {
         self.downpour = Downpour(fullPath: path.absolute)
     }
 
-    func convertCommand(_ logger: SwiftyBeaver.Type) throws -> Command {
+    func convertCommand() throws -> Command {
         fatalError("Not Implemented")
     }
 
-    func needsConversion(_ logger: SwiftyBeaver.Type) throws -> Bool {
+    func needsConversion() throws -> Bool {
         // Use the Handbrake CLI to convert to Plex DirectPlay capable audio (if necessary)
         guard let config = audioConversionConfig else {
             throw MediaError.AudioError.invalidConfig
         }
-        logger.verbose("Getting audio stream data for '\(path.absolute)'")
+        loggerQueue.async {
+            logger.verbose("Getting audio stream data for '\(self.path.absolute)'")
+        }
 
         let ffprobe = try info()
 
@@ -76,7 +78,9 @@ final class Audio: ConvertibleMedia {
         let mainAudioStream: AudioStream
 
         if audioStreams.count > 1 {
-            logger.warning("Multiple audio streams found, trying to identify the main one...")
+            loggerQueue.async {
+                logger.warning("Multiple audio streams found, trying to identify the main one...")
+            }
             mainAudioStream = identifyMainAudioStream(audioStreams, using: config)
         } else if audioStreams.count == 1 {
             mainAudioStream = audioStreams[0]
@@ -84,16 +88,20 @@ final class Audio: ConvertibleMedia {
             throw MediaError.AudioError.noStreams
         }
 
-        logger.verbose("Got main audio/video streams. Checking if we need to convert them")
-        return try needToConvert(audioStream: mainAudioStream, logger: logger)
+        loggerQueue.async {
+            logger.verbose("Got main audio/video streams. Checking if we need to convert them")
+        }
+        return try needToConvert(audioStream: mainAudioStream)
     }
 
-    private func needToConvert(audioStream: AudioStream, logger: SwiftyBeaver.Type) throws -> Bool {
+    private func needToConvert(audioStream: AudioStream) throws -> Bool {
         guard let config = audioConversionConfig else {
             throw MediaError.AudioError.invalidConfig
         }
 
-        logger.verbose("Streams:\n\nAudio:\n\(audioStream.description)")
+        loggerQueue.async {
+            logger.verbose("Streams:\n\nAudio:\n\(audioStream.description)")
+        }
 
         guard let container = AudioContainer(rawValue: path.extension ?? "") else {
             throw MediaError.unknownContainer(path.extension ?? "")
@@ -102,7 +110,9 @@ final class Audio: ConvertibleMedia {
         guard container == config.audioContainer else { return true }
         guard let audioCodec = audioStream.codec as? AudioCodec, config.codec == .any || audioCodec == config.codec else { return true }
 
-        logger.verbose("\(path) does not need to be converted")
+        loggerQueue.async {
+            logger.verbose("\(self.path) does not need to be converted")
+        }
         return false
     }
 

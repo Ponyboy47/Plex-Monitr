@@ -13,16 +13,17 @@ final class MainMonitr: DirectoryMonitorDelegate {
 
     let config: Config
 
-    let queue: DispatchQueue = DispatchQueue(label: "com.monitr.main", qos: .userInitiated, attributes: .concurrent)
+    let queue = DispatchQueue(label: "com.monitr.main", qos: .userInitiated, attributes: .concurrent)
     let moveTaskQueue: LinkedTaskQueue
     let convertTaskQueue: LinkedTaskQueue
+    private let _sem =  DispatchSemaphore(value: 1)
 
     var cronStart: CronJob!
     var cronEnd: CronJob!
 
     var currentMedia: [Media] = []
 
-    var isRunning: Bool = false {
+    var isRunning = false {
         didSet {
             // If we went from running to not running and needsUpdate is true, then we should run again just in case
             if oldValue && !isRunning && needsUpdate {
@@ -31,7 +32,7 @@ final class MainMonitr: DirectoryMonitorDelegate {
             }
         }
     }
-    var needsUpdate: Bool = false
+    var needsUpdate = false
 
     init(config: Config) throws {
         self.moveTaskQueue = LinkedTaskQueue(name: "com.monitr.move", maxSimultaneous: 5)
@@ -48,7 +49,9 @@ final class MainMonitr: DirectoryMonitorDelegate {
             convertTaskQueue.start()
             if !config.convertImmediately {
                 convertTaskQueue.pause()
-                logger.verbose("Setting up the conversion queue cron jobs")
+                loggerQueue.async {
+                    logger.verbose("Setting up the conversion queue cron jobs")
+                }
                 cronStart = CronJob(pattern: config.convertCronStart, queue: .global(qos: .background)) {
                     self.convertTaskQueue.resume()
                 }
@@ -56,7 +59,9 @@ final class MainMonitr: DirectoryMonitorDelegate {
                     self.convertTaskQueue.pause()
                 }
                 let next = MediaDuration(double: cronStart!.pattern.next(Date())!.date!.timeIntervalSinceNow)
-                logger.verbose("Set up the conversion cron jobs! It will begin in \(next.description)")
+                loggerQueue.async {
+                    logger.verbose("Set up the conversion cron jobs! It will begin in \(next.description)")
+                }
             }
         }
     }
@@ -71,6 +76,7 @@ final class MainMonitr: DirectoryMonitorDelegate {
     }
 
     func run() {
+        _sem.wait()
         isRunning = true
 
         defer { isRunning = false }
@@ -103,11 +109,16 @@ final class MainMonitr: DirectoryMonitorDelegate {
 
         // If there's no new media, don't continue
         guard !media.isEmpty else { return }
-        config.logger.debug("Found \(media.count) total media files in the downloads directories")
+        loggerQueue.async {
+            logger.debug("Found \(media.count) total media files in the downloads directories")
+        }
 
         currentMedia += media
 
-        config.logger.info("Found \(media.count) new media files to process")
+        loggerQueue.async {
+            logger.info("Found \(media.count) new media files to process")
+        }
+        _sem.signal()
 
         let videoMedia = media.compactMap { $0 as? Video }
         let audioMedia = media.compactMap { $0 as? Audio }
@@ -154,13 +165,17 @@ final class MainMonitr: DirectoryMonitorDelegate {
                             media.append(m)
                         }
                     } else {
-                        self.config.logger.warning("Unknown/unsupported file found: \(childFile)")
+                        loggerQueue.async {
+                            logger.warning("Unknown/unsupported file found: \(childFile)")
+                        }
                     }
                 }
                 // swiftlint:enable identifier_name
             } catch {
-                config.logger.error("Failed to get files from the downloads directories.")
-                config.logger.debug(error)
+                loggerQueue.async {
+                    logger.error("Failed to get files from the downloads directories.")
+                    logger.debug(error)
+                }
             }
         }
         return media
@@ -182,7 +197,7 @@ final class MainMonitr: DirectoryMonitorDelegate {
                     let normal = file.normalized.string
                     for base in config.downloadDirectories + config.homeVideoDownloadDirectories {
                         if normal.range(of: base.string) != nil {
-                            video.findSubtitles(below: base, logger: config.logger)
+                            video.findSubtitles(below: base)
                             return video
                         }
                     }
@@ -197,8 +212,10 @@ final class MainMonitr: DirectoryMonitorDelegate {
                 return try Video.Subtitle(file)
             }
         } catch {
-            config.logger.error("Error occured trying to create media object from '\(file)'.")
-            config.logger.debug(error)
+            loggerQueue.async {
+                logger.error("Error occured trying to create media object from '\(file)'.")
+                logger.debug(error)
+            }
         }
         return nil
     }
@@ -214,7 +231,9 @@ final class MainMonitr: DirectoryMonitorDelegate {
      - Parameter now: If true, kills any active media management. Defaults to false
     */
     func shutdown() {
-        config.logger.info("Shutting down monitrs.")
+        loggerQueue.sync {
+            logger.info("Shutting down monitrs.")
+        }
         config.stopMonitoring()
         if !convertTaskQueue.isDone {
             convertTaskQueue.cancel()
@@ -241,6 +260,7 @@ final class MainMonitr: DirectoryMonitorDelegate {
             return
         }
         #endif
+
         self.run()
     }
 }

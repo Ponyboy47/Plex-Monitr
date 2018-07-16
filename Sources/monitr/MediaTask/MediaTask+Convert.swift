@@ -13,14 +13,16 @@ class ConversionTask<MediaType: ConvertibleMedia>: MediaTask<MediaType>, Configu
     // swiftlint:disable identifier_name
     func configure() -> Bool {
         do {
-            let (cmd, args, oP, dO) = try media.convertCommand(logger)
+            let (cmd, args, oP, dO) = try media.convertCommand()
             commandName = cmd
             commandArgs = args
             outputPath = oP
             deleteOriginal = dO
         } catch {
-            logger.error("Failed to generate the conversion command for \(media.path)")
-            logger.debug(error)
+            loggerQueue.async {
+                logger.error("Failed to generate the conversion command for \(self.media.path)")
+                logger.debug(error)
+            }
             return false
         }
 
@@ -31,7 +33,9 @@ class ConversionTask<MediaType: ConvertibleMedia>: MediaTask<MediaType>, Configu
     override func execute() -> Bool {
         command = SwiftShell.runAsync(commandName, commandArgs)
         command.stdout.readData()
-        logger.debug("Finished conversion of media file '\(media.path)'")
+        loggerQueue.async {
+            logger.debug("Finished conversion of media file '\(self.media.path)'")
+        }
 
         guard command.exitcode() == 0 else {
             var error: String = "Error attempting to convert: \(media.path)"
@@ -42,19 +46,27 @@ class ConversionTask<MediaType: ConvertibleMedia>: MediaTask<MediaType>, Configu
             if !command.stderror.read().isEmpty {
                 error += "\n\tStandard Error: \(command.stderror.read())"
             }
-            logger.error("Error converting \(MediaType.self) media")
-            logger.debug(MediaError.conversionError(error))
+            loggerQueue.async {
+                logger.error("Error converting \(MediaType.self) media")
+                logger.debug(MediaError.conversionError(error))
+            }
 
             return false
         }
 
-        logger.verbose("Successfully converted media file '\(media.path)' to '\(outputPath)'")
+        loggerQueue.async {
+            logger.verbose("Successfully converted media file '\(self.media.path)' to '\(self.outputPath)'")
+        }
 
         do {
 			if deleteOriginal {
-                logger.debug("Deleting original file '\(media.path)'")
+                loggerQueue.async {
+                    logger.debug("Deleting original file '\(self.media.path)'")
+                }
 				try media.path.delete()
-				logger.verbose("Successfully deleted original media file '\(media.path)'")
+                loggerQueue.async {
+                    logger.verbose("Successfully deleted original media file '\(self.media.path)'")
+                }
 			}
 
 			// Update the media object's path
@@ -62,8 +74,10 @@ class ConversionTask<MediaType: ConvertibleMedia>: MediaTask<MediaType>, Configu
 
 			media.beenConverted = true
         } catch {
-            logger.error("Error deleting the original file '\(media.path)'")
-            logger.debug(error)
+            loggerQueue.async {
+                logger.error("Error deleting the original file '\(self.media.path)'")
+                logger.debug(error)
+            }
         }
 
         return true

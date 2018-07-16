@@ -105,7 +105,6 @@ struct Config: Codable {
 
     var logFile: Path?
     var logLevel: SwiftyBeaver.Level = .error
-    var logger: SwiftyBeaver.Type
 
     /// Watches the download directory for new files
     private var downloadWatchers: [DirectoryMonitor?] = []
@@ -141,22 +140,17 @@ struct Config: Codable {
         case logFile
     }
 
-    init(_ logger: SwiftyBeaver.Type) {
-        self.logger = logger
-    }
+    init() {}
 
     /// Initializes by reading the file at the path as a JSON string
-    init(fromFile configFile: Path, with logger: SwiftyBeaver.Type) throws {
+    init(fromFile configFile: Path) throws {
         self = try configFile.decode(with: JSONDecoder(), to: Config.self)
         self.configFile = configFile
-        self.logger = logger
     }
 
     /// Initialize the config from a JSON object
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
-
-        logger = SwiftyBeaver.self
 
         plexDirectory = try values.decode(Path.self, forKey: .plexDirectory)
 
@@ -230,8 +224,10 @@ struct Config: Codable {
             do {
                 try watcher?.startMonitoring()
             } catch {
-                logger.error("Failed to start the directory watcher for '\(String(describing: watcher?.URL.path))'.")
-                logger.debug(error)
+                loggerQueue.async {
+                    logger.error("Failed to start the directory watcher for '\(String(describing: watcher?.URL.path))'.")
+                    logger.debug(error)
+                }
                 return false
             }
         }

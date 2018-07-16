@@ -28,15 +28,17 @@ class Monitr<M> where M: Media {
     }
 
     func setupTask(for media: M) -> MediaTask<M>? {
-        return MoveTask(media, plexDirectory: config.plexDirectory, deleteSubtitles: config.deleteSubtitles, logger: config.logger)
+        return MoveTask(media, plexDirectory: config.plexDirectory, deleteSubtitles: config.deleteSubtitles)
     }
 
     /// Gets all media object and moves them to Plex then deletes all the empty
     ///   directories left in the downloads directory
     func run(_ media: [M]) {
         guard !media.isEmpty else { return }
-        config.logger.info("\(media.count) new \(M.self) files")
-        config.logger.verbose(media.map { $0.path })
+        loggerQueue.async {
+            logger.info("\(media.count) new \(M.self) files")
+            logger.verbose(media.map { $0.path })
+        }
 
         for media in media {
             addToQueue(setupTask(for: media))
@@ -53,7 +55,9 @@ class Monitr<M> where M: Media {
         if task is MoveTask<M> {
             moveTaskQueue.add(task: task)
         } else {
-            config.logger.warning("Unknown operation type '\(type(of: task))'")
+            loggerQueue.async {
+                logger.warning("Unknown operation type '\(type(of: task))'")
+            }
         }
     }
 }

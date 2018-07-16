@@ -11,7 +11,6 @@
 import Foundation
 import PathKit
 import Downpour
-import SwiftyBeaver
 import SwiftShell
 
 // swiftlint:disable type_body_length
@@ -130,9 +129,9 @@ final class Video: ConvertibleMedia {
         }
     }
 
-    func move(to plexPath: Path, logger: SwiftyBeaver.Type) throws -> MediaState {
+    func move(to plexPath: Path) throws -> MediaState {
         for subtitle in subtitles {
-            let subtitleState = try subtitle.move(to: plexPath, logger: logger)
+            let subtitleState = try subtitle.move(to: plexPath)
             switch subtitleState {
             case .success:
                 continue
@@ -143,7 +142,7 @@ final class Video: ConvertibleMedia {
 
         // If we aren't configured to convert or don't need to convert, then
         // just move the file like normal
-        return try commonMove(to: plexPath, logger: logger)
+        return try commonMove(to: plexPath)
     }
 
     func deleteSubtitles() throws {
@@ -190,7 +189,7 @@ final class Video: ConvertibleMedia {
         return args
     }
 
-    func convertCommand(_ logger: SwiftyBeaver.Type) throws -> Command {
+    func convertCommand() throws -> Command {
         guard let config = videoConversionConfig else {
             throw MediaError.VideoError.invalidConfig
         }
@@ -203,7 +202,9 @@ final class Video: ConvertibleMedia {
         let filename = "\(plexName) - original.\(ext)"
         if !(path.parent + filename).exists {
             try path.rename(filename)
-            logger.debug("Renamed file from '\(path)' to '\(path.parent + filename)'")
+            loggerQueue.async {
+                logger.debug("Renamed file from '\(self.path)' to '\(self.path.parent + filename)'")
+            }
             path = path.parent + filename
         }
 
@@ -225,11 +226,13 @@ final class Video: ConvertibleMedia {
         try container.encode(subtitles, forKey: .subtitles)
     }
 
-    func needsConversion(_ logger: SwiftyBeaver.Type) throws -> Bool {
+    func needsConversion() throws -> Bool {
         guard let config = videoConversionConfig else {
             throw MediaError.VideoError.invalidConfig
         }
-        logger.verbose("Getting audio/video stream data for '\(path.absolute)'")
+        loggerQueue.async {
+            logger.verbose("Getting audio/video stream data for '\(self.path.absolute)'")
+        }
 
         let ffprobe = try info()
 
@@ -240,7 +243,9 @@ final class Video: ConvertibleMedia {
         let mainAudioStream: AudioStream
 
         if videoStreams.count > 1 {
-            logger.warning("Multiple video streams found, trying to identify the main one...")
+            loggerQueue.async {
+                logger.warning("Multiple video streams found, trying to identify the main one...")
+            }
             mainVideoStream = identifyMainVideoStream(videoStreams, using: config)
         } else if videoStreams.count == 1 {
             mainVideoStream = videoStreams[0]
@@ -249,7 +254,9 @@ final class Video: ConvertibleMedia {
         }
 
         if audioStreams.count > 1 {
-            logger.warning("Multiple audio streams found, trying to identify the main one...")
+            loggerQueue.async {
+                logger.warning("Multiple audio streams found, trying to identify the main one...")
+            }
             mainAudioStream = identifyMainAudioStream(audioStreams, using: config)
         } else if audioStreams.count == 1 {
             mainAudioStream = audioStreams[0]
@@ -257,8 +264,10 @@ final class Video: ConvertibleMedia {
             throw MediaError.AudioError.noStreams
         }
 
-        logger.verbose("Got main audio/video streams. Checking if we need to convert them")
-        return try needToConvert(videoStream: mainVideoStream, audioStream: mainAudioStream, logger: logger)
+        loggerQueue.async {
+            logger.verbose("Got main audio/video streams. Checking if we need to convert them")
+        }
+        return try needToConvert(videoStream: mainVideoStream, audioStream: mainAudioStream)
     }
 
     // I assume that this will probably never be used since pretty much
@@ -322,12 +331,14 @@ final class Video: ConvertibleMedia {
         }
     }
 
-    private func needToConvert(videoStream: VideoStream, audioStream: AudioStream, logger: SwiftyBeaver.Type) throws -> Bool {
+    private func needToConvert(videoStream: VideoStream, audioStream: AudioStream) throws -> Bool {
         guard let config = videoConversionConfig else {
             throw MediaError.VideoError.invalidConfig
         }
 
-        logger.verbose("Streams:\n\nVideo:\n\(videoStream.description)\n\nAudio:\n\(audioStream.description)")
+        loggerQueue.async {
+            logger.verbose("Streams:\n\nVideo:\n\(videoStream.description)\n\nAudio:\n\(audioStream.description)")
+        }
 
         guard let container = VideoContainer(rawValue: path.extension ?? "") else {
             throw MediaError.unknownContainer(path.extension ?? "")
@@ -341,11 +352,13 @@ final class Video: ConvertibleMedia {
 
         guard videoStream.framerate!.value <= config.maxFramerate else { return true }
 
-        logger.verbose("\(path) does not need to be converted")
+        loggerQueue.async {
+            logger.verbose("\(self.path) does not need to be converted")
+        }
         return false
     }
 
-    func findSubtitles(below: Path, logger: SwiftyBeaver.Type) {
+    func findSubtitles(below: Path) {
         // Get the highest directory that is below the below Path
         var top = path
         // If we don't do the absolute paths, then the string comparison on the
@@ -375,8 +388,10 @@ final class Video: ConvertibleMedia {
                 }
             }
         } catch {
-            logger.error("Failed to get children when trying to find a video file's subtitles")
-            logger.debug(error)
+            loggerQueue.async {
+                logger.error("Failed to get children when trying to find a video file's subtitles")
+                logger.debug(error)
+            }
         }
     }
 }

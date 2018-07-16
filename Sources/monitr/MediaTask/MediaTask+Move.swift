@@ -8,51 +8,67 @@ final class MoveTask<MediaType: Media>: MediaTask<MediaType> {
     let deleteSubtitles: Bool
 
     @available(*, renamed: "init")
-    override init(_ media: MediaType, qos: DispatchQoS, priority: TaskPriority, logger: SwiftyBeaver.Type) {
-        fatalError("Call init(_:MediaType,plexDirectory:Path,deleteSubtitles:Bool,logger:SwiftyBeaver.Type) instead")
+    override init(_ media: MediaType, qos: DispatchQoS, priority: TaskPriority) {
+        fatalError("Call init(_:MediaType,plexDirectory:Path,deleteSubtitles:Bool) instead")
     }
 
-    init(_ media: MediaType, plexDirectory: Path, deleteSubtitles: Bool, priority: TaskPriority = .minimal, logger: SwiftyBeaver.Type) {
+    init(_ media: MediaType, plexDirectory: Path, deleteSubtitles: Bool, priority: TaskPriority = .minimal) {
         self.plexDirectory = plexDirectory
         self.deleteSubtitles = deleteSubtitles
-        super.init(media, qos: .background, priority: priority, logger: logger)
+        super.init(media, qos: .background, priority: priority)
     }
 
     override func execute() -> Bool {
-        logger.debug("Moving \(media.path)")
+        loggerQueue.async {
+            logger.debug("Moving \(self.media.path)")
+        }
 
         do {
-            let state: MediaState = try media.move(to: plexDirectory, logger: logger)
+            let state: MediaState = try media.move(to: plexDirectory)
 
             switch state {
             case .subtitle(_, let sub):
-                logger.warning("Failed to move subtitle '\(sub.path)' to plex")
+                loggerQueue.async {
+                    logger.warning("Failed to move subtitle '\(sub.path)' to plex")
+                }
                 return false
             case .unconverted(.failed(_, let uMedia)):
-                logger.warning("Failed to move unconverted \(MediaType.self) media '\(uMedia.path)' to plex")
+                loggerQueue.async {
+                    logger.warning("Failed to move unconverted \(MediaType.self) media '\(uMedia.path)' to plex")
+                }
                 return false
             case .failed(.moving, let file):
-                logger.warning("Failed to move \(MediaType.self) media '\(file.path)' to plex")
+                loggerQueue.async {
+                    logger.warning("Failed to move \(MediaType.self) media '\(file.path)' to plex")
+                }
                 return false
             case .failed(.deleting, let file):
-                logger.warning("Failed to delete \(MediaType.self) media '\(file.path)'")
+                loggerQueue.async {
+                    logger.warning("Failed to delete \(MediaType.self) media '\(file.path)'")
+                }
                 return false
             default: break
             }
         } catch {
-            logger.error("Failed to move '\(media.path)'")
-            logger.debug(error)
+            loggerQueue.async {
+                logger.error("Failed to move '\(self.media.path)'")
+                logger.debug(error)
+            }
             return false
         }
 
         do {
             if deleteSubtitles && media is Video {
-                logger.verbose("Removing subtitles")
+                loggerQueue.async {
+                    logger.verbose("Removing subtitles")
+                }
                 try (media as! Video).deleteSubtitles()
             }
         } catch {
-            logger.error("Failed to delete subtitles from : \(media.path)")
-            logger.debug(error)
+            loggerQueue.async {
+                logger.error("Failed to delete subtitles from : \(self.media.path)")
+                logger.debug(error)
+            }
         }
 
         return true

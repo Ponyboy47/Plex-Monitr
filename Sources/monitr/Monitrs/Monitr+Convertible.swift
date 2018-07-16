@@ -45,28 +45,32 @@ class ConvertibleMonitr<M>: Monitr<M> where M: ConvertibleMedia {
 
         setupConversionConfig(media)
 
-        let move = MoveTask(media, plexDirectory: config.plexDirectory, deleteSubtitles: config.deleteSubtitles, logger: config.logger)
+        let move = MoveTask(media, plexDirectory: config.plexDirectory, deleteSubtitles: config.deleteSubtitles)
 
         guard !media.beenConverted else {
             return move
         }
 
         do {
-            if try media.needsConversion(logger) {
-                config.logger.verbose("Need to convert: \(media.path)")
+            if try media.needsConversion() {
+                loggerQueue.async {
+                    logger.verbose("Need to convert: \(media.path)")
+                }
                 var convert: ConversionTask<M>
                 if config.convertImmediately {
-                    convert = ConversionTask(media, priority: .high, logger: config.logger)
+                    convert = ConversionTask(media, priority: .high)
                     move.addDependency(convert)
                 } else {
-                    convert = ConversionTask(media, logger: config.logger)
+                    convert = ConversionTask(media)
                     convert.addDependency(move)
                     return convert
                 }
             }
         } catch {
-            config.logger.error("Could not determine if '\(media.path)' needs to be converted")
-            config.logger.debug(error)
+            loggerQueue.async {
+                logger.error("Could not determine if '\(media.path)' needs to be converted")
+                logger.debug(error)
+            }
         }
         return move
     }
@@ -91,12 +95,16 @@ class ConvertibleMonitr<M>: Monitr<M> where M: ConvertibleMedia {
         } else if media is Audio {
             (media as! Audio).conversionConfig = AudioConversionConfig(config: config)
         } else {
-            config.logger.error("Unknown Convertible Media type from \(media.path)")
+            loggerQueue.async {
+                logger.error("Unknown Convertible Media type from \(media.path)")
+            }
         }
     }
 
     private func checkConversionDependencies() throws {
-        config.logger.verbose("Making sure we have the required dependencies for transcoding \(M.self) media...")
+        loggerQueue.async {
+            logger.verbose("Making sure we have the required dependencies for transcoding \(M.self) media...")
+        }
 
         let group = DispatchGroup()
         let queue = DispatchQueue(label: "com.monitr.dependencies", qos: .userInteractive)
@@ -114,7 +122,9 @@ class ConvertibleMonitr<M>: Monitr<M> where M: ConvertibleMedia {
                     if !response.stderror.isEmpty {
                         debugMessage += "\n\tStandard Error: '\(response.stderror)'"
                     }
-                    self.config.logger.debug(debugMessage)
+                    loggerQueue.async {
+                        logger.debug(debugMessage)
+                    }
                     missing.append(dependency)
                 }
             }
