@@ -11,7 +11,7 @@ var dependencies: [Package.Dependency] = [
     .package(url: "https://github.com/kareman/SwiftShell.git", .upToNextMinor(from: "4.1.0")),
     .package(url: "https://github.com/SwiftyBeaver/SwiftyBeaver.git", .upToNextMinor(from: "1.4.0")),
     .package(url: "https://github.com/Ponyboy47/LockSmith.git", .upToNextMinor(from: "0.3.0")),
-    .package(url: "https://github.com/Ponyboy47/TaskKit.git", .upToNextMinor(from: "0.4.5"))
+    .package(url: "https://github.com/Ponyboy47/TaskKit.git", .upToNextMinor(from: "0.4.7"))
 ]
 var namedDependencies: [Target.Dependency] = ["Signals", "CLI", "Cron", "Downpour", "PathKit", "SwiftShell", "SwiftyBeaver", "LockSmith", "TaskKit"]
 
