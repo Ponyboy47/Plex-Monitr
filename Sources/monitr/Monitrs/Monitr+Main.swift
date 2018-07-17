@@ -139,6 +139,8 @@ final class MainMonitr: DirectoryMonitorDelegate {
     func getAllMedia(from paths: [Path]) -> [Media] {
         var media: [Media] = []
         for path in paths {
+            guard path.isDirectory else { continue }
+
             do {
                 // Get all the children in the downloads directory
                 let children = try path.recursiveChildren()
@@ -184,11 +186,14 @@ final class MainMonitr: DirectoryMonitorDelegate {
                     let video = try Video(file)
                     let normal = file.normalized.string
                     for base in config.downloadDirectories + config.homeVideoDownloadDirectories {
+                        guard base.isDirectory else { continue }
+
                         if normal.range(of: base.string) != nil {
                             video.findSubtitles(below: base)
-                            return video
+                            break
                         }
                     }
+                    return video
                 } catch MediaError.VideoError.sampleMedia {
                     return try Ignore(file)
                 }
