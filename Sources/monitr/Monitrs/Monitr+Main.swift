@@ -75,10 +75,6 @@ final class MainMonitr: DirectoryMonitorDelegate {
             // If there's no new media, don't continue
             guard !(media.isEmpty && homeMedia.isEmpty) else { return [] }
 
-            loggerQueue.async {
-                logger.debug("Found \(media.count + homeMedia.count) total media files in the downloads directories")
-            }
-
             // Remove items that we're currently processing
             // swiftlint:disable identifier_name
             let newStuff = (media + homeMedia).filter { m in
@@ -98,9 +94,12 @@ final class MainMonitr: DirectoryMonitorDelegate {
             }
             // swiftlint:enable identifier_name
 
+            guard !newStuff.isEmpty else { return [] }
+
             currentMedia += newStuff
 
             loggerQueue.async {
+                logger.debug("Found \(media.count + homeMedia.count) total media files in the downloads directories")
                 logger.info("Found \(newStuff.count) new media files to process")
             }
 
