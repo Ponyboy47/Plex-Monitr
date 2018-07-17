@@ -16,23 +16,12 @@ final class MainMonitr: DirectoryMonitorDelegate {
     let queue = DispatchQueue(label: "com.monitr.main", qos: .userInitiated, attributes: .concurrent)
     let moveTaskQueue: LinkedTaskQueue
     let convertTaskQueue: LinkedTaskQueue
-    private let _sem =  DispatchSemaphore(value: 1)
+    private let _runQueue = DispatchQueue(label: "com.monitr.run", qos: .background)
 
     var cronStart: CronJob!
     var cronEnd: CronJob!
 
     var currentMedia: [Media] = []
-
-    var isRunning = false {
-        didSet {
-            // If we went from running to not running and needsUpdate is true, then we should run again just in case
-            if oldValue && !isRunning && needsUpdate {
-                needsUpdate = false
-                self.run()
-            }
-        }
-    }
-    var needsUpdate = false
 
     init(config: Config) throws {
         self.moveTaskQueue = LinkedTaskQueue(name: "com.monitr.move", maxSimultaneous: 5)
@@ -76,49 +65,48 @@ final class MainMonitr: DirectoryMonitorDelegate {
     }
 
     func run() {
-        _sem.wait()
-        isRunning = true
+        let media: [Media] = _runQueue.sync {
+            let media = getAllMedia(from: config.downloadDirectories)
+            let homeMedia = getAllMedia(from: config.homeVideoDownloadDirectories)
 
-        defer { isRunning = false }
+            // Get all the media in the downloads directory
+            setHomeMedia(homeMedia)
 
-        var media = getAllMedia(from: config.downloadDirectories)
-        let homeMedia = getAllMedia(from: config.homeVideoDownloadDirectories)
+            // If there's no new media, don't continue
+            guard !(media.isEmpty && homeMedia.isEmpty) else { return [] }
 
-        // Get all the media in the downloads directory
-        setHomeMedia(homeMedia)
-        media += homeMedia
+            loggerQueue.async {
+                logger.debug("Found \(media.count + homeMedia.count) total media files in the downloads directories")
+            }
 
-        // Remove items that we're currently processing
-        // swiftlint:disable identifier_name
-        media = media.filter { m in
-            !currentMedia.contains(where: { c in
-                var isEqual = false
-                let mUnconverted = (m as? ConvertibleMedia)?.unconvertedFile?.absolute
-                let cUnconverted = (c as? ConvertibleMedia)?.unconvertedFile?.absolute
-                if let mU = mUnconverted, let cU = cUnconverted {
-                    isEqual = mU == cU
-                } else if let mU = mUnconverted {
-                    isEqual = mU == c.path.absolute
-                } else if let cU = cUnconverted {
-                    isEqual = cU == m.path.absolute
-                }
-                return isEqual || m.path.absolute == c.path.absolute || m.plexName == c.plexName
-            })
+            // Remove items that we're currently processing
+            // swiftlint:disable identifier_name
+            let newStuff = (media + homeMedia).filter { m in
+                !currentMedia.contains(where: { c in
+                    var isEqual = false
+                    let mUnconverted = (m as? ConvertibleMedia)?.unconvertedFile?.absolute
+                    let cUnconverted = (c as? ConvertibleMedia)?.unconvertedFile?.absolute
+                    if let mU = mUnconverted, let cU = cUnconverted {
+                        isEqual = mU == cU
+                    } else if let mU = mUnconverted {
+                        isEqual = mU == c.path.absolute
+                    } else if let cU = cUnconverted {
+                        isEqual = cU == m.path.absolute
+                    }
+                    return isEqual || m.path.absolute == c.path.absolute || m.plexName == c.plexName
+                })
+            }
+            // swiftlint:enable identifier_name
+
+            currentMedia += newStuff
+
+            loggerQueue.async {
+                logger.info("Found \(newStuff.count) new media files to process")
+            }
+
+            return newStuff
         }
-        // swiftlint:enable identifier_name
-
-        // If there's no new media, don't continue
         guard !media.isEmpty else { return }
-        loggerQueue.async {
-            logger.debug("Found \(media.count) total media files in the downloads directories")
-        }
-
-        currentMedia += media
-
-        loggerQueue.async {
-            logger.info("Found \(media.count) new media files to process")
-        }
-        _sem.signal()
 
         let videoMedia = media.compactMap { $0 as? Video }
         let audioMedia = media.compactMap { $0 as? Audio }
@@ -248,10 +236,6 @@ final class MainMonitr: DirectoryMonitorDelegate {
      - Parameter directoryMonitor: The DirectoryMonitor that triggered the event
     */
     func directoryMonitorDidObserveChange(_ directoryMonitor: DirectoryMonitor) {
-        guard !isRunning else {
-            needsUpdate = true
-            return
-        }
         // The FileSystem monitoring doesn't work on Linux yet, so only check
         //   if a write occurred in the directory if we're not on Linux
         #if !os(Linux)
