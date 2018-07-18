@@ -322,8 +322,10 @@ if let lF = config.logFile {
     }
 }
 
-for dest in logger.destinations {
-    dest.minLevel = config.logLevel
+loggerQueue.sync {
+    for dest in logger.destinations {
+        dest.minLevel = config.logLevel
+    }
 }
 
 // Try and save the config (if the flag is set to true)
